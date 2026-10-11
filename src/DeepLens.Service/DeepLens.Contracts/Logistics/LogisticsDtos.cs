@@ -214,6 +214,18 @@ public class CreateDelhiveryShipmentRequest
 
     [JsonPropertyName("pickupTime")]
     public string? PickupTime { get; set; } // HH:mm:ss
+
+    [JsonPropertyName("orderType")]
+    public string? OrderType { get; set; }
+
+    [JsonPropertyName("resellerName")]
+    public string? ResellerName { get; set; }
+
+    [JsonPropertyName("sellerName")]
+    public string? SellerName { get; set; }
+
+    [JsonPropertyName("sellerAddress")]
+    public string? SellerAddress { get; set; }
 }
 
 public class ShipmentItemCreateDto
@@ -602,6 +614,9 @@ public class WarehouseDto
     [JsonPropertyName("name")]
     public string Name { get; set; } = string.Empty;
 
+    [JsonPropertyName("alias")]
+    public string? Alias { get; set; }
+
     [JsonPropertyName("code")]
     public string Code { get; set; } = string.Empty;
 
@@ -644,6 +659,9 @@ public class CreateWarehouseDto
     [JsonPropertyName("name")]
     public string Name { get; set; } = string.Empty;
 
+    [JsonPropertyName("alias")]
+    public string? Alias { get; set; }
+
     [JsonPropertyName("code")]
     public string Code { get; set; } = string.Empty;
 
@@ -679,6 +697,9 @@ public class UpdateWarehouseDto
 {
     [JsonPropertyName("name")]
     public string? Name { get; set; }
+
+    [JsonPropertyName("alias")]
+    public string? Alias { get; set; }
 
     [JsonPropertyName("code")]
     public string? Code { get; set; }
@@ -835,6 +856,12 @@ public class PickupRequestDto
 
     [JsonPropertyName("expectedPackageCount")]
     public int ExpectedPackageCount { get; set; } = 1;
+
+    [JsonPropertyName("orderGrpId")]
+    public string? OrderGrpId { get; set; }
+
+    [JsonPropertyName("awbNumber")]
+    public string? AwbNumber { get; set; }
 }
 
 public class PickupResponseDto
@@ -854,11 +881,17 @@ public class PickupResponseDto
     [JsonPropertyName("pickupTime")]
     public string? PickupTime { get; set; }
 
+    [JsonPropertyName("pickupSlot")]
+    public string? PickupSlot { get; set; }
+
     [JsonPropertyName("pickupLocation")]
     public string? PickupLocation { get; set; }
 
     [JsonPropertyName("message")]
     public string? Message { get; set; }
+
+    [JsonPropertyName("prExist")]
+    public bool? PrExist { get; set; }
 }
 
 public class TrackingDetailsDto

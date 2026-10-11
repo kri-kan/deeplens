@@ -259,10 +259,13 @@ public class DelhiveryClient : IDelhiveryClient
 
             try
             {
-                var result = JsonSerializer.Deserialize<DelhiveryPickupResponse>(responseContent, new JsonSerializerOptions
+                var options = new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
-                });
+                };
+                options.Converters.Add(new FlexibleStringConverter());
+
+                var result = JsonSerializer.Deserialize<DelhiveryPickupResponse>(responseContent, options);
                 return result ?? throw new InvalidOperationException("Delhivery pickup returned an empty response.");
             }
             catch (Exception ex) when (ex is not InvalidOperationException)
@@ -296,10 +299,13 @@ public class DelhiveryClient : IDelhiveryClient
             var content = await response.Content.ReadAsStringAsync(ct);
             try
             {
-                var trackingData = JsonSerializer.Deserialize<DelhiveryTrackingResponse>(content, new JsonSerializerOptions
+                var options = new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
-                });
+                };
+                options.Converters.Add(new FlexibleStringConverter());
+
+                var trackingData = JsonSerializer.Deserialize<DelhiveryTrackingResponse>(content, options);
                 if (trackingData?.ShipmentData != null && trackingData.ShipmentData.Count > 0)
                 {
                     return trackingData;
@@ -485,10 +491,13 @@ public class DelhiveryClient : IDelhiveryClient
                 var content = await response.Content.ReadAsStringAsync(ct);
                 try
                 {
-                    var trackingData = JsonSerializer.Deserialize<DelhiveryTrackingResponse>(content, new JsonSerializerOptions
+                    var options = new JsonSerializerOptions
                     {
                         PropertyNameCaseInsensitive = true
-                    });
+                    };
+                    options.Converters.Add(new FlexibleStringConverter());
+
+                    var trackingData = JsonSerializer.Deserialize<DelhiveryTrackingResponse>(content, options);
                     if (trackingData?.ShipmentData != null && trackingData.ShipmentData.Count > 0)
                     {
                         return trackingData;

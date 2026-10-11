@@ -7,15 +7,25 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
+using DeepLens.Infrastructure.Clients.Delhivery;
+using Microsoft.Extensions.Logging;
+
 namespace DeepLens.Infrastructure.Persistence.Repositories;
 
 public class OrderRepository : IOrderRepository
 {
     private readonly IDbConnectionFactory _dbConnectionFactory;
+    private readonly IDelhiveryClient _delhiveryClient;
+    private readonly ILogger<OrderRepository> _logger;
 
-    public OrderRepository(IDbConnectionFactory dbConnectionFactory)
+    public OrderRepository(
+        IDbConnectionFactory dbConnectionFactory,
+        IDelhiveryClient delhiveryClient,
+        ILogger<OrderRepository> logger)
     {
         _dbConnectionFactory = dbConnectionFactory;
+        _delhiveryClient = delhiveryClient;
+        _logger = logger;
     }
 
     public async Task<int> CreateOrderRecordAsync(
@@ -141,6 +151,8 @@ public class OrderRepository : IOrderRepository
                 o.total_amount as TotalAmount,
                 o.advance_paid as AdvancePaid,
                 o.cod_balance as CodBalance,
+                o.order_type as OrderType,
+                o.reseller_name as ResellerName,
                 o.created_at as Timestamp,
                 o.is_deleted as IsDeleted,
                 o.customer_id as CustomerId
@@ -200,6 +212,8 @@ public class OrderRepository : IOrderRepository
                 o.total_amount as TotalAmount,
                 o.advance_paid as AdvancePaid,
                 o.cod_balance as CodBalance,
+                o.order_type as OrderType,
+                o.reseller_name as ResellerName,
                 o.created_at as Timestamp,
                 o.is_deleted as IsDeleted,
                 o.customer_id as CustomerId
@@ -299,7 +313,10 @@ public class OrderRepository : IOrderRepository
                 o.is_deleted as IsDeleted,
                 o.customer_id as CustomerId,
                 COALESCE(o.status, 0) as Status,
-                COALESCE(o.need_label, false) as NeedLabel
+                COALESCE(o.need_label, false) as NeedLabel,
+                o.order_type as OrderType,
+                o.reseller_name as ResellerName,
+                COALESCE(o.is_address_reviewed, true) as IsAddressReviewed
             FROM ""orderId"" o
             LEFT JOIN order_sources s ON o.source_id = s.id
             LEFT JOIN payment_modes p ON o.payment_mode_id = p.id
@@ -439,6 +456,68 @@ public class OrderRepository : IOrderRepository
             }
         }
 
+        if (existingGroups.Count > 0)
+        {
+            var grpIds = existingGroups.Select(g => g.OrderGrpId).Where(id => !string.IsNullOrWhiteSpace(id)).ToArray();
+            if (grpIds.Length > 0)
+            {
+                var shipSql = @"
+                    SELECT 
+                        id::text AS Id,
+                        order_number AS OrderGrpId,
+                        awb_number AS AwbNumber,
+                        status AS Status,
+                        courier_partner AS CourierPartner,
+                        shipping_mode AS ShippingMode,
+                        metadata::text AS MetadataJson,
+                        created_at AS CreatedAt,
+                        updated_at AS UpdatedAt
+                    FROM shipments
+                    WHERE (order_number = ANY(@GrpIds) OR order_number = @OrderId)
+                      AND awb_number IS NOT NULL AND awb_number != ''
+                    ORDER BY created_at DESC";
+
+                var shipRows = await connection.QueryAsync<dynamic>(shipSql, new { GrpIds = grpIds, OrderId = orderId });
+                var shipByGrp = new Dictionary<string, List<GroupShipmentHistoryDto>>(StringComparer.OrdinalIgnoreCase);
+                foreach (var r in shipRows)
+                {
+                    string? metaStr = r.metadatajson;
+                    System.Text.Json.JsonDocument? doc = null;
+                    if (!string.IsNullOrWhiteSpace(metaStr))
+                    {
+                        try { doc = System.Text.Json.JsonDocument.Parse(metaStr); } catch { }
+                    }
+                    var shipItem = new GroupShipmentHistoryDto
+                    {
+                        Id = (string?)r.id,
+                        OrderGrpId = (string?)r.ordergrpid,
+                        AwbNumber = (string?)r.awbnumber ?? string.Empty,
+                        Status = (string?)r.status ?? "cancelled",
+                        CourierPartner = (string?)r.courierpartner ?? "Delhivery",
+                        ShippingMode = (string?)r.shippingmode,
+                        Metadata = doc,
+                        CreatedAt = (DateTime?)r.createdat,
+                        UpdatedAt = (DateTime?)r.updatedat
+                    };
+                    var gKey = shipItem.OrderGrpId ?? string.Empty;
+                    if (!shipByGrp.TryGetValue(gKey, out var sList))
+                    {
+                        sList = new List<GroupShipmentHistoryDto>();
+                        shipByGrp[gKey] = sList;
+                    }
+                    sList.Add(shipItem);
+                }
+
+                foreach (var grp in existingGroups)
+                {
+                    if (shipByGrp.TryGetValue(grp.OrderGrpId, out var sList))
+                    {
+                        grp.ShipmentHistory = sList;
+                    }
+                }
+            }
+        }
+
         return new OrderDetailDto
         {
             Id = order.Id,
@@ -465,6 +544,9 @@ public class OrderRepository : IOrderRepository
             Timestamp = order.Timestamp,
             IsDeleted = order.IsDeleted,
             CustomerId = order.CustomerId,
+            OrderType = order.OrderType ?? "Customer",
+            ResellerName = order.ResellerName,
+            IsAddressReviewed = order.IsAddressReviewed ?? true,
             Attachments = attachments.ToList(),
             Items = itemsList,
             Groups = existingGroups,
@@ -492,7 +574,10 @@ public class OrderRepository : IOrderRepository
         string? shippingPincode = null,
         bool? isServiceable = null,
         OrderStatus? status = null,
-        bool? needLabel = null)
+        bool? needLabel = null,
+        string? orderType = null,
+        string? resellerName = null,
+        bool? isAddressReviewed = null)
     {
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
         var rows = await connection.ExecuteAsync(@"
@@ -515,7 +600,10 @@ public class OrderRepository : IOrderRepository
                 shipping_pincode = COALESCE(@ShippingPincode, shipping_pincode),
                 is_serviceable = COALESCE(@IsServiceable, is_serviceable),
                 status = COALESCE(@Status, status),
-                need_label = COALESCE(@NeedLabel, need_label)
+                need_label = COALESCE(@NeedLabel, need_label),
+                order_type = COALESCE(@OrderType, order_type),
+                reseller_name = @ResellerName,
+                is_address_reviewed = COALESCE(@IsAddressReviewed, is_address_reviewed)
             WHERE order_id = @OrderId",
             new { 
                 OrderId = orderId, 
@@ -537,7 +625,10 @@ public class OrderRepository : IOrderRepository
                 ShippingPincode = shippingPincode,
                 IsServiceable = isServiceable,
                 Status = status.HasValue ? (int?)status.Value : null,
-                NeedLabel = needLabel
+                NeedLabel = needLabel,
+                OrderType = orderType,
+                ResellerName = resellerName,
+                IsAddressReviewed = isAddressReviewed
             });
         return rows > 0;
     }
@@ -594,8 +685,16 @@ public class OrderRepository : IOrderRepository
             SET vendor_id = EXCLUDED.vendor_id,
                 vendor_name = EXCLUDED.vendor_name,
                 need_label = EXCLUDED.need_label,
-                awb_number = COALESCE(EXCLUDED.awb_number, order_groups.awb_number),
-                label_url = COALESCE(EXCLUDED.label_url, order_groups.label_url),
+                awb_number = CASE 
+                    WHEN EXCLUDED.need_label = false THEN NULL 
+                    WHEN EXCLUDED.awb_number IS NOT NULL THEN EXCLUDED.awb_number
+                    ELSE order_groups.awb_number 
+                END,
+                label_url = CASE 
+                    WHEN EXCLUDED.need_label = false THEN NULL 
+                    WHEN EXCLUDED.label_url IS NOT NULL THEN EXCLUDED.label_url
+                    ELSE order_groups.label_url 
+                END,
                 status = EXCLUDED.status,
                 updated_at = NOW()",
             new {
@@ -611,16 +710,16 @@ public class OrderRepository : IOrderRepository
             });
     }
 
-    public async Task UpdateGroupLabelInfoAsync(string orderGrpId, string awbNumber, string labelUrl, string status = "generated")
+    public async Task UpdateGroupLabelInfoAsync(string orderGrpId, string awbNumber, string labelUrl)
     {
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
         await connection.ExecuteAsync(@"
             UPDATE order_groups 
             SET awb_number = @AwbNumber,
                 label_url = @LabelUrl,
-                status = @Status
+                updated_at = NOW()
             WHERE order_grp_id = @OrderGrpId",
-            new { OrderGrpId = orderGrpId, AwbNumber = awbNumber, LabelUrl = labelUrl, Status = status });
+            new { OrderGrpId = orderGrpId, AwbNumber = awbNumber, LabelUrl = labelUrl });
 
         await connection.ExecuteAsync(@"
             UPDATE ""orderItem""
@@ -706,11 +805,13 @@ public class OrderRepository : IOrderRepository
             FROM order_groups g
             JOIN ""orderId"" o ON g.order_id = o.order_id
             LEFT JOIN payment_modes pm ON o.payment_mode_id = pm.id
-            WHERE (@Stage = 'confirmed' AND (LOWER(g.status) = 'confirmed' OR LOWER(g.status) = 'unconfirmed'))
+            WHERE (@Stage = 'unconfirmed' AND (LOWER(g.status) = 'unconfirmed' OR LOWER(g.status) = 'unformed'))
+               OR (@Stage = 'confirmed' AND (LOWER(g.status) = 'confirmed' OR LOWER(g.status) = 'processed' OR LOWER(g.status) = 'processing'))
                OR (@Stage = 'processed' AND (LOWER(g.status) = 'processed' OR LOWER(g.status) = 'processing'))
+               OR (@Stage = 'placed' AND (LOWER(g.status) = 'placed' OR LOWER(g.status) = 'dispatched'))
                OR (@Stage = 'dispatched' AND LOWER(g.status) = 'dispatched')
                OR (@Stage = 'delivered' AND LOWER(g.status) = 'delivered')
-               OR (@Stage NOT IN ('confirmed', 'processed', 'delivered', 'dispatched') AND LOWER(g.status) = @Stage)
+               OR (@Stage NOT IN ('unconfirmed', 'confirmed', 'processed', 'placed', 'delivered', 'dispatched') AND LOWER(g.status) = @Stage)
             ORDER BY g.created_at DESC";
 
         var groups = (await connection.QueryAsync<OrderGroupDto>(sql, new { Stage = stage.ToLower() })).ToList();
@@ -754,9 +855,21 @@ public class OrderRepository : IOrderRepository
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
         var rows = await connection.ExecuteAsync(@"
             UPDATE order_groups
-            SET need_label = @NeedLabel, updated_at = NOW()
+            SET need_label = @NeedLabel,
+                awb_number = CASE WHEN @NeedLabel = false THEN NULL ELSE awb_number END,
+                label_url = CASE WHEN @NeedLabel = false THEN NULL ELSE label_url END,
+                updated_at = NOW()
             WHERE order_grp_id = @OrderGrpId",
             new { OrderGrpId = orderGrpId, NeedLabel = needLabel });
+
+        if (!needLabel)
+        {
+            await connection.ExecuteAsync(@"
+                UPDATE ""orderItem""
+                SET label_url = NULL
+                WHERE order_grp_id_ref = @OrderGrpId",
+                new { OrderGrpId = orderGrpId });
+        }
 
         return rows > 0;
     }
@@ -768,8 +881,8 @@ public class OrderRepository : IOrderRepository
         var rows = await connection.ExecuteAsync(@"
             UPDATE order_groups 
             SET need_label = false,
+                awb_number = NULL,
                 label_url = NULL,
-                status = 'cancelled',
                 updated_at = NOW()
             WHERE order_grp_id = @OrderGrpId",
             new { OrderGrpId = orderGrpId });
@@ -782,7 +895,8 @@ public class OrderRepository : IOrderRepository
 
         if (!string.IsNullOrWhiteSpace(awbNumber))
         {
-            await connection.ExecuteAsync(@"
+            var cleanAwb = awbNumber.Trim();
+            var updatedRows = await connection.ExecuteAsync(@"
                 UPDATE shipments
                 SET status = 'cancelled',
                     label_url = NULL,
@@ -790,8 +904,190 @@ public class OrderRepository : IOrderRepository
                     metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('cancelled_at', NOW(), 'cancellation_reason', 'Need Label toggled off'),
                     updated_at = NOW()
                 WHERE awb_number = @AwbNumber",
-                new { AwbNumber = awbNumber.Trim() });
+                new { AwbNumber = cleanAwb });
+
+            if (updatedRows == 0)
+            {
+                await connection.ExecuteAsync(@"
+                    INSERT INTO shipments (
+                        id, order_number, shipment_number, courier_partner, awb_number, 
+                        status, metadata, created_at, updated_at
+                    )
+                    VALUES (
+                        gen_random_uuid(), @OrderGrpId, @AwbNumber, 'Delhivery', @AwbNumber,
+                        'cancelled', jsonb_build_object('cancelled_at', NOW(), 'cancellation_reason', 'Need Label toggled off'), NOW(), NOW()
+                    )
+                    ON CONFLICT (shipment_number) DO UPDATE
+                    SET status = 'cancelled',
+                        metadata = COALESCE(shipments.metadata, '{}'::jsonb) || jsonb_build_object('cancelled_at', NOW(), 'cancellation_reason', 'Need Label toggled off'),
+                        updated_at = NOW()",
+                    new { OrderGrpId = orderGrpId, AwbNumber = cleanAwb });
+            }
         }
+
+        return rows > 0;
+    }
+
+    public async Task<List<GroupShipmentHistoryDto>> GetGroupShipmentsAsync(string orderGrpId)
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        var sql = @"
+            SELECT 
+                id::text AS Id,
+                order_number AS OrderGrpId,
+                awb_number AS AwbNumber,
+                status AS Status,
+                courier_partner AS CourierPartner,
+                shipping_mode AS ShippingMode,
+                metadata::text AS MetadataJson,
+                created_at AS CreatedAt,
+                updated_at AS UpdatedAt
+            FROM shipments
+            WHERE (order_number = @OrderGrpId OR order_number LIKE @OrderGrpId || '%')
+              AND awb_number IS NOT NULL AND awb_number != ''
+            ORDER BY created_at DESC";
+
+        var rows = await connection.QueryAsync<dynamic>(sql, new { OrderGrpId = orderGrpId });
+        var result = new List<GroupShipmentHistoryDto>();
+        foreach (var r in rows)
+        {
+            string? metaStr = r.metadatajson;
+            System.Text.Json.JsonDocument? doc = null;
+            if (!string.IsNullOrWhiteSpace(metaStr))
+            {
+                try { doc = System.Text.Json.JsonDocument.Parse(metaStr); } catch { }
+            }
+            result.Add(new GroupShipmentHistoryDto
+            {
+                Id = (string?)r.id,
+                OrderGrpId = (string?)r.ordergrpid,
+                AwbNumber = (string?)r.awbnumber ?? string.Empty,
+                Status = (string?)r.status ?? "cancelled",
+                CourierPartner = (string?)r.courierpartner ?? "Delhivery",
+                ShippingMode = (string?)r.shippingmode,
+                Metadata = doc,
+                CreatedAt = (DateTime?)r.createdat,
+                UpdatedAt = (DateTime?)r.updatedat
+            });
+        }
+        return result;
+    }
+
+    public async Task<List<GroupShipmentHistoryDto>> SyncGroupShipmentTrackingAsync(string orderGrpId, string? awbNumber = null)
+    {
+        var shipments = await GetGroupShipmentsAsync(orderGrpId);
+        var targetShipment = (!string.IsNullOrWhiteSpace(awbNumber))
+            ? shipments.FirstOrDefault(s => s.AwbNumber.Equals(awbNumber.Trim(), StringComparison.OrdinalIgnoreCase))
+            : shipments.FirstOrDefault(s => s.Status != "cancelled") ?? shipments.FirstOrDefault();
+
+        if (targetShipment != null && !string.IsNullOrWhiteSpace(targetShipment.AwbNumber))
+        {
+            var cleanAwb = targetShipment.AwbNumber.Trim();
+            try
+            {
+                var trackResponse = await _delhiveryClient.TrackShipmentAsync(cleanAwb);
+                var shipmentData = trackResponse?.ShipmentData?.FirstOrDefault()?.Shipment;
+                if (shipmentData != null)
+                {
+                    var status = shipmentData.Status?.Status ?? string.Empty;
+                    var statusCode = shipmentData.Status?.StatusCode ?? string.Empty;
+                    var instructions = shipmentData.Status?.Instructions ?? string.Empty;
+
+                    bool isPickupCancelled =
+                        status.Contains("Not Picked", StringComparison.OrdinalIgnoreCase) ||
+                        statusCode.Equals("DTUP-210", StringComparison.OrdinalIgnoreCase) ||
+                        instructions.Contains("Seller cancelled the order", StringComparison.OrdinalIgnoreCase) ||
+                        instructions.Contains("cancelled", StringComparison.OrdinalIgnoreCase);
+
+                    using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+
+                    if (isPickupCancelled)
+                    {
+                        await connection.ExecuteAsync(@"
+                            UPDATE shipments
+                            SET pickup_token = NULL,
+                                pickup_scheduled_at = NULL,
+                                status = 'manifested',
+                                metadata = (COALESCE(metadata, '{}'::jsonb) - 'pickup_id' - 'pickup_token' - 'pickup_slot' - 'pickup_scheduled_date' - 'pickup_scheduled_time')
+                                           || jsonb_build_object(
+                                               'last_sync_status', @Status,
+                                               'last_sync_code', @StatusCode,
+                                               'last_sync_instruction', @Instructions,
+                                               'last_sync_at', NOW()::text
+                                           ),
+                                updated_at = NOW()
+                            WHERE awb_number = @AwbNumber",
+                            new { AwbNumber = cleanAwb, Status = status, StatusCode = statusCode, Instructions = instructions });
+
+                        await connection.ExecuteAsync(@"
+                            UPDATE order_groups
+                            SET tracking_sub_status = 'Ready to Ship',
+                                updated_at = NOW()
+                            WHERE order_grp_id = @OrderGrpId",
+                            new { OrderGrpId = orderGrpId });
+                    }
+                    else
+                    {
+                        await connection.ExecuteAsync(@"
+                            UPDATE shipments
+                            SET metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object(
+                                    'last_sync_status', @Status,
+                                    'last_sync_code', @StatusCode,
+                                    'last_sync_instruction', @Instructions,
+                                    'last_sync_at', NOW()::text
+                                ),
+                                updated_at = NOW()
+                            WHERE awb_number = @AwbNumber",
+                            new { AwbNumber = cleanAwb, Status = status, StatusCode = statusCode, Instructions = instructions });
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to sync live Delhivery tracking for AWB {Awb}", cleanAwb);
+            }
+        }
+
+        return await GetGroupShipmentsAsync(orderGrpId);
+    }
+
+    public async Task<bool> ResetGroupPickupAsync(string orderGrpId, string? awbNumber = null)
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        int rows = 0;
+
+        if (!string.IsNullOrWhiteSpace(awbNumber))
+        {
+            var cleanAwb = awbNumber.Trim();
+            rows = await connection.ExecuteAsync(@"
+                UPDATE shipments
+                SET pickup_token = NULL,
+                    pickup_scheduled_at = NULL,
+                    metadata = (COALESCE(metadata, '{}'::jsonb) - 'pickup_id' - 'pickup_token' - 'pickup_slot' - 'pickup_scheduled_date' - 'pickup_scheduled_time')
+                               || jsonb_build_object('pickup_reset_at', NOW()::text),
+                    updated_at = NOW()
+                WHERE awb_number = @AwbNumber",
+                new { AwbNumber = cleanAwb });
+        }
+        else
+        {
+            rows = await connection.ExecuteAsync(@"
+                UPDATE shipments
+                SET pickup_token = NULL,
+                    pickup_scheduled_at = NULL,
+                    metadata = (COALESCE(metadata, '{}'::jsonb) - 'pickup_id' - 'pickup_token' - 'pickup_slot' - 'pickup_scheduled_date' - 'pickup_scheduled_time')
+                               || jsonb_build_object('pickup_reset_at', NOW()::text),
+                    updated_at = NOW()
+                WHERE order_number = @OrderGrpId OR order_number LIKE @OrderGrpId || '%'",
+                new { OrderGrpId = orderGrpId });
+        }
+
+        await connection.ExecuteAsync(@"
+            UPDATE order_groups
+            SET tracking_sub_status = 'Ready to Ship',
+                updated_at = NOW()
+            WHERE order_grp_id = @OrderGrpId",
+            new { OrderGrpId = orderGrpId });
 
         return rows > 0;
     }
@@ -870,7 +1166,10 @@ public class OrderRepository : IOrderRepository
         bool IsDeleted,
         Guid? CustomerId,
         int Status,
-        bool NeedLabel);
+        bool NeedLabel,
+        string? OrderType,
+        string? ResellerName,
+        bool? IsAddressReviewed);
 
     private record OrderItemQueryResult(
         int Id, 

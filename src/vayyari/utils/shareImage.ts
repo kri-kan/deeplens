@@ -1,18 +1,53 @@
 import { Alert, Platform, Linking, Share } from 'react-native';
 import * as ExpoSharing from 'expo-sharing';
-import { cacheDirectory, createDownloadResumable } from 'expo-file-system/legacy';
+import {
+  cacheDirectory,
+  createDownloadResumable,
+  copyAsync,
+  deleteAsync,
+  getInfoAsync,
+} from 'expo-file-system/legacy';
 
 /**
  * Shares an image or PDF (local file or remote URL) with other apps via Android/iOS share intent.
  * Handles Expo Go, development builds, and standalone release APKs seamlessly.
+ *
+ * @param uri Local file URI or remote HTTP/HTTPS URL
+ * @param title Dialog / intent title
+ * @param customFilename Optional custom name for the shared file (e.g. "Hyd-Apt Priya Sharma")
  */
-export async function shareImageUri(uri?: string | null, title?: string): Promise<void> {
+export async function shareImageUri(
+  uri?: string | null,
+  title?: string,
+  customFilename?: string
+): Promise<void> {
   if (!uri) {
     Alert.alert('No File', 'No file available to share.');
     return;
   }
 
   try {
+    const isRemote = uri.startsWith('http://') || uri.startsWith('https://');
+    const lower = uri.toLowerCase();
+    const isPdf =
+      lower.includes('.pdf') ||
+      Boolean(customFilename && customFilename.toLowerCase().endsWith('.pdf'));
+    const isPng = lower.includes('.png');
+    const ext = isPdf ? 'pdf' : isPng ? 'png' : 'jpg';
+
+    // Build clean target filename
+    let targetFileName = `share_${Date.now()}.${ext}`;
+    if (customFilename && customFilename.trim()) {
+      const sanitized = customFilename
+        .replace(/\.(pdf|png|jpg|jpeg)$/i, '')
+        .replace(/[/\\?%*:|"<>]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (sanitized) {
+        targetFileName = `${sanitized}.${ext}`;
+      }
+    }
+
     if (Platform.OS === 'web') {
       if (typeof navigator !== 'undefined' && (navigator as any).share) {
         try {
@@ -23,31 +58,76 @@ export async function shareImageUri(uri?: string | null, title?: string): Promis
           return;
         }
       }
-      window.open(uri, '_blank');
-      return;
+      try {
+        const link = document.createElement('a');
+        link.href = uri;
+        link.download = targetFileName;
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+      } catch {
+        window.open(uri, '_blank');
+        return;
+      }
     }
 
     let localUri = uri;
-    const isRemote = uri.startsWith('http://') || uri.startsWith('https://');
+    const targetPath = `${cacheDirectory || ''}${targetFileName}`;
+
+    // Clean up existing file if present to guarantee clean write
+    try {
+      const existing = await getInfoAsync(targetPath);
+      if (existing?.exists) {
+        await deleteAsync(targetPath, { idempotent: true });
+      }
+    } catch {
+      // Non-critical if check fails
+    }
 
     // Remote HTTP/HTTPS file: download to local cache directory first
     if (isRemote) {
-      const lower = uri.toLowerCase();
-      const isPdf = lower.includes('.pdf');
-      const isPng = lower.includes('.png');
-      const ext = isPdf ? 'pdf' : isPng ? 'png' : 'jpg';
-      const filename = `share_${Date.now()}.${ext}`;
-      const targetPath = `${cacheDirectory || ''}${filename}`;
-
       try {
         const downloadResumable = createDownloadResumable(uri, targetPath);
         const res = await downloadResumable.downloadAsync();
+        if (res?.status && res.status >= 400) {
+          try {
+            await deleteAsync(targetPath, { idempotent: true });
+          } catch {}
+          Alert.alert('File Not Found', 'The requested file could not be found or downloaded from storage.');
+          return;
+        }
         if (res?.uri) {
           localUri = res.uri;
         }
       } catch (dlErr) {
         console.warn('[shareImageUri] Cache download failed, will fallback to URL:', dlErr);
       }
+    } else {
+      // Local file: copy to targetPath so the file carries the desired custom filename
+      try {
+        const sourcePath = localUri.startsWith('file://')
+          ? localUri
+          : `file://${localUri.replace(/^[^/]+:\/\//, '')}`;
+        if (sourcePath !== targetPath) {
+          await copyAsync({ from: sourcePath, to: targetPath });
+          localUri = targetPath;
+        }
+      } catch (copyErr) {
+        console.warn('[shareImageUri] Local copy with custom filename failed:', copyErr);
+      }
+    }
+
+    // Validate downloaded file existence and non-zero size before sharing
+    try {
+      const fileInfo = await getInfoAsync(localUri);
+      if (!fileInfo?.exists || (fileInfo as any).size === 0) {
+        Alert.alert('Invalid File', 'The file is empty or could not be retrieved.');
+        return;
+      }
+    } catch {
+      // Non-critical check
     }
 
     // Prepare local file intent URI
@@ -85,6 +165,7 @@ export async function shareImageUri(uri?: string | null, title?: string): Promis
           url: fileIntentUri,
           type: mimeType,
           title: title || 'Share Document',
+          filename: targetFileName.replace(/\.[^/.]+$/, ''),
           failOnCancel: false,
         });
         return;

@@ -109,6 +109,13 @@ export default function VendorManagement() {
                     {item.vendorName}
                   </Text>
                   <View style={styles.tagsContainer}>
+                    {item.alias ? (
+                      <Surface style={[styles.tag, { backgroundColor: '#e0f2fe' }]} elevation={0}>
+                        <Text style={[styles.tagText, { color: '#0369a1', fontWeight: '600' }]}>
+                          🏷️ {item.alias}
+                        </Text>
+                      </Surface>
+                    ) : null}
                     {item.vendorCode && (
                       <Surface style={styles.tag} elevation={0}>
                         <Text style={styles.tagText}>{item.vendorCode}</Text>
@@ -117,7 +124,7 @@ export default function VendorManagement() {
                     {(item.defaultWarehouseName || item.defaultWarehouseCode) && (
                       <Surface style={[styles.tag, styles.warehouseTag]} elevation={0}>
                         <Text style={styles.warehouseTagText}>
-                          🏭 {item.defaultWarehouseName || item.defaultWarehouseCode}
+                          🏭 {item.defaultWarehouseAlias || item.defaultWarehouseName || item.defaultWarehouseCode}
                         </Text>
                       </Surface>
                     )}

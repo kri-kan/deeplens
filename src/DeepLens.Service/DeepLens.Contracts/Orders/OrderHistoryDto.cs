@@ -63,4 +63,10 @@ public class OrderHistoryDto
 
     [JsonPropertyName("codBalance")]
     public decimal? CodBalance { get; set; }
+
+    [JsonPropertyName("orderType")]
+    public string? OrderType { get; set; }
+
+    [JsonPropertyName("resellerName")]
+    public string? ResellerName { get; set; }
 }

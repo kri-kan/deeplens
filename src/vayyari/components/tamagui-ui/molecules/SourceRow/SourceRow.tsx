@@ -2,24 +2,33 @@ import React from 'react';
 import { Pressable } from 'react-native';
 import { XStack, YStack, Text } from 'tamagui';
 import { RiWhatsappFill, RiInstagramLine } from '@/components/tamagui-ui/icons/ri';
-import { LuTag } from '@/components/tamagui-ui/icons/lu';
+import { LuTag, LuUser, LuStore } from '@/components/tamagui-ui/icons/lu';
 import { useTheme } from '@/theme';
 import { StatusBadge } from '../../atoms/StatusBadge';
 import { openPlatformHandle, formatDisplayHandle } from '@/utils/platformLink';
 
 export type OrderSource = 'whatsapp' | 'instagram' | null;
 export type PaymentType = 'cod' | 'prepaid';
+export type OrderType = 'customer' | 'reseller' | 'Customer' | 'Reseller';
 
 export interface SourceRowProps {
   source?: OrderSource;
   sourceContact?: string;
   paymentType?: PaymentType;
+  orderType?: OrderType;
+  resellerName?: string;
 }
 
 const WHATSAPP_GREEN = '#25D366';
 const INSTAGRAM_ACTIVE = '#E1306C';
 
-export function SourceRow({ source, sourceContact, paymentType }: SourceRowProps) {
+export function SourceRow({
+  source,
+  sourceContact,
+  paymentType,
+  orderType = 'customer',
+  resellerName,
+}: SourceRowProps) {
   const { tokens } = useTheme();
 
   const handleOpenSourceChat = () => {
@@ -35,14 +44,20 @@ export function SourceRow({ source, sourceContact, paymentType }: SourceRowProps
     ? 'Instagram'
     : 'None';
 
+  const isReseller = (orderType || '').toLowerCase() === 'reseller';
+  const orderTypeLabel = isReseller
+    ? (resellerName?.trim() ? `RESELLER • ${resellerName.trim()}` : 'RESELLER')
+    : 'CUSTOMER';
+
   return (
     <XStack
       alignItems="center"
       justifyContent="space-between"
       paddingVertical={6}
+      gap={6}
     >
       {/* Left: Source text + functional logo + contact */}
-      <XStack alignItems="center" gap={8}>
+      <XStack alignItems="center" gap={6} flexShrink={1} maxWidth="42%">
         <Text fontSize={13} color={tokens.textMuted} fontWeight="500">
           Source:
         </Text>
@@ -54,20 +69,22 @@ export function SourceRow({ source, sourceContact, paymentType }: SourceRowProps
           onPress={handleOpenSourceChat}
           style={{ cursor: 'pointer' }}
         >
-          <XStack alignItems="center" gap={6}>
+          <XStack alignItems="center" gap={5}>
             {source === 'whatsapp' && (
-              <RiWhatsappFill size={20} color={WHATSAPP_GREEN} />
+              <RiWhatsappFill size={19} color={WHATSAPP_GREEN} />
             )}
             {source === 'instagram' && (
-              <RiInstagramLine size={20} color={INSTAGRAM_ACTIVE} />
+              <RiInstagramLine size={19} color={INSTAGRAM_ACTIVE} />
             )}
             {!source && (
-              <LuTag size={18} color={tokens.textMuted} />
+              <LuTag size={17} color={tokens.textMuted} />
             )}
             <Text
               fontSize={13}
               fontWeight="700"
               color={tokens.text}
+              numberOfLines={1}
+              ellipsizeMode="tail"
               hoverStyle={{ textDecorationLine: 'underline' }}
             >
               {displayContact}
@@ -75,6 +92,22 @@ export function SourceRow({ source, sourceContact, paymentType }: SourceRowProps
           </XStack>
         </Pressable>
       </XStack>
+
+      {/* Middle: Order Type Chip (indicating customer or reseller) */}
+      <YStack flexShrink={1} maxWidth="36%" alignItems="center" justifyContent="center">
+        <StatusBadge
+          intent={isReseller ? 'attention' : 'info'}
+          label={orderTypeLabel}
+          size="md"
+          icon={
+            isReseller ? (
+              <LuStore size={12} color={tokens?.status?.attention?.text || '#B06000'} />
+            ) : (
+              <LuUser size={12} color={tokens?.status?.info?.text || '#1D4ED8'} />
+            )
+          }
+        />
+      </YStack>
 
       {/* Right: Payment Type Pill (using intent-driven StatusBadge atom) */}
       <StatusBadge

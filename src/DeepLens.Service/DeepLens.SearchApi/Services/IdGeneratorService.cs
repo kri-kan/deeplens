@@ -108,9 +108,18 @@ public class IdGeneratorService : IIdGeneratorService
         var source = await GetOrderDetailsAsync(orderId);
         if (source == null) return null;
 
+        var paymentModeToClone = source.PaymentMode;
+        if (!paymentModeToClone.HasValue || paymentModeToClone == PaymentMode.None)
+        {
+            if (source.CodBalance.HasValue && source.CodBalance.Value > 0)
+            {
+                paymentModeToClone = PaymentMode.COD;
+            }
+        }
+
         var newOrderId = await GenerateOrderIdAsync(
             source.Source,
-            source.PaymentMode,
+            paymentModeToClone,
             source.SourceHandle,
             source.InstagramUserId,
             source.CustomerId);
@@ -120,6 +129,45 @@ public class IdGeneratorService : IIdGeneratorService
         {
             foreach (var item in source.Items)
             {
+                string? sanitizedComments = item.Comments;
+                if (!string.IsNullOrWhiteSpace(sanitizedComments))
+                {
+                    try
+                    {
+                        var jsonObj = System.Text.Json.Nodes.JsonNode.Parse(sanitizedComments)?.AsObject();
+                        if (jsonObj != null)
+                        {
+                            jsonObj.Remove("isShared");
+                            jsonObj.Remove("sharedAt");
+                            jsonObj.Remove("isAddressShared");
+                            jsonObj.Remove("addressSharedAt");
+                            jsonObj.Remove("isLabelShared");
+                            jsonObj.Remove("labelSharedAt");
+                            jsonObj.Remove("status");
+                            jsonObj.Remove("awbNumber");
+                            jsonObj.Remove("trackingNumber");
+                            jsonObj.Remove("labelUrl");
+                            jsonObj.Remove("shipmentId");
+
+                            // Preserve and sync COD / Pc charge field if present
+                            if (jsonObj.TryGetPropertyValue("cod/pc", out var codPcNode) && !jsonObj.ContainsKey("codChargePerPiece"))
+                            {
+                                jsonObj["codChargePerPiece"] = codPcNode?.DeepClone();
+                            }
+                            else if (jsonObj.TryGetPropertyValue("codChargePerPiece", out var codChargeNode) && !jsonObj.ContainsKey("cod/pc"))
+                            {
+                                jsonObj["cod/pc"] = codChargeNode?.DeepClone();
+                            }
+
+                            sanitizedComments = jsonObj.ToJsonString();
+                        }
+                    }
+                    catch
+                    {
+                        // Plain text comments remain as is
+                    }
+                }
+
                 clonedItems.Add(new OrderItemUpdateDto
                 {
                     ProductId = item.ProductId,
@@ -130,11 +178,15 @@ public class IdGeneratorService : IIdGeneratorService
                     VendorId = item.VendorId,
                     VendorName = null,
                     SourceType = item.SourceType,
-                    Comments = item.Comments,
+                    Comments = sanitizedComments,
                     LabelUrl = null
                 });
             }
         }
+
+        decimal itemsTotal = clonedItems.Sum(i => i.Subtotal);
+        decimal shipping = source.ShippingCharges ?? 0m;
+        decimal grandTotal = itemsTotal > 0 ? (itemsTotal + shipping) : (source.TotalAmount ?? 0m);
 
         var updateDto = new OrderUpdateDto
         {
@@ -146,17 +198,20 @@ public class IdGeneratorService : IIdGeneratorService
             ShippingState = source.ShippingState,
             ShippingPincode = source.ShippingPincode,
             IsServiceable = source.IsServiceable,
-            TotalAmount = source.TotalAmount,
+            TotalAmount = grandTotal,
             ShippingCharges = source.ShippingCharges,
             AdvancePaid = null,
-            CodBalance = source.PaymentMode == PaymentMode.COD ? source.TotalAmount : null,
+            CodBalance = paymentModeToClone == PaymentMode.COD ? grandTotal : null,
             CustomerId = source.CustomerId,
             Source = source.Source,
             SourceHandle = source.SourceHandle,
-            PaymentMode = source.PaymentMode,
+            PaymentMode = paymentModeToClone,
             TransactionId = null,
             Status = OrderStatus.Unconfirmed,
-            NeedLabel = source.NeedLabel,
+            NeedLabel = false,
+            OrderType = source.OrderType,
+            ResellerName = source.ResellerName,
+            IsAddressReviewed = false,
             Items = clonedItems,
             Groups = null
         };
@@ -202,7 +257,10 @@ public class IdGeneratorService : IIdGeneratorService
             details.ShippingPincode,
             details.IsServiceable,
             details.Status,
-            details.NeedLabel);
+            details.NeedLabel,
+            details.OrderType,
+            details.ResellerName,
+            details.IsAddressReviewed);
 
         if (details.Items != null)
         {
@@ -275,11 +333,11 @@ public class IdGeneratorService : IIdGeneratorService
 
             var groupedByVendor = details.Items.GroupBy(ResolveVendorForGroup).ToList();
             int grpIndex = 1;
+            int globalItemIndex = 1;
 
             foreach (var grp in groupedByVendor)
             {
                 var grpId = $"{orderId}-G{grpIndex}";
-                var needLabelForGroup = (details.NeedLabel ?? false) || (details.PaymentMode == PaymentMode.COD);
                 var groupVendorName = grp.Key;
 
                 var matchingClientGroup = details.Groups?.FirstOrDefault(g => 
@@ -287,6 +345,7 @@ public class IdGeneratorService : IIdGeneratorService
                     (!string.IsNullOrEmpty(g.VendorName) && g.VendorName.Equals(groupVendorName, StringComparison.OrdinalIgnoreCase)) ||
                     (groupVendorName.Equals("Unassigned", StringComparison.OrdinalIgnoreCase) && (string.IsNullOrEmpty(g.VendorName) || g.VendorName.Equals("Unassigned", StringComparison.OrdinalIgnoreCase))));
 
+                var needLabelForGroup = matchingClientGroup?.NeedLabel ?? details.NeedLabel ?? (details.PaymentMode == PaymentMode.COD);
                 var groupStatus = matchingClientGroup?.Status ?? (details.Status == OrderStatus.Confirmed ? "confirmed" : "unconfirmed");
 
                 await _orderRepository.CreateOrUpdateOrderGroupAsync(new OrderGroupDto
@@ -296,10 +355,12 @@ public class IdGeneratorService : IIdGeneratorService
                     VendorId = grp.FirstOrDefault(i => i.VendorId.HasValue)?.VendorId,
                     VendorName = groupVendorName,
                     NeedLabel = needLabelForGroup,
+                    AwbNumber = matchingClientGroup?.AwbNumber,
+                    LabelUrl = matchingClientGroup?.LabelUrl,
                     Status = groupStatus
                 });
 
-                int itemIdx = 1;
+                int grpItemIdx = 1;
                 foreach (var item in grp)
                 {
                     var prodId = item.ProductId;
@@ -308,11 +369,12 @@ public class IdGeneratorService : IIdGeneratorService
                     var unitPrice = item.UnitPrice;
                     var qty = item.Quantity > 0 ? item.Quantity : 1;
                     var subtotal = item.Subtotal > 0 ? item.Subtotal : (unitPrice * qty);
-                    var itemId = item.ItemId ?? $"{grpId}-I{itemIdx++}";
+                    var itemId = item.ItemId ?? $"{grpId}-I{grpItemIdx}";
+                    grpItemIdx++;
 
                     await _orderRepository.AddOrderItemAsync(
                         internalId, 
-                        itemIdx, 
+                        globalItemIndex++, 
                         prodId, 
                         productTitle,
                         comments,

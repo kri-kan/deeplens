@@ -169,3 +169,43 @@ export const CreateForwardOrderFlow: Story = {
   ),
 };
 
+export const WithCancelledShipmentHistory: Story = {
+  render: () => (
+    <InteractiveGroupManagement
+      vendorName="Varanasi Weavers Ltd"
+      currentStage="Confirmed"
+      needLabel={true}
+      isCod={true}
+      awbNumber="35003110014976"
+      labelUrl="https://example.com/delhivery-label.pdf"
+      shipmentHistory={[
+        {
+          awbNumber: '35003110014976',
+          status: 'manifested',
+          courierPartner: 'Delhivery',
+          metadata: {
+            weightGrams: 800,
+            lengthCm: 40,
+            widthCm: 25,
+            heightCm: 3,
+            pickupLocation: 'Hyd apartment',
+            sellerName: 'From: Supriya boutique',
+          },
+        },
+        {
+          awbNumber: '35003110014884',
+          status: 'cancelled',
+          courierPartner: 'Delhivery',
+          metadata: {
+            cancelled_at: '2026-10-11T07:30:00Z',
+            cancellation_reason: 'Need Label toggled off',
+            weightGrams: 500,
+            pickupLocation: 'Hyd apartment',
+            sellerName: 'From: Supriya boutique',
+          },
+        },
+      ]}
+    />
+  ),
+};
+

@@ -56,6 +56,8 @@ export function StatusBadge({
         letterSpacing={0.4}
         textAlign="center"
         textTransform="uppercase"
+        numberOfLines={1}
+        ellipsizeMode="tail"
         style={{
           display: 'flex',
           alignItems: 'center',

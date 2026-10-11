@@ -339,19 +339,29 @@ export function AdjacentStageDropdown({
                   return (
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityLabel={`Advance to ${nextStage}`}
-                      onPress={() => handleStagePress(nextStage)}
+                      accessibilityLabel={
+                        isBlockedPlaced
+                          ? `Cannot advance to ${nextStage}. Valid shipping label is required.`
+                          : `Advance to ${nextStage}`
+                      }
+                      accessibilityState={{ disabled: isBlockedPlaced }}
+                      disabled={isBlockedPlaced}
+                      onPress={() => {
+                        if (isBlockedPlaced) return;
+                        handleStagePress(nextStage);
+                      }}
                       style={({ pressed }) => ({
                         paddingHorizontal: 12,
                         paddingVertical: 10,
                         borderRadius: tokens.radius.sm,
                         borderWidth: 1,
-                        borderColor: isBlockedPlaced ? tokens.warning : tokens.accent,
+                        borderColor: isBlockedPlaced ? `${tokens.border}` : tokens.accent,
                         backgroundColor: isBlockedPlaced
-                          ? '#FEF3C720'
+                          ? `${tokens.textMuted}0A`
                           : pressed
                           ? `${tokens.accent}24`
                           : `${tokens.accent}10`,
+                        opacity: isBlockedPlaced ? 0.55 : 1,
                         flexDirection: 'row',
                         alignItems: 'center',
                         justifyContent: 'space-between',
@@ -364,9 +374,14 @@ export function AdjacentStageDropdown({
                             height: 8,
                             borderRadius: 4,
                             backgroundColor: getStageColor(nextStage),
+                            opacity: isBlockedPlaced ? 0.5 : 1,
                           }}
                         />
-                        <Text fontSize={13} fontWeight="700" color={tokens.text}>
+                        <Text
+                          fontSize={13}
+                          fontWeight="700"
+                          color={isBlockedPlaced ? tokens.textMuted : tokens.text}
+                        >
                           {nextStage}
                         </Text>
                       </XStack>
@@ -382,7 +397,7 @@ export function AdjacentStageDropdown({
                           alignItems="center"
                           gap={4}
                         >
-                          <LuTriangleAlert size={11} color="#D97706" />
+                          <LuLock size={11} color="#B45309" />
                           <Text fontSize={10} fontWeight="700" color="#B45309">
                             Label Required
                           </Text>

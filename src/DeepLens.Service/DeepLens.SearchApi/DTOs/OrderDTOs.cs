@@ -74,6 +74,15 @@ public class OrderUpdateDto
 
     [JsonPropertyName("groups")]
     public List<DeepLens.Contracts.Orders.OrderGroupDto>? Groups { get; set; }
+
+    [JsonPropertyName("orderType")]
+    public string? OrderType { get; set; }
+
+    [JsonPropertyName("resellerName")]
+    public string? ResellerName { get; set; }
+
+    [JsonPropertyName("isAddressReviewed")]
+    public bool? IsAddressReviewed { get; set; }
 }
 
 /// <summary>

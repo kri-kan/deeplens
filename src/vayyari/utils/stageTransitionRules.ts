@@ -1,7 +1,6 @@
 export const ORDER_STAGES = [
   'Unconfirmed',
   'Confirmed',
-  'Processed',
   'Placed',
   'Delivered',
 ] as const;
@@ -11,7 +10,6 @@ export type OrderStage = typeof ORDER_STAGES[number];
 export const STAGE_COLORS: Record<string, string> = {
   unconfirmed: '#94A3B8',
   confirmed: '#F59E0B',
-  processed: '#6366F1',
   placed: '#2563EB',
   delivered: '#10B981',
 };
@@ -52,7 +50,6 @@ export function resolveInitials(name?: string, fallback = 'SK'): string {
 
 export const DEFAULT_STAGE_ACTIONS: Record<string, string> = {
   confirmed: 'Confirmed',
-  processed: 'Processed',
   placed: 'Label Ready',
   delivered: 'Delivered',
 };
@@ -135,4 +132,10 @@ export function synthesizeProgressionHistory(
   }
 
   return { nodes, transitions };
+}
+
+export function isGroupSharingEnabled(stage?: string | null): boolean {
+  if (!stage) return false;
+  const s = stage.trim().toLowerCase();
+  return s !== 'unconfirmed' && s !== 'unformed';
 }

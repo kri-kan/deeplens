@@ -1,6 +1,7 @@
 export interface VendorResponse {
   id: string;
   vendorName: string;
+  alias?: string;
   vendorCode?: string;
   firstName?: string;
   lastName?: string;
@@ -16,6 +17,7 @@ export interface VendorResponse {
   defaultWarehouseId?: string;
   defaultWarehouseName?: string;
   defaultWarehouseCode?: string;
+  defaultWarehouseAlias?: string;
   createdAt: string;
   updatedAt: string;
 }

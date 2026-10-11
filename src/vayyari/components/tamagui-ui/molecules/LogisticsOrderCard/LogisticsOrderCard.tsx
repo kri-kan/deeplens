@@ -9,10 +9,12 @@ import {
   LuUser,
   LuTag,
   LuChevronRight,
+  LuCheck,
 } from '@/components/tamagui-ui/icons/lu';
 import { useTheme } from '@/theme';
 import { TimestampBadge } from '../../atoms/TimestampBadge';
 import { StatusBadge } from '../../atoms/StatusBadge';
+import { evaluateNoLabelSla } from '@/utils/noLabelSla';
 
 export interface PackageSummary {
   id: string;
@@ -36,6 +38,8 @@ export interface LogisticsOrderCardData {
   totalOrderValue: number;
   totalCodBalance?: number;
   orderDate: string | Date;
+  placedAt?: string | Date;
+  hasLabel?: boolean;
   status: string;
   totalItemsCount: number;
   packages: PackageSummary[];
@@ -47,6 +51,9 @@ export interface LogisticsOrderCardProps {
   onPressDetails?: (orderId: string) => void;
   onPressFulfillment?: (orderId: string) => void;
   onPressResolveNdr?: (orderId: string) => void;
+  onPressMarkInTransit?: (orderId: string) => void;
+  onPressMarkDelivered?: (orderId: string) => void;
+  onPressFlagIssue?: (orderId: string) => void;
 }
 
 const WHATSAPP_GREEN = '#25D366';
@@ -57,6 +64,9 @@ export function LogisticsOrderCard({
   onPressDetails,
   onPressFulfillment,
   onPressResolveNdr,
+  onPressMarkInTransit,
+  onPressMarkDelivered,
+  onPressFlagIssue,
 }: LogisticsOrderCardProps) {
   const { tokens } = useTheme();
 
@@ -65,17 +75,22 @@ export function LogisticsOrderCard({
   const isInstagram = order.source?.toLowerCase() === 'instagram';
   const hasNdr = order.hasNdr || order.status === 'NdrActionNeeded';
 
+  // Evaluate SLA for no-label orders (3-day dispatch & 12-day delivery)
+  const slaResult = evaluateNoLabelSla(order);
+  const isOverdue = slaResult.isOverdue;
+  const isRedBox = hasNdr || isOverdue;
+
   return (
     <YStack
-      backgroundColor={tokens.surface}
+      backgroundColor={isOverdue ? `${tokens.error}05` : tokens.surface}
       borderRadius={tokens.radius.lg}
-      borderWidth={1.5}
-      borderColor={hasNdr ? tokens.error : tokens.border}
+      borderWidth={isRedBox ? 2 : 1.5}
+      borderColor={isRedBox ? tokens.error : tokens.border}
       padding={14}
       gap={12}
       shadowColor="#000"
       shadowOffset={{ width: 0, height: 2 }}
-      shadowOpacity={hasNdr ? 0.08 : 0.03}
+      shadowOpacity={isRedBox ? 0.12 : 0.03}
       shadowRadius={8}
     >
       {/* Top Header: Order ID + Source Badge + Date + Payment Pill */}
@@ -279,6 +294,130 @@ export function LogisticsOrderCard({
               </Text>
             </XStack>
           </Pressable>
+        </XStack>
+      )}
+
+      {/* No-Label Overdue Dispatch Alert (>= 3 days in Ready to Ship) */}
+      {!hasNdr && slaResult.isOverdue && slaResult.type === 'DISPATCH_OVERDUE' && (
+        <XStack
+          backgroundColor={`${tokens.error}14`}
+          borderRadius={tokens.radius.md}
+          borderWidth={1}
+          borderColor={tokens.error}
+          padding={10}
+          alignItems="center"
+          justifyContent="space-between"
+          gap={10}
+          flexWrap="wrap"
+        >
+          <XStack alignItems="center" gap={8} flex={1} minWidth={200}>
+            <LuTriangleAlert size={18} color={tokens.error} />
+            <YStack gap={1} flex={1}>
+              <Text fontSize={12} fontWeight="800" color={tokens.error}>
+                OVERDUE DISPATCH (Day {slaResult.daysElapsed} since Placed)
+              </Text>
+              <Text fontSize={11} color={tokens.textMuted}>
+                Vendor has not confirmed dispatch. Please verify offline.
+              </Text>
+            </YStack>
+          </XStack>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Mark order ${order.orderNumber} in transit`}
+            onPress={() => onPressMarkInTransit?.(order.id)}
+            style={{ cursor: 'pointer' } as any}
+          >
+            <XStack
+              paddingVertical={6}
+              paddingHorizontal={12}
+              borderRadius={tokens.radius.sm}
+              backgroundColor={tokens.error}
+              alignItems="center"
+              justifyContent="center"
+              gap={6}
+            >
+              <LuTruck size={14} color="#fff" />
+              <Text fontSize={11} fontWeight="800" color="#fff">
+                Mark In Transit
+              </Text>
+            </XStack>
+          </Pressable>
+        </XStack>
+      )}
+
+      {/* No-Label Overdue Delivery Alert (>= 12 days since placed, still In Transit) */}
+      {!hasNdr && slaResult.isOverdue && slaResult.type === 'DELIVERY_OVERDUE' && (
+        <XStack
+          backgroundColor={`${tokens.error}14`}
+          borderRadius={tokens.radius.md}
+          borderWidth={1}
+          borderColor={tokens.error}
+          padding={10}
+          alignItems="center"
+          justifyContent="space-between"
+          gap={10}
+          flexWrap="wrap"
+        >
+          <XStack alignItems="center" gap={8} flex={1} minWidth={200}>
+            <LuTriangleAlert size={18} color={tokens.error} />
+            <YStack gap={1} flex={1}>
+              <Text fontSize={12} fontWeight="800" color={tokens.error}>
+                OVERDUE DELIVERY (Day {slaResult.daysElapsed} since Placed)
+              </Text>
+              <Text fontSize={11} color={tokens.textMuted}>
+                In transit for {slaResult.daysElapsed} days. Verify delivery with buyer.
+              </Text>
+            </YStack>
+          </XStack>
+
+          <XStack alignItems="center" gap={8}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Flag issue for order ${order.orderNumber}`}
+              onPress={() => onPressFlagIssue?.(order.id)}
+              style={{ cursor: 'pointer' } as any}
+            >
+              <XStack
+                paddingVertical={6}
+                paddingHorizontal={10}
+                borderRadius={tokens.radius.sm}
+                borderWidth={1}
+                borderColor={tokens.error}
+                backgroundColor={tokens.surface}
+                alignItems="center"
+                justifyContent="center"
+                gap={4}
+              >
+                <LuTriangleAlert size={13} color={tokens.error} />
+                <Text fontSize={11} fontWeight="700" color={tokens.error}>
+                  Flag Issue / NDR
+                </Text>
+              </XStack>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Mark order ${order.orderNumber} delivered`}
+              onPress={() => onPressMarkDelivered?.(order.id)}
+              style={{ cursor: 'pointer' } as any}
+            >
+              <XStack
+                paddingVertical={6}
+                paddingHorizontal={12}
+                borderRadius={tokens.radius.sm}
+                backgroundColor={tokens.success}
+                alignItems="center"
+                justifyContent="center"
+                gap={4}
+              >
+                <LuCheck size={14} color="#fff" />
+                <Text fontSize={11} fontWeight="800" color="#fff">
+                  Mark Delivered
+                </Text>
+              </XStack>
+            </Pressable>
+          </XStack>
         </XStack>
       )}
 

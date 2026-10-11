@@ -7,6 +7,8 @@ import {
   Alert,
   Image,
   ActivityIndicator,
+  BackHandler,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YStack, XStack, Text } from 'tamagui';
@@ -153,53 +155,100 @@ export function UnderlineField({
 export interface AddressCardProps {
   address: AddressData | null;
   onEditPress: () => void;
+  isReviewed?: boolean;
 }
 
-export function AddressCard({ address, onEditPress }: AddressCardProps) {
+export function AddressCard({ address, onEditPress, isReviewed = true }: AddressCardProps) {
   const { tokens } = useTheme();
+  const isUnreviewed = isReviewed === false;
 
   return (
     <YStack gap={6}>
-      <Text fontSize={11} fontWeight="700" color={tokens.textMuted} textTransform="uppercase" letterSpacing={0.8}>
-        Delivery Address
-      </Text>
+      <XStack justifyContent="space-between" alignItems="center">
+        <Text fontSize={11} fontWeight="700" color={tokens.textMuted} textTransform="uppercase" letterSpacing={0.8}>
+          Delivery Address
+        </Text>
+        {isUnreviewed && (
+          <XStack
+            backgroundColor={`${tokens.warning}22`}
+            borderWidth={1}
+            borderColor={`${tokens.warning}55`}
+            borderRadius={tokens.radius.xs}
+            paddingHorizontal={7}
+            paddingVertical={2}
+            alignItems="center"
+            gap={4}
+          >
+            <LuTriangleAlert size={11} color={tokens.warning} />
+            <Text fontSize={10} fontWeight="800" color={tokens.warning} letterSpacing={0.4}>
+              NOT REVIEWED
+            </Text>
+          </XStack>
+        )}
+      </XStack>
 
       {address ? (
         <YStack
-          backgroundColor={tokens.surface}
-          borderWidth={1}
-          borderColor={tokens.border}
+          backgroundColor={isUnreviewed ? `${tokens.warning}0F` : tokens.surface}
+          borderWidth={isUnreviewed ? 1.5 : 1}
+          borderColor={isUnreviewed ? tokens.warning : tokens.border}
           borderRadius={tokens.radius.md}
           padding={12}
           gap={6}
         >
+          {isUnreviewed && (
+            <XStack
+              backgroundColor={`${tokens.warning}1A`}
+              borderRadius={tokens.radius.xs}
+              paddingHorizontal={8}
+              paddingVertical={5}
+              alignItems="center"
+              justifyContent="space-between"
+              marginBottom={2}
+            >
+              <XStack gap={6} alignItems="center" flex={1}>
+                <LuTriangleAlert size={13} color={tokens.warning} />
+                <Text fontSize={11} fontWeight="700" color={tokens.warning} numberOfLines={1}>
+                  Copied from cloned order — please review address
+                </Text>
+              </XStack>
+              <Pressable onPress={onEditPress}>
+                <Text fontSize={11} fontWeight="800" color={tokens.warning} textDecorationLine="underline">
+                  Review
+                </Text>
+              </Pressable>
+            </XStack>
+          )}
+
           <XStack justifyContent="space-between" alignItems="flex-start">
             <XStack gap={8} alignItems="center" flex={1}>
               <YStack
                 width={28}
                 height={28}
                 borderRadius={tokens.radius.full}
-                backgroundColor={tokens.accentSubtle}
+                backgroundColor={isUnreviewed ? `${tokens.warning}25` : tokens.accentSubtle}
                 alignItems="center"
                 justifyContent="center"
               >
-                <LuMapPin size={14} color={tokens.accent} />
+                <LuMapPin size={14} color={isUnreviewed ? tokens.warning : tokens.accent} />
               </YStack>
               <Text fontSize={13} fontWeight="700" color={tokens.text} flex={1}>
                 {address.name}
               </Text>
             </XStack>
 
-            <Pressable onPress={onEditPress}>
+            <Pressable onPress={onEditPress} accessibilityRole="button" accessibilityLabel="Edit address">
               <YStack
                 width={28}
                 height={28}
                 borderRadius={tokens.radius.sm}
-                backgroundColor={tokens.surfaceRaised}
+                backgroundColor={isUnreviewed ? `${tokens.warning}20` : tokens.surfaceRaised}
+                borderWidth={isUnreviewed ? 1 : 0}
+                borderColor={isUnreviewed ? tokens.warning : 'transparent'}
                 alignItems="center"
                 justifyContent="center"
               >
-                <LuPencil size={12} color={tokens.accent} />
+                <LuPencil size={12} color={isUnreviewed ? tokens.warning : tokens.accent} />
               </YStack>
             </Pressable>
           </XStack>
@@ -848,26 +897,48 @@ export function AddressSheet({ visible, initial, onSave, onClose }: AddressSheet
               </XStack>
             )}
 
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => {
-                onSave({ ...form, isDelhiveryServiceable: pinServiceable });
-                onClose();
-              }}
-              style={{ marginTop: 8 }}
-            >
-              <YStack
-                height={46}
-                borderRadius={tokens.radius.md}
-                backgroundColor={tokens.accent}
-                alignItems="center"
-                justifyContent="center"
+            <XStack gap={10} marginTop={8}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Discard address changes"
+                onPress={onClose}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  height: 46,
+                  borderRadius: tokens.radius.md,
+                  borderWidth: 1,
+                  borderColor: tokens.border,
+                  backgroundColor: pressed ? `${tokens.text}10` : tokens.surfaceRaised,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                })}
+              >
+                <Text fontSize={13} fontWeight="700" color={tokens.textSecondary} letterSpacing={0.4}>
+                  DISCARD
+                </Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Save address"
+                onPress={() => {
+                  onSave({ ...form, isDelhiveryServiceable: pinServiceable });
+                  onClose();
+                }}
+                style={({ pressed }) => ({
+                  flex: 1.5,
+                  height: 46,
+                  borderRadius: tokens.radius.md,
+                  backgroundColor: pressed ? `${tokens.accent}D0` : tokens.accent,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                })}
               >
                 <Text fontSize={13} fontWeight="800" color={tokens.accentForeground} letterSpacing={0.6}>
                   SAVE ADDRESS
                 </Text>
-              </YStack>
-            </Pressable>
+              </Pressable>
+            </XStack>
           </YStack>
         )}
       </YStack>
@@ -937,6 +1008,85 @@ export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBa
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [showExitPrompt, setShowExitPrompt] = useState(false);
+
+  const hasUnsavedChanges = useMemo(() => {
+    return (
+      products.length > 0 ||
+      sourceInput.trim().length > 0 ||
+      Boolean(address?.phone || address?.address) ||
+      Boolean(receiptUrl) ||
+      Boolean(transactionId.trim())
+    );
+  }, [products, sourceInput, address, receiptUrl, transactionId]);
+
+  const handleAttemptBack = () => {
+    if (hasUnsavedChanges) {
+      setShowExitPrompt(true);
+    } else if (onBack) {
+      onBack();
+    } else if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/orders');
+    }
+  };
+
+  useEffect(() => {
+    const onBackPress = () => {
+      if (showExitPrompt) {
+        setShowExitPrompt(false);
+        return true;
+      }
+      if (hasUnsavedChanges) {
+        setShowExitPrompt(true);
+        return true;
+      }
+      return false;
+    };
+
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [hasUnsavedChanges, showExitPrompt]);
+
+  const handleDiscardAndExit = () => {
+    setShowExitPrompt(false);
+
+    // Clean up any uploaded MinIO attachments created during this uncreated order session
+    const attachmentsToClean = products
+      .map((p) => p.attachmentId)
+      .filter((id): id is string => Boolean(id));
+
+    const pathsToClean = products
+      .map((p) => p.storagePath)
+      .filter((p): p is string => Boolean(p));
+
+    if (receiptUrl && receiptUrl.includes('/api/v1/Attachment/')) {
+      pathsToClean.push(receiptUrl);
+    }
+
+    attachmentsToClean.forEach((attId) => {
+      searchApiClient.delete(API_ROUTES.ATTACHMENTS.DELETE(attId)).catch(() => {});
+    });
+    pathsToClean.forEach((path) => {
+      searchApiClient.delete(API_ROUTES.ATTACHMENTS.DELETE_BY_PATH(path)).catch(() => {});
+    });
+
+    resetForm();
+
+    if (onBack) {
+      onBack();
+    } else if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/orders');
+    }
+  };
+
+  const handleSaveDraftAndExit = async () => {
+    setShowExitPrompt(false);
+    await handleSubmit('Unconfirmed');
+  };
 
   useEffect(() => {
     if (snackbarVisible) {
@@ -1208,17 +1358,20 @@ export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBa
           ? [{ id: `receipt-${Date.now()}`, key: receiptUrl, name: 'receipt_screenshot.png', tag: 'order_receipt' }]
           : undefined,
         items: products.map((i, idx) => {
-          const meta = (i.photoUri || i.image || i.size || i.catalogImageUrl || i.vendor || i.attachmentId || i.storagePath)
-            ? JSON.stringify({
-                photoUri: i.photoUri || (i.image && i.image !== i.catalogImageUrl ? i.image : undefined),
-                image: i.photoUri || i.image,
-                catalogImageUrl: i.catalogImageUrl,
-                size: i.size || 'Free Size',
-                vendor: i.vendor,
-                attachmentId: i.attachmentId,
-                storagePath: i.storagePath,
-              })
-            : undefined;
+          const metaObj: Record<string, any> = {};
+          if (i.photoUri || (i.image && i.image !== i.catalogImageUrl)) metaObj.photoUri = i.photoUri || i.image;
+          if (i.photoUri || i.image) metaObj.image = i.photoUri || i.image;
+          if (i.catalogImageUrl) metaObj.catalogImageUrl = i.catalogImageUrl;
+          if (i.size) metaObj.size = i.size || 'Free Size';
+          if (i.vendor) metaObj.vendor = i.vendor;
+          if (i.codChargePerPiece !== undefined) {
+            metaObj.codChargePerPiece = i.codChargePerPiece;
+            metaObj['cod/pc'] = i.codChargePerPiece;
+          }
+          if (i.attachmentId) metaObj.attachmentId = i.attachmentId;
+          if (i.storagePath) metaObj.storagePath = i.storagePath;
+
+          const meta = Object.keys(metaObj).length > 0 ? JSON.stringify(metaObj) : undefined;
           const itemTitle = i.title?.trim() || (i.productId?.trim() ? `Item ${i.productId.trim()}` : `Product Item #${idx + 1}`);
           return {
             productId: i.productId?.trim() || undefined,
@@ -1337,15 +1490,7 @@ export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBa
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Go back"
-            onPress={() => {
-              if (onBack) {
-                onBack();
-              } else if (router.canGoBack()) {
-                router.back();
-              } else {
-                router.replace('/(tabs)/orders');
-              }
-            }}
+            onPress={handleAttemptBack}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             style={({ pressed }) => ({
               width: 36,
@@ -1743,6 +1888,151 @@ export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBa
           </Pressable>
         </YStack>
       )}
+
+      {/* ── Unsaved Changes / Exit Prompt Modal ── */}
+      <Modal
+        visible={showExitPrompt}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowExitPrompt(false)}
+      >
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.65)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 20,
+          }}
+          onPress={() => setShowExitPrompt(false)}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: 380,
+              backgroundColor: tokens.surface,
+              borderRadius: tokens.radius.lg || 16,
+              padding: 20,
+              borderWidth: 1,
+              borderColor: tokens.border,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 6 },
+              shadowOpacity: 0.25,
+              shadowRadius: 12,
+              elevation: 8,
+            }}
+          >
+            <YStack gap={16}>
+              <XStack alignItems="center" gap={12}>
+                <YStack
+                  width={40}
+                  height={40}
+                  borderRadius={tokens.radius.full || 20}
+                  backgroundColor={`${tokens.warning}1A`}
+                  alignItems="center"
+                  justifyContent="center"
+                >
+                  <LuTriangleAlert size={22} color={tokens.warning} />
+                </YStack>
+                <YStack flex={1}>
+                  <Text fontSize={16} fontWeight="700" color={tokens.text}>
+                    Unsaved Order Changes
+                  </Text>
+                  <Text fontSize={12} color={tokens.textMuted} marginTop={2}>
+                    You have items or details added to this order.
+                  </Text>
+                </YStack>
+              </XStack>
+
+              <Text fontSize={13} color={tokens.textSecondary} lineHeight={18}>
+                Would you like to save this order as a draft before leaving, or discard all changes?
+              </Text>
+
+              <YStack gap={10} marginTop={4}>
+                {/* Save as Draft */}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Save as draft and exit"
+                  onPress={handleSaveDraftAndExit}
+                  disabled={isSubmitting}
+                  style={({ pressed }) => ({
+                    backgroundColor: tokens.accent,
+                    paddingVertical: 12,
+                    paddingHorizontal: 16,
+                    borderRadius: tokens.radius.sm || 8,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'row',
+                    gap: 8,
+                    opacity: pressed || isSubmitting ? 0.8 : 1,
+                  })}
+                >
+                  {isSubmitting ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <LuCheck size={16} color="#FFFFFF" />
+                      <Text fontSize={13} fontWeight="700" color="#FFFFFF">
+                        SAVE AS DRAFT
+                      </Text>
+                    </>
+                  )}
+                </Pressable>
+
+                {/* Discard Order */}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Discard order and clean up"
+                  onPress={handleDiscardAndExit}
+                  disabled={isSubmitting}
+                  style={({ pressed }) => ({
+                    backgroundColor: '#FEE2E2',
+                    borderWidth: 1,
+                    borderColor: '#FCA5A5',
+                    paddingVertical: 12,
+                    paddingHorizontal: 16,
+                    borderRadius: tokens.radius.sm || 8,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'row',
+                    gap: 8,
+                    opacity: pressed || isSubmitting ? 0.8 : 1,
+                  })}
+                >
+                  <LuTrash2 size={16} color="#DC2626" />
+                  <Text fontSize={13} fontWeight="700" color="#DC2626">
+                    DISCARD & EXIT
+                  </Text>
+                </Pressable>
+
+                {/* Keep Editing */}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Keep editing"
+                  onPress={() => setShowExitPrompt(false)}
+                  disabled={isSubmitting}
+                  style={({ pressed }) => ({
+                    backgroundColor: 'transparent',
+                    borderWidth: 1,
+                    borderColor: tokens.border,
+                    paddingVertical: 11,
+                    paddingHorizontal: 16,
+                    borderRadius: tokens.radius.sm || 8,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: pressed ? 0.7 : 1,
+                  })}
+                >
+                  <Text fontSize={13} fontWeight="600" color={tokens.textSecondary}>
+                    KEEP EDITING
+                  </Text>
+                </Pressable>
+              </YStack>
+            </YStack>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </YStack>
   );
 };

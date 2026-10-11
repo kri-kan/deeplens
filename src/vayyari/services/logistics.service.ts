@@ -19,7 +19,9 @@ import {
   UpdateWarehouseRequest,
   WarehouseSyncResponse,
   ShippingEstimateRequest,
-  ShippingEstimateResponse
+  ShippingEstimateResponse,
+  MarkInTransitPayload,
+  GroupShipmentHistoryItem
 } from '@/types/logistics';
 
 // No mock orders in production — live data only
@@ -67,6 +69,22 @@ function mapHistoryItemToLogisticsOrder(item: any): LogisticsOrder {
   const totalValue = Number(item.totalAmount) || 0;
   const codBalance = Number(item.codBalance) || (paymentMode === 'COD' ? totalValue : 0);
 
+  const rawHistoryStatus = (item.status || '').toLowerCase().replace(/[\s_-]+/g, '');
+  let status: OrderFulfillmentStatus = 'ReadyToShip';
+  if (rawHistoryStatus === 'intransit') status = 'InTransit';
+  else if (rawHistoryStatus === 'delivered') status = 'Delivered';
+  else if (rawHistoryStatus === 'ndractionneeded') status = 'NdrActionNeeded';
+  else if (rawHistoryStatus === 'rto') status = 'RTO';
+  else if (rawHistoryStatus === 'cancelled') status = 'Cancelled';
+  else if (rawHistoryStatus === 'readyforpickup') status = 'ReadyForPickup';
+  else if (rawHistoryStatus === 'outfordelivery') status = 'OutForDelivery';
+  else status = 'ReadyToShip';
+
+  const hasLabel = Boolean(
+    item.needLabel !== false && (item.labelUrl || item.awbNumber || item.delhiveryAwbNumber)
+  );
+  const placedAt = item.placedAt || item.timestamp || item.createdAt || new Date().toISOString();
+
   const order: LogisticsOrder = {
     id: item.id,
     orderNumber: item.id.startsWith('VY-') ? item.id : `VY-2026-${item.id}`,
@@ -82,8 +100,10 @@ function mapHistoryItemToLogisticsOrder(item: any): LogisticsOrder {
     totalOrderValue: totalValue,
     totalCodBalance: codBalance,
     orderDate: item.timestamp || new Date().toISOString(),
-    status: 'PendingFulfillment',
-    hasNdr: false,
+    placedAt,
+    hasLabel,
+    status,
+    hasNdr: status === 'NdrActionNeeded',
     hasEscalation: false,
     items: [],
     packages: []
@@ -125,6 +145,26 @@ function mapOrderDetailToLogisticsOrder(dto: any): LogisticsOrder {
   const totalValue = Number(dto.totalAmount) || items.reduce((acc, i) => acc + i.totalPrice, 0);
   const codBalance = Number(dto.codBalance) || (paymentMode === 'COD' ? totalValue : 0);
 
+  const rawDtoStatus = (dto.status || '').toLowerCase().replace(/[\s_-]+/g, '');
+  let dtoStatus: OrderFulfillmentStatus = 'ReadyToShip';
+  if (rawDtoStatus === 'intransit') dtoStatus = 'InTransit';
+  else if (rawDtoStatus === 'delivered') dtoStatus = 'Delivered';
+  else if (rawDtoStatus === 'ndractionneeded') dtoStatus = 'NdrActionNeeded';
+  else if (rawDtoStatus === 'rto') dtoStatus = 'RTO';
+  else if (rawDtoStatus === 'cancelled') dtoStatus = 'Cancelled';
+  else if (rawDtoStatus === 'readyforpickup') dtoStatus = 'ReadyForPickup';
+  else if (rawDtoStatus === 'outfordelivery') dtoStatus = 'OutForDelivery';
+  else dtoStatus = 'ReadyToShip';
+
+  const hasLabel = Boolean(
+    dto.needLabel !== false &&
+      (dto.labelUrl ||
+        dto.awbNumber ||
+        (Array.isArray(dto.packages) &&
+          dto.packages.some((p: any) => p.delhiveryAwbNumber || p.delhiveryLabelPdfUrl)))
+  );
+  const placedAt = dto.placedAt || dto.timestamp || dto.createdAt || new Date().toISOString();
+
   const order: LogisticsOrder = {
     id: dto.id,
     orderNumber: dto.id.startsWith('VY-') ? dto.id : `VY-2026-${dto.id}`,
@@ -140,8 +180,10 @@ function mapOrderDetailToLogisticsOrder(dto: any): LogisticsOrder {
     totalOrderValue: totalValue,
     totalCodBalance: codBalance,
     orderDate: dto.timestamp || new Date().toISOString(),
-    status: 'PendingFulfillment',
-    hasNdr: false,
+    placedAt,
+    hasLabel,
+    status: dtoStatus,
+    hasNdr: dtoStatus === 'NdrActionNeeded',
     hasEscalation: false,
     items,
     packages: []
@@ -510,6 +552,84 @@ export const logisticsService = {
   },
 
   /**
+   * Mark an entire order or package as In Transit (for no-label vendor direct or custom shipments)
+   */
+  markOrderInTransit: async (
+    orderId: string,
+    payload: {
+      packageId?: string;
+      courierName?: string;
+      awbNumber?: string;
+      labelAttachmentUrl?: string;
+      notes?: string;
+    }
+  ): Promise<LogisticsOrder> => {
+    try {
+      await productMgmtApiClient.post(`/api/v1/logistics/orders/${orderId}/mark-in-transit`, payload);
+    } catch {
+      // Local fallback simulation
+    }
+
+    ordersStore = ordersStore.map((order) => {
+      if (!isMatchingOrderId(order.id, orderId)) return order;
+      const updatedPackages = order.packages.map((pkg) => {
+        if (!payload.packageId || pkg.id === payload.packageId) {
+          return {
+            ...pkg,
+            vendorAwbNumber: payload.awbNumber || pkg.vendorAwbNumber,
+            vendorCourierName: payload.courierName || pkg.vendorCourierName,
+            vendorLabelAttachmentUrl: payload.labelAttachmentUrl || pkg.vendorLabelAttachmentUrl,
+            currentTrackingStatus: payload.courierName || payload.awbNumber
+              ? `Dispatched via ${payload.courierName || 'Courier'} (${payload.awbNumber || 'No AWB'})`
+              : 'In Transit',
+            updatedAt: new Date().toISOString(),
+          };
+        }
+        return pkg;
+      });
+      return {
+        ...order,
+        packages: updatedPackages,
+        status: 'InTransit' as OrderFulfillmentStatus,
+        notes: payload.notes || order.notes,
+      };
+    });
+
+    return await logisticsService.getOrder(orderId);
+  },
+
+  /**
+   * Mark an entire order as Delivered (for offline verified delivery)
+   */
+  markOrderDelivered: async (
+    orderId: string,
+    notes?: string
+  ): Promise<LogisticsOrder> => {
+    try {
+      await productMgmtApiClient.post(`/api/v1/logistics/orders/${orderId}/mark-delivered`, { notes });
+    } catch {
+      // Local fallback simulation
+    }
+
+    ordersStore = ordersStore.map((order) => {
+      if (!isMatchingOrderId(order.id, orderId)) return order;
+      const updatedPackages = order.packages.map((pkg) => ({
+        ...pkg,
+        currentTrackingStatus: 'Delivered',
+        updatedAt: new Date().toISOString(),
+      }));
+      return {
+        ...order,
+        packages: updatedPackages,
+        status: 'Delivered' as OrderFulfillmentStatus,
+        notes: notes || order.notes,
+      };
+    });
+
+    return await logisticsService.getOrder(orderId);
+  },
+
+  /**
    * Generate Delhivery COD AWB & Thermal Label
    */
   generateDelhiveryAwb: async (request: GenerateDelhiveryAwbRequest): Promise<GenerateDelhiveryAwbResponse> => {
@@ -719,6 +839,62 @@ export const logisticsService = {
     } catch (err) {
       console.warn('Backend cancelGroupLabel call failed:', err);
       return { success: false, awbNumber };
+    }
+  },
+
+  /**
+   * Updates need_label setting for an order group.
+   */
+  updateNeedLabel: async (orderGrpId: string, needLabel: boolean): Promise<boolean> => {
+    try {
+      await searchApiClient.put(`/api/v1/orderid/groups/${orderGrpId}/need-label`, { needLabel });
+      return true;
+    } catch (err) {
+      console.warn('Backend updateNeedLabel call failed:', err);
+      return false;
+    }
+  },
+
+  /**
+   * Fetches historical shipment records for an order group (including cancelled AWBs and manifestation metadata).
+   */
+  getGroupShipments: async (orderGrpId: string): Promise<GroupShipmentHistoryItem[]> => {
+    try {
+      const response = await searchApiClient.get<GroupShipmentHistoryItem[]>(
+        `/api/v1/orderid/groups/${orderGrpId}/shipments`
+      );
+      return response || [];
+    } catch (err) {
+      console.warn('Backend getGroupShipments call failed:', err);
+      return [];
+    }
+  },
+
+  /**
+   * Reconciles live tracking and pickup schedule with carrier (Delhivery) and returns refreshed shipment records.
+   */
+  syncGroupShipments: async (orderGrpId: string, awbNumber?: string): Promise<GroupShipmentHistoryItem[]> => {
+    try {
+      const url = `/api/v1/orderid/groups/${orderGrpId}/sync-tracking${awbNumber ? `?awbNumber=${encodeURIComponent(awbNumber)}` : ''}`;
+      const response = await searchApiClient.post<GroupShipmentHistoryItem[]>(url);
+      return response || [];
+    } catch (err) {
+      console.warn('Backend syncGroupShipments call failed:', err);
+      return [];
+    }
+  },
+
+  /**
+   * Resets and clears the scheduled pickup for an order group (useful when cancelled offline by business/carrier).
+   */
+  resetGroupPickup: async (orderGrpId: string, awbNumber?: string): Promise<{ success: boolean; shipments: GroupShipmentHistoryItem[] }> => {
+    try {
+      const url = `/api/v1/orderid/groups/${orderGrpId}/reset-pickup${awbNumber ? `?awbNumber=${encodeURIComponent(awbNumber)}` : ''}`;
+      const response = await searchApiClient.post<{ success: boolean; shipments: GroupShipmentHistoryItem[] }>(url);
+      return response || { success: false, shipments: [] };
+    } catch (err) {
+      console.warn('Backend resetGroupPickup call failed:', err);
+      return { success: false, shipments: [] };
     }
   },
 

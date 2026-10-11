@@ -17,6 +17,7 @@ export interface VendorOption {
   id: string;
   name: string;
   code?: string;
+  alias?: string;
   isStarred?: boolean;
 }
 
@@ -66,6 +67,7 @@ export function VendorPickerSheet({
             id: v.id,
             name: v.vendorName,
             code: v.vendorCode,
+            alias: v.alias,
             isStarred: Boolean(
               v.isStarred ||
               v.isFavorite ||
@@ -117,7 +119,8 @@ export function VendorPickerSheet({
       ? vendors.filter(
           (v) =>
             v.name.toLowerCase().includes(q) ||
-            (v.code && v.code.toLowerCase().includes(q))
+            (v.code && v.code.toLowerCase().includes(q)) ||
+            (v.alias && v.alias.toLowerCase().includes(q))
         )
       : vendors;
 
@@ -312,6 +315,18 @@ export function VendorPickerSheet({
                         >
                           ({item.code})
                         </Text>
+                      ) : null}
+                      {item.alias ? (
+                        <YStack
+                          backgroundColor="rgba(3, 105, 161, 0.1)"
+                          paddingHorizontal={6}
+                          paddingVertical={1}
+                          borderRadius={4}
+                        >
+                          <Text fontSize={10} fontWeight="700" color="#0369A1">
+                            🏷️ {item.alias}
+                          </Text>
+                        </YStack>
                       ) : null}
                       {isItemLocked && (
                         <YStack

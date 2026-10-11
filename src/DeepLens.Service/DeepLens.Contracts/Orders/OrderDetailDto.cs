@@ -90,6 +90,15 @@ public class OrderDetailDto
 
     [JsonPropertyName("isDeleted")]
     public bool IsDeleted { get; set; }
+
+    [JsonPropertyName("orderType")]
+    public string? OrderType { get; set; } = "Customer";
+
+    [JsonPropertyName("resellerName")]
+    public string? ResellerName { get; set; }
+
+    [JsonPropertyName("isAddressReviewed")]
+    public bool IsAddressReviewed { get; set; } = true;
 }
 
 public class OrderItemDetailDto

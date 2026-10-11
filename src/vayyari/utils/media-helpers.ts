@@ -180,3 +180,51 @@ export const shareMedia = async (
     }
   }
 };
+
+/**
+ * Converts a local (file://, content://) or remote URI into a standard Blob.
+ * 
+ * In modern Expo (SDK 52+), fetch's FormData implementation is WinterCG-compliant
+ * and rejects legacy React Native { uri, name, type } objects with:
+ * "Unsupported FormDataPart implementation".
+ * 
+ * This helper produces a real Blob that FormData accepts across all platforms.
+ */
+export const uriToBlob = async (uri: string, mimeType?: string): Promise<Blob> => {
+  try {
+    const res = await fetch(uri);
+    const blob = await res.blob();
+    if (mimeType && (!blob.type || blob.type === 'application/octet-stream')) {
+      return new Blob([blob], { type: mimeType });
+    }
+    return blob;
+  } catch (err) {
+    console.warn('[uriToBlob] fetch(uri) failed, attempting File/FileSystem fallback:', err);
+    try {
+      const { File } = await import('expo-file-system');
+      const file = new File(uri);
+      const buffer = await file.arrayBuffer();
+      return new Blob([buffer], { type: mimeType || 'image/jpeg' });
+    } catch (fallbackErr) {
+      console.warn('[uriToBlob] File.arrayBuffer fallback failed, trying legacy base64:', fallbackErr);
+      const { readAsStringAsync, EncodingType } = await import('expo-file-system/legacy');
+      const base64 = await readAsStringAsync(uri, { encoding: EncodingType.Base64 });
+      const binaryString = typeof atob === 'function' ? atob(base64) : Buffer.from(base64, 'base64').toString('binary');
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      return new Blob([bytes], { type: mimeType || 'image/jpeg' });
+    }
+  }
+};
+
+export {
+  calculateTargetDimensions,
+  buildWebPFileName,
+  compressImageToWebP,
+  type CompressImageOptions,
+  type CompressedImageResult,
+} from './image-compression';
+

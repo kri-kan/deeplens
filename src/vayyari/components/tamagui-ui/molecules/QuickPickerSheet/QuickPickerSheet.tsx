@@ -69,12 +69,13 @@ export function QuickPickerSheet({
   // Determine initial size category tab (saree vs kids) based on current value
   const isCurrentKids = React.useMemo(() => {
     if (!selected) return false;
-    return KIDS_SIZES.some(
-      (k) =>
-        k.value === selected ||
-        selected.startsWith(k.size) ||
-        selected.toLowerCase().includes('y') ||
-        selected.toLowerCase().includes('month')
+    const norm = selected.trim().toLowerCase();
+    return (
+      KIDS_SIZES.some((k) => k.value.toLowerCase() === norm) ||
+      norm.includes('yr') ||
+      norm.includes('year') ||
+      norm.includes('month') ||
+      /\d+\s*\(\d+.*y\)/i.test(norm)
     );
   }, [selected]);
 
@@ -142,19 +143,26 @@ export function QuickPickerSheet({
             <Text fontSize={11} color={tokens.textMuted}>
               Standard adult and ethnic wear sizing:
             </Text>
-            <XStack flexWrap="wrap" gap={8} paddingVertical={2}>
-              {SAREE_DRESS_SIZES.map((opt) => (
-                <OptionChip
-                  key={opt}
-                  label={opt}
-                  selected={isSareeDressSelected(opt)}
-                  onSelect={() => {
-                    onSelect(opt);
-                    onClose();
-                  }}
-                />
-              ))}
-            </XStack>
+            <ScrollView
+              style={{ maxHeight: 280 }}
+              showsVerticalScrollIndicator={false}
+              nestedScrollEnabled={true}
+              keyboardShouldPersistTaps="always"
+            >
+              <XStack flexWrap="wrap" gap={8} paddingVertical={4}>
+                {SAREE_DRESS_SIZES.map((opt) => (
+                  <OptionChip
+                    key={opt}
+                    label={opt}
+                    selected={isSareeDressSelected(opt)}
+                    onSelect={() => {
+                      onSelect(opt);
+                      onClose();
+                    }}
+                  />
+                ))}
+              </XStack>
+            </ScrollView>
           </YStack>
         )}
 
@@ -164,7 +172,12 @@ export function QuickPickerSheet({
             <Text fontSize={11} color={tokens.textMuted}>
               Lehenga-Choli & Kids ethnic wear (6 Month to 15 Years):
             </Text>
-            <ScrollView style={{ maxHeight: 260 }} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={{ maxHeight: 280 }}
+              showsVerticalScrollIndicator={false}
+              nestedScrollEnabled={true}
+              keyboardShouldPersistTaps="always"
+            >
               <XStack flexWrap="wrap" gap={6} paddingVertical={2}>
                 {KIDS_SIZES.map((kid) => {
                   const isSelected =

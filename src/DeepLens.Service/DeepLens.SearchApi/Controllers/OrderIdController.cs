@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using System.Text.Json.Serialization;
 using DeepLens.SearchApi.Services;
 using DeepLens.SearchApi.DTOs;
 using DeepLens.Contracts.Orders;
@@ -220,7 +221,11 @@ public class OrderIdController : ControllerBase
             request?.TotalAmount,
             request?.OrderId,
             request?.Quantity,
-            request?.ProductsDesc);
+            request?.ProductsDesc,
+            request?.OrderType,
+            request?.ResellerName,
+            request?.SellerName,
+            request?.SellerAddress);
         var result = await _mediator.Send(command);
 
         if (!result.IsSuccess)
@@ -295,6 +300,41 @@ public class OrderIdController : ControllerBase
     }
 
     /// <summary>
+    /// Fetches all historical shipments (both manifested and cancelled) for an order group.
+    /// </summary>
+    [HttpGet("groups/{grpId}/shipments")]
+    public async Task<ActionResult<List<GroupShipmentHistoryDto>>> GetGroupShipments(string grpId)
+    {
+        var shipments = await _orderRepository.GetGroupShipmentsAsync(grpId);
+        return Ok(shipments);
+    }
+
+    /// <summary>
+    /// Reconciles live tracking and pickup schedule with carrier (Delhivery) and returns refreshed shipment records.
+    /// </summary>
+    [HttpPost("groups/{grpId}/sync-tracking")]
+    public async Task<ActionResult<List<GroupShipmentHistoryDto>>> SyncGroupTracking(
+        string grpId, 
+        [FromQuery] string? awbNumber = null)
+    {
+        var shipments = await _orderRepository.SyncGroupShipmentTrackingAsync(grpId, awbNumber);
+        return Ok(shipments);
+    }
+
+    /// <summary>
+    /// Clears any scheduled pickup for an order group (e.g. when pickup was cancelled offline or needs rescheduling).
+    /// </summary>
+    [HttpPost("groups/{grpId}/reset-pickup")]
+    public async Task<IActionResult> ResetGroupPickup(
+        string grpId,
+        [FromQuery] string? awbNumber = null)
+    {
+        var success = await _orderRepository.ResetGroupPickupAsync(grpId, awbNumber);
+        var shipments = await _orderRepository.GetGroupShipmentsAsync(grpId);
+        return Ok(new { success, message = "Pickup schedule cleared successfully", shipments });
+    }
+
+    /// <summary>
     /// Soft deletes an order by its ID.
     /// </summary>
     [HttpDelete("order/{orderId}")]
@@ -313,18 +353,53 @@ public class NeedLabelUpdateRequest
 
 public class GenerateGroupLabelRequest
 {
+    [JsonPropertyName("pickupLocation")]
     public string? PickupLocation { get; set; }
+
+    [JsonPropertyName("shippingMode")]
     public string? ShippingMode { get; set; }
+
+    [JsonPropertyName("weightGrams")]
     public int? WeightGrams { get; set; }
+
+    [JsonPropertyName("lengthCm")]
     public double? LengthCm { get; set; }
+
+    [JsonPropertyName("widthCm")]
     public double? WidthCm { get; set; }
+
+    [JsonPropertyName("heightCm")]
     public double? HeightCm { get; set; }
+
+    [JsonPropertyName("paymentMode")]
     public string? PaymentMode { get; set; }
+
+    [JsonPropertyName("codAmount")]
     public decimal? CodAmount { get; set; }
+
+    [JsonPropertyName("totalAmount")]
     public decimal? TotalAmount { get; set; }
+
+    [JsonPropertyName("orderId")]
     public string? OrderId { get; set; }
+
+    [JsonPropertyName("quantity")]
     public int? Quantity { get; set; }
+
+    [JsonPropertyName("productsDesc")]
     public string? ProductsDesc { get; set; }
+
+    [JsonPropertyName("orderType")]
+    public string? OrderType { get; set; }
+
+    [JsonPropertyName("resellerName")]
+    public string? ResellerName { get; set; }
+
+    [JsonPropertyName("sellerName")]
+    public string? SellerName { get; set; }
+
+    [JsonPropertyName("sellerAddress")]
+    public string? SellerAddress { get; set; }
 }
 
 public class CancelGroupLabelRequest

@@ -3,6 +3,11 @@ import { StyleSheet, View, Modal, ScrollView, Share, Platform } from 'react-nati
 import { Surface, Text, Button, IconButton, useTheme, Divider, Chip } from 'react-native-paper';
 import * as Clipboard from 'expo-clipboard';
 import { FulfillmentPackage, LogisticsOrder } from '@/types/logistics';
+import { shareImageUri } from '@/utils/shareImage';
+import {
+  buildShippingLabelFileName,
+  resolveWarehouseAlias,
+} from '@/utils/shipping-label-helpers';
 
 interface ThermalLabelModalProps {
   visible: boolean;
@@ -27,8 +32,19 @@ export const ThermalLabelModal: React.FC<ThermalLabelModalProps> = ({
 
   const handleShare = async () => {
     try {
+      if (awb) {
+        await Clipboard.setStringAsync(awb);
+      }
+
+      if (packageItem.delhiveryLabelPdfUrl) {
+        const whAlias = (await resolveWarehouseAlias(packageItem.vendorName)) || '';
+        const customFilename = buildShippingLabelFileName(whAlias, order.customerName, awb);
+        await shareImageUri(packageItem.delhiveryLabelPdfUrl, customFilename, customFilename);
+        return;
+      }
+
       await Share.share({
-        message: `Delhivery Shipping Label\nAWB: ${awb}\nOrder: ${order.orderNumber}\nCustomer: ${order.customerName}\nRouting: ${routing}\n${packageItem.delhiveryLabelPdfUrl ? `Download: ${packageItem.delhiveryLabelPdfUrl}` : ''}`,
+        message: `Delhivery Shipping Label\nAWB: ${awb}\nOrder: ${order.orderNumber}\nCustomer: ${order.customerName}\nRouting: ${routing}`,
         title: `Delhivery Label - ${awb}`,
       });
     } catch {
@@ -174,7 +190,6 @@ export const ThermalLabelModal: React.FC<ThermalLabelModalProps> = ({
           <View style={styles.footerActions}>
             <Button
               mode="outlined"
-              icon="content-copy"
               onPress={handleCopyAwb}
               style={styles.actionBtn}
             >

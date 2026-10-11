@@ -21,13 +21,13 @@ import {
   LuStar,
   LuX,
   LuSearch,
-  LuTruck,
 } from '@/components/tamagui-ui/icons/lu';
 import { useTheme } from '@/theme';
 
 export interface DelhiveryWarehouseItem {
   id: string;
   name: string;
+  alias?: string;
   code: string;
   addressLine1?: string;
   address_line1?: string;
@@ -118,6 +118,8 @@ export function DelhiveryWarehousesView({
     const q = activeQuery.toLowerCase().trim();
     return warehouses.filter((item) => {
       const name = item.name?.toLowerCase() || '';
+      const alias = item.alias?.toLowerCase() || '';
+      const code = item.code?.toLowerCase() || '';
       const city = item.city?.toLowerCase() || '';
       const state = item.state?.toLowerCase() || '';
       const pincode = item.pincode?.toLowerCase() || '';
@@ -127,6 +129,8 @@ export function DelhiveryWarehousesView({
 
       return (
         name.includes(q) ||
+        alias.includes(q) ||
+        code.includes(q) ||
         city.includes(q) ||
         state.includes(q) ||
         pincode.includes(q) ||
@@ -419,7 +423,6 @@ export function DelhiveryWarehousesView({
               const addressLine2 = warehouse.addressLine2 || warehouse.address_line2 || '';
               const contactPerson = warehouse.contactPerson || warehouse.contact_person || '';
               const isCentral = !!(warehouse.isCentral ?? warehouse.is_central);
-              const isRegistered = warehouse.registeredWithDelhivery ?? warehouse.isRegistered ?? true;
 
               return (
                 <YStack
@@ -444,36 +447,33 @@ export function DelhiveryWarehousesView({
                         {warehouse.name}
                       </Text>
 
+                      {warehouse.alias ? (
+                        <XStack
+                          alignItems="center"
+                          gap={3}
+                          paddingHorizontal={5.5}
+                          paddingVertical={2}
+                          borderRadius={3.5}
+                          backgroundColor="#E0F2FE"
+                          borderWidth={1}
+                          borderColor="#BAE6FD"
+                        >
+                          <Text
+                            fontSize={9.5}
+                            fontWeight="800"
+                            color="#0369A1"
+                            style={{ includeFontPadding: false } as any}
+                          >
+                            🏷️ {warehouse.alias}
+                          </Text>
+                        </XStack>
+                      ) : null}
+
                       {/* Central Hub Star Indicator Only */}
                       {isCentral && (
                         <YStack>
                           <LuStar size={13.5} color="#F59E0B" filled={true} />
                         </YStack>
-                      )}
-
-                      {/* Delhivery Logo Micro-Badge */}
-                      {isRegistered && (
-                        <XStack
-                          alignItems="center"
-                          gap={3.5}
-                          paddingHorizontal={5.5}
-                          paddingVertical={2}
-                          borderRadius={3.5}
-                          backgroundColor="#FEF2F2"
-                          borderWidth={1}
-                          borderColor="#FECACA"
-                        >
-                          <LuTruck size={10} color="#DC2626" />
-                          <Text
-                            fontSize={9}
-                            fontWeight="900"
-                            color="#DC2626"
-                            letterSpacing={0.4}
-                            style={{ includeFontPadding: false } as any}
-                          >
-                            DELHIVERY
-                          </Text>
-                        </XStack>
                       )}
                     </XStack>
 

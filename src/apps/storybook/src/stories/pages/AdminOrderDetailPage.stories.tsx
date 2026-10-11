@@ -286,19 +286,44 @@ export const SingleItemDeleteConfirmation: Story = {
 /**
  * Multi-select batch delete confirmation prompt when clicking "DELETE (2)"
  */
-export const BatchDeleteConfirmation: Story = {
+export const WhatsAppResellerOrder: Story = {
+  name: 'WhatsApp COD (Reseller Order with Boutique Name)',
   args: {
-    orderId: '849201',
+    orderId: '849202',
+    createdAt: new Date(),
+    source: 'whatsapp',
+    sourceContact: '9876543210',
+    paymentType: 'cod',
+    initialOrderType: 'reseller',
+    initialResellerName: 'Sri Krishna Silk Sarees',
+    initialProducts: MOCK_ITEMS,
+    initialAddress: MOCK_ADDRESS,
+    initialTransactionId: 'UPI-20261010-9982',
+  },
+};
+
+/**
+ * Cloned Order with Unreviewed Address — demonstrating orange warning frame,
+ * amber "NOT REVIEWED" badge, and prompt to review/discard/save.
+ */
+export const ClonedOrderUnreviewedAddress: Story = {
+  name: 'Cloned Order (Address Not Reviewed Warning)',
+  decorators: [withFormFactor('mobile', 'Order Detail (Cloned - Unreviewed Address)')],
+  args: {
+    orderId: '849203',
     createdAt: new Date(),
     source: 'whatsapp',
     sourceContact: '9876543210',
     paymentType: 'cod',
     initialProducts: MOCK_ITEMS,
-    initialSelectedIds: ['item-1', 'item-2'],
     initialAddress: MOCK_ADDRESS,
-    initialConfirmDialogOpen: true,
-    initialConfirmDialogType: 'batch',
+    initialIsAddressReviewed: false,
+    initialTransactionId: '',
+    initialReceiptUrl: null,
+    initialProductSheetOpen: false,
+    initialAddressSheetOpen: false,
   },
 };
+
 
 

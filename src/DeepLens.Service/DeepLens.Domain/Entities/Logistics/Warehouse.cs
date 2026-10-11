@@ -6,6 +6,7 @@ public class Warehouse
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Name { get; set; } = string.Empty;
+    public string? Alias { get; set; }
     public string Code { get; set; } = string.Empty;
     public string? AddressLine1 { get; set; }
     public string? AddressLine2 { get; set; }

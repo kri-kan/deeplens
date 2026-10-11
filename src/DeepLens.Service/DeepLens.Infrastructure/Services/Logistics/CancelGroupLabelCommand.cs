@@ -57,17 +57,26 @@ public class CancelGroupLabelCommandHandler : IRequestHandler<CancelGroupLabelCo
             }
 
             var awbNumber = request.AwbNumber;
+            string? existingLabelUrl = null;
 
-            // If AWB is not supplied, look it up from order_groups
-            if (string.IsNullOrWhiteSpace(awbNumber))
+            // Look up awb_number and label_url from order_groups if not fully provided
+            using (var conn = await _dbConnectionFactory.CreateConnectionAsync())
             {
-                using var conn = await _dbConnectionFactory.CreateConnectionAsync();
-                awbNumber = await conn.QueryFirstOrDefaultAsync<string>(
-                    "SELECT awb_number FROM order_groups WHERE order_grp_id = @OrderGrpId",
+                var groupInfo = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                    "SELECT awb_number, label_url FROM order_groups WHERE order_grp_id = @OrderGrpId",
                     new { OrderGrpId = request.OrderGrpId });
+
+                if (groupInfo != null)
+                {
+                    if (string.IsNullOrWhiteSpace(awbNumber))
+                    {
+                        awbNumber = (string?)groupInfo.awb_number;
+                    }
+                    existingLabelUrl = (string?)groupInfo.label_url;
+                }
             }
 
-            // If we have an AWB, cancel with Delhivery live API and hard delete label from MinIO
+            // 1. If we have an AWB, cancel with Delhivery live API and hard delete label from MinIO
             if (!string.IsNullOrWhiteSpace(awbNumber))
             {
                 var cleanAwb = awbNumber.Trim();
@@ -78,7 +87,7 @@ public class CancelGroupLabelCommandHandler : IRequestHandler<CancelGroupLabelCo
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Delhivery live API cancellation returned an error for AWB {Awb}, proceeding with database update", cleanAwb);
+                    _logger.LogWarning(ex, "Delhivery live API cancellation returned an error for AWB {Awb}, proceeding with storage and database cleanup", cleanAwb);
                 }
 
                 _logger.LogInformation("Hard deleting shipping label PDF from MinIO for AWB {Awb}", cleanAwb);
@@ -88,11 +97,66 @@ public class CancelGroupLabelCommandHandler : IRequestHandler<CancelGroupLabelCo
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to delete label PDF from MinIO for AWB {Awb}", cleanAwb);
+                    _logger.LogWarning(ex, "Failed to delete labels/{Awb}.pdf from storage", cleanAwb);
                 }
             }
 
-            // Update database records: soft delete manifest submission / set status = cancelled, clear label_url, RETAIN awb_number
+            // 2. If existingLabelUrl is present, delete that file from storage as well
+            if (!string.IsNullOrWhiteSpace(existingLabelUrl))
+            {
+                try
+                {
+                    string cleanPath = existingLabelUrl.Trim();
+                    if (cleanPath.Contains("path=", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var idx = cleanPath.IndexOf("path=", StringComparison.OrdinalIgnoreCase);
+                        var sub = cleanPath.Substring(idx + 5);
+                        var endIdx = sub.IndexOf('&');
+                        if (endIdx > 0) sub = sub.Substring(0, endIdx);
+                        cleanPath = Uri.UnescapeDataString(sub);
+                    }
+                    if (cleanPath.StartsWith("/")) cleanPath = cleanPath.TrimStart('/');
+
+                    if (!string.IsNullOrWhiteSpace(cleanPath))
+                    {
+                        _logger.LogInformation("Hard deleting label storage path {Path} for group {GrpId}", cleanPath, request.OrderGrpId);
+                        await _storageService.DeleteFileAsync(cleanPath);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to delete storage path {Path} for group {GrpId}", existingLabelUrl, request.OrderGrpId);
+                }
+            }
+
+            // 3. Purge any attachment records in DB (attachments and entity_attachments)
+            try
+            {
+                using var conn = await _dbConnectionFactory.CreateConnectionAsync();
+                var cleanAwb = awbNumber?.Trim();
+
+                var attachmentIds = (await conn.QueryAsync<Guid>(@"
+                    SELECT DISTINCT a.id 
+                    FROM attachments a
+                    LEFT JOIN entity_attachments ea ON a.id = ea.attachment_id
+                    WHERE (ea.entity_type = 'order_group' AND ea.entity_id = @OrderGrpId)
+                       OR (ea.tag = 'shipping_label' AND ea.entity_id = @OrderGrpId)
+                       OR (@CleanAwb IS NOT NULL AND (a.object_key LIKE '%' || @CleanAwb || '%' OR a.original_filename LIKE '%' || @CleanAwb || '%'))",
+                    new { OrderGrpId = request.OrderGrpId, CleanAwb = cleanAwb })).ToList();
+
+                foreach (var attId in attachmentIds)
+                {
+                    await conn.ExecuteAsync("DELETE FROM entity_attachments WHERE attachment_id = @Id", new { Id = attId });
+                    await conn.ExecuteAsync("DELETE FROM attachments WHERE id = @Id", new { Id = attId });
+                    _logger.LogInformation("Purged attachment record {Id} for cancelled label in group {GrpId}", attId, request.OrderGrpId);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to clean up attachments database records for group {GrpId}", request.OrderGrpId);
+            }
+
+            // 4. Update database records: clear awb_number and label_url in order_groups, mark shipment cancelled
             await _orderRepository.CancelGroupLabelAsync(request.OrderGrpId, awbNumber);
 
             return Result<CancelGroupLabelResponse>.Success(new CancelGroupLabelResponse(

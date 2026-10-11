@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { Pressable, TextInput, Image, Modal, Alert } from 'react-native';
+import { Pressable, TouchableOpacity, TextInput, Image, Modal, Alert } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import {
   LuTrash2,
   LuPlus,
+  LuPencil,
   LuChevronRight,
   LuChevronDown,
   LuX,
@@ -19,6 +20,7 @@ import { CustomCheckbox } from '@/components/tamagui-ui/atoms/CustomCheckbox';
 import { StatusBadge, StatusIntent } from '@/components/tamagui-ui/atoms/StatusBadge';
 import { ImageViewerModal } from '@/components/tamagui-ui/molecules/ImageViewerModal';
 import { shareImageUri } from '@/utils/shareImage';
+import { isGroupSharingEnabled } from '@/utils/stageTransitionRules';
 import { GroupManagementView } from './GroupManagementView';
 
 export interface OrderItem {
@@ -48,7 +50,6 @@ export interface OrderItem {
 export const ORDER_STAGES = [
   'Unconfirmed',
   'Confirmed',
-  'Processed',
   'Placed',
   'Delivered',
 ] as const;
@@ -59,6 +60,9 @@ export interface ProductListSectionProps {
   selectedIds: string[];
   isCod?: boolean;
   orderId?: string;
+  orderStage?: string;
+  isOrderConfirmed?: boolean;
+  readOnly?: boolean;
   groupStages?: Record<string, string>;
   groupLabelInfo?: Record<string, { orderGrpId?: string; needLabel?: boolean; awbNumber?: string; labelUrl?: string }>;
   lockedVendorKeys?: string[];
@@ -83,6 +87,9 @@ export function ProductListSection({
   selectedIds,
   isCod = false,
   orderId,
+  orderStage,
+  isOrderConfirmed = false,
+  readOnly = false,
   groupStages = {},
   groupLabelInfo = {},
   lockedVendorKeys = [],
@@ -108,7 +115,6 @@ export function ProductListSection({
     const s = (stage || '').toLowerCase();
     if (s === 'delivered') return 'positive';
     if (s === 'placed') return 'info';
-    if (s === 'processed') return 'info';
     if (s === 'confirmed') return 'info';
     return 'attention';
   };
@@ -167,7 +173,7 @@ export function ProductListSection({
 
         {/* Right: Batch Delete Action & Add Item */}
         <XStack alignItems="center" gap={8}>
-          {selectedIds.length > 0 && (
+          {!isOrderConfirmed && selectedIds.length > 0 && (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Delete ${selectedIds.length} selected items`}
@@ -193,28 +199,30 @@ export function ProductListSection({
             </Pressable>
           )}
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Add product item"
-            onPress={onAddProduct}
-            hitSlop={6}
-          >
-            <XStack
-              paddingHorizontal={10}
-              paddingVertical={5}
-              borderRadius={tokens.radius.xs}
-              backgroundColor={tokens.surfaceRaised}
-              borderWidth={1}
-              borderColor={tokens.border}
-              alignItems="center"
-              gap={4}
+          {!isOrderConfirmed && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Add product item"
+              onPress={onAddProduct}
+              hitSlop={6}
             >
-              <LuPlus size={13} color={tokens.accent} />
-              <Text fontSize={11} fontWeight="700" color={tokens.accent}>
-                ADD ITEM
-              </Text>
-            </XStack>
-          </Pressable>
+              <XStack
+                paddingHorizontal={10}
+                paddingVertical={5}
+                borderRadius={tokens.radius.xs}
+                backgroundColor={tokens.surfaceRaised}
+                borderWidth={1}
+                borderColor={tokens.border}
+                alignItems="center"
+                gap={4}
+              >
+                <LuPlus size={13} color={tokens.accent} />
+                <Text fontSize={11} fontWeight="700" color={tokens.accent}>
+                  ADD ITEM
+                </Text>
+              </XStack>
+            </Pressable>
+          )}
         </XStack>
       </XStack>
 
@@ -242,7 +250,11 @@ export function ProductListSection({
           </YStack>
         ) : (
           vendorGroups.map((group) => {
-            const currentStage = groupStages?.[group.key] || 'Unconfirmed';
+            const currentStage = groupStages?.[group.key] || orderStage || 'Unconfirmed';
+            const isSharingEnabled = isGroupSharingEnabled(currentStage);
+            const isGroupConfirmed =
+              Boolean(readOnly) ||
+              (currentStage.toLowerCase() !== 'unconfirmed' && currentStage.toLowerCase() !== 'unformed');
             const groupItemCount = group.items.reduce((acc, it) => acc + (it.quantity || 1), 0);
             const groupTotal = group.items.reduce((acc, it) => {
               const codCharge = isCod ? (it.codChargePerPiece ?? 50) : 0;
@@ -431,11 +443,17 @@ export function ProductListSection({
                       </Pressable>
 
                       <Pressable
+                        disabled={!isSharingEnabled}
                         accessibilityRole="button"
-                        accessibilityLabel={`Share image for ${item.title}`}
+                        accessibilityLabel={
+                          !isSharingEnabled
+                            ? `Sharing disabled for ${item.title} until package is confirmed`
+                            : `Share image for ${item.title}`
+                        }
                         hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
                         onPress={(e) => {
                           e.stopPropagation?.();
+                          if (!isSharingEnabled) return;
                           shareImageUri(previewImgUri, item.title || item.productId);
                         }}
                         style={({ pressed }) => ({
@@ -443,15 +461,15 @@ export function ProductListSection({
                           height: 22,
                           borderRadius: 11,
                           marginTop: 14,
-                          backgroundColor: 'rgba(0, 0, 0, 0.32)',
+                          backgroundColor: !isSharingEnabled ? 'rgba(0, 0, 0, 0.15)' : 'rgba(0, 0, 0, 0.32)',
                           borderWidth: 1,
-                          borderColor: 'rgba(255, 255, 255, 0.2)',
+                          borderColor: !isSharingEnabled ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          opacity: pressed ? 0.5 : 0.85,
+                          opacity: !isSharingEnabled ? 0.35 : pressed ? 0.5 : 0.85,
                         })}
                       >
-                        <LuShare2 size={11} color="#ffffff" />
+                        <LuShare2 size={11} color={!isSharingEnabled ? '#94A3B8' : '#ffffff'} />
                       </Pressable>
                     </YStack>
                   ) : null}
@@ -461,11 +479,12 @@ export function ProductListSection({
                 <YStack flex={1} gap={2}>
                   {/* Line 1: Single Line Title + Actions (Edit & Remove) */}
                   <XStack alignItems="flex-start" justifyContent="space-between">
-                    <Pressable
+                    <TouchableOpacity
+                      activeOpacity={0.7}
                       accessibilityRole="button"
                       accessibilityLabel={`Edit details for ${item.title}`}
                       onPress={() => onEditProduct(item)}
-                      style={{ flex: 1, paddingRight: 6 } as any}
+                      style={{ flex: 1, paddingRight: 6 }}
                     >
                       <Text
                         fontSize={13}
@@ -476,32 +495,34 @@ export function ProductListSection({
                       >
                         {item.title}
                       </Text>
-                    </Pressable>
+                    </TouchableOpacity>
 
                     <XStack alignItems="center" gap={8}>
-                      {/* Remove Trash button */}
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={`Remove ${item.title}`}
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          onRemoveProduct(String(item.id));
-                        }}
-                        hitSlop={10}
-                        style={({ pressed }) => ({
-                          width: 28,
-                          height: 28,
-                          borderRadius: tokens.radius.full,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          backgroundColor: tokens.errorSubtle || 'rgba(239, 68, 68, 0.12)',
-                          borderWidth: 1,
-                          borderColor: 'rgba(239, 68, 68, 0.35)',
-                          opacity: pressed ? 0.7 : 1,
-                        })}
-                      >
-                        <LuTrash2 size={13} color={tokens.error || '#EF4444'} />
-                      </Pressable>
+                      {/* Remove Trash button (only allowed in unconfirmed stage) */}
+                      {!isGroupConfirmed && (
+                        <TouchableOpacity
+                          activeOpacity={0.7}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Remove ${item.title}`}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            onRemoveProduct(String(item.id));
+                          }}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          style={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: tokens.radius.full,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: tokens.errorSubtle || 'rgba(239, 68, 68, 0.12)',
+                            borderWidth: 1,
+                            borderColor: 'rgba(239, 68, 68, 0.35)',
+                          }}
+                        >
+                          <LuTrash2 size={13} color={tokens.error || '#EF4444'} />
+                        </TouchableOpacity>
+                      )}
                     </XStack>
                   </XStack>
 
@@ -527,8 +548,13 @@ export function ProductListSection({
                     <Pressable
                       accessibilityRole="combobox"
                       accessibilityLabel={`Size: ${item.size || 'Free Size'}`}
-                      accessibilityHint="Tap to change size"
-                      onPress={() => onOpenPicker(item, 'size')}
+                      accessibilityHint={isGroupConfirmed ? 'Item locked' : 'Tap to change size'}
+                      accessibilityState={{ disabled: isGroupConfirmed }}
+                      disabled={isGroupConfirmed}
+                      onPress={() => {
+                        if (isGroupConfirmed) return;
+                        onOpenPicker(item, 'size');
+                      }}
                     >
                       <XStack
                         height={24}
@@ -543,7 +569,7 @@ export function ProductListSection({
                         <Text fontSize={10} fontWeight="700" color={tokens.text}>
                           Size: {item.size || 'Free Size'}
                         </Text>
-                        <LuChevronDown size={10} color={tokens.textMuted} />
+                        {!isGroupConfirmed && <LuChevronDown size={10} color={tokens.textMuted} />}
                       </XStack>
                     </Pressable>
 
@@ -551,8 +577,13 @@ export function ProductListSection({
                     <Pressable
                       accessibilityRole="combobox"
                       accessibilityLabel={`Quantity: ${item.quantity || 1}`}
-                      accessibilityHint="Tap to change quantity"
-                      onPress={() => onOpenPicker(item, 'qty')}
+                      accessibilityHint={isGroupConfirmed ? 'Item locked' : 'Tap to change quantity'}
+                      accessibilityState={{ disabled: isGroupConfirmed }}
+                      disabled={isGroupConfirmed}
+                      onPress={() => {
+                        if (isGroupConfirmed) return;
+                        onOpenPicker(item, 'qty');
+                      }}
                     >
                       <XStack
                         height={24}
@@ -567,7 +598,7 @@ export function ProductListSection({
                         <Text fontSize={10} fontWeight="700" color={tokens.text}>
                           Qty: {item.quantity || 1}
                         </Text>
-                        <LuChevronDown size={10} color={tokens.textMuted} />
+                        {!isGroupConfirmed && <LuChevronDown size={10} color={tokens.textMuted} />}
                       </XStack>
                     </Pressable>
                   </XStack>
@@ -603,7 +634,9 @@ export function ProductListSection({
                     <TextInput
                       accessibilityLabel="Cost per piece in rupees"
                       value={String(item.costPerPiece ?? 0)}
+                      editable={!isGroupConfirmed}
                       onChangeText={(v) => {
+                        if (isGroupConfirmed) return;
                         const digits = v.replace(/[^0-9]/g, '').slice(0, 5);
                         onUpdateItem(item.id, { costPerPiece: digits ? parseInt(digits, 10) : 0 });
                       }}
@@ -612,11 +645,11 @@ export function ProductListSection({
                       style={{
                         fontSize: 13,
                         fontWeight: '700',
-                        color: tokens.text,
+                        color: isGroupConfirmed ? tokens.textSecondary : tokens.text,
                         height: 32,
                         paddingVertical: 4,
                         paddingHorizontal: 7,
-                        backgroundColor: tokens.surfaceRaised,
+                        backgroundColor: isGroupConfirmed ? `${tokens.textMuted}0A` : tokens.surfaceRaised,
                         borderRadius: 6,
                         borderWidth: 1,
                         borderColor: tokens.border,
@@ -634,7 +667,9 @@ export function ProductListSection({
                       <TextInput
                         accessibilityLabel="COD charge per piece in rupees"
                         value={String(item.codChargePerPiece ?? 50)}
+                        editable={!isGroupConfirmed}
                         onChangeText={(v) => {
+                          if (isGroupConfirmed) return;
                           const digits = v.replace(/[^0-9]/g, '').slice(0, 4);
                           onUpdateItem(item.id, { codChargePerPiece: digits ? parseInt(digits, 10) : 0 });
                         }}
@@ -643,11 +678,11 @@ export function ProductListSection({
                         style={{
                           fontSize: 13,
                           fontWeight: '700',
-                          color: tokens.warningText,
+                          color: isGroupConfirmed ? tokens.textSecondary : tokens.warningText,
                           height: 32,
                           paddingVertical: 4,
                           paddingHorizontal: 7,
-                          backgroundColor: tokens.warningSubtle,
+                          backgroundColor: isGroupConfirmed ? `${tokens.textMuted}0A` : tokens.warningSubtle,
                           borderRadius: 6,
                           borderWidth: 1,
                           borderColor: tokens.warningBorder,
@@ -666,7 +701,9 @@ export function ProductListSection({
                       <TextInput
                         accessibilityLabel="Advance paid in rupees to deduct from total"
                         value={String(item.amountPaid ?? 0)}
+                        editable={!isGroupConfirmed}
                         onChangeText={(v) => {
+                          if (isGroupConfirmed) return;
                           const digits = v.replace(/[^0-9]/g, '').slice(0, 4);
                           onUpdateItem(item.id, { amountPaid: digits ? parseInt(digits, 10) : 0 });
                         }}
@@ -675,11 +712,11 @@ export function ProductListSection({
                         style={{
                           fontSize: 13,
                           fontWeight: '700',
-                          color: tokens.status.positive.text,
+                          color: isGroupConfirmed ? tokens.textSecondary : tokens.status.positive.text,
                           height: 32,
                           paddingVertical: 4,
                           paddingHorizontal: 7,
-                          backgroundColor: tokens.status.positive.subtle,
+                          backgroundColor: isGroupConfirmed ? `${tokens.textMuted}0A` : tokens.status.positive.subtle,
                           borderRadius: 6,
                           borderWidth: 1,
                           borderColor: tokens.status.positive.border,
@@ -691,43 +728,54 @@ export function ProductListSection({
                 </XStack>
 
                 {/* Right: Total and Chevron */}
-                <XStack alignItems="center" gap={12} paddingBottom={2}>
-                  {/* Total */}
-                  <YStack alignItems="flex-end" gap={1}>
-                    <Text fontSize={10} fontWeight="700" color={tokens.textMuted} textTransform="uppercase" letterSpacing={0.5}>
-                      Total
-                    </Text>
-                    <Text
-                      fontSize={15}
-                      fontWeight="800"
-                      color={tokens.text}
-                      aria-label={`Line total: ${lineTotal} rupees`}
-                    >
-                      ₹{lineTotal.toLocaleString('en-IN')}
-                    </Text>
-                  </YStack>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    isGroupConfirmed
+                      ? `View line item details (Locked) for ${item.title || 'item'}`
+                      : `Edit line item details for ${item.title || 'item'}`
+                  }
+                  onPress={() => onEditProduct(item)}
+                  hitSlop={{ top: 12, bottom: 12, left: 10, right: 12 }}
+                  style={{
+                    flexShrink: 0,
+                    zIndex: 20,
+                  }}
+                >
+                  <XStack alignItems="center" gap={10} paddingBottom={2}>
+                    {/* Total */}
+                    <YStack alignItems="flex-end" gap={1}>
+                      <Text fontSize={10} fontWeight="700" color={tokens.textMuted} textTransform="uppercase" letterSpacing={0.5}>
+                        Total
+                      </Text>
+                      <Text
+                        fontSize={15}
+                        fontWeight="800"
+                        color={tokens.text}
+                        aria-label={`Line total: ${lineTotal} rupees`}
+                      >
+                        ₹{lineTotal.toLocaleString('en-IN')}
+                      </Text>
+                    </YStack>
 
-                  {/* Big Accent/Black Chevron Button */}
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Edit line item details for ${item.title}`}
-                    onPress={() => onEditProduct(item)}
-                    hitSlop={10}
-                  >
+                    {/* Big Accent/Black Chevron or Lock Button */}
                     <YStack
-                      width={32}
-                      height={32}
+                      width={36}
+                      height={36}
                       borderRadius={tokens.radius.sm}
                       backgroundColor={tokens.accent}
                       alignItems="center"
                       justifyContent="center"
-                      hoverStyle={{ opacity: 0.88 }}
-                      pressStyle={{ scale: 0.94 }}
                     >
-                      <LuChevronRight size={18} color={tokens.accentForeground} />
+                      {isGroupConfirmed ? (
+                        <LuLock size={16} color={tokens.accentForeground} />
+                      ) : (
+                        <LuChevronRight size={18} color={tokens.accentForeground} />
+                      )}
                     </YStack>
-                  </Pressable>
-                </XStack>
+                  </XStack>
+                </TouchableOpacity>
               </XStack>
             </YStack>
           );

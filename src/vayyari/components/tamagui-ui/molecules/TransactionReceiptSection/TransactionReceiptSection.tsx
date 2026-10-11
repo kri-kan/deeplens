@@ -7,6 +7,7 @@ import { useTheme } from '@/theme';
 import { searchApiClient } from '@/api/client';
 import { getSearchApiUrl } from '@/utils/api-config';
 import { API_ROUTES } from '@/constants/api-routes';
+import { uriToBlob, compressImageToWebP } from '@/utils/media-helpers';
 
 export interface TransactionReceiptSectionProps {
   transactionId: string;
@@ -46,23 +47,19 @@ export function TransactionReceiptSection({
 
       setUploading(true);
       const asset = result.assets[0];
-      const fileUri = asset.uri;
-      const fileName = fileUri.split('/').pop() || 'receipt.png';
-      const ext = fileName.split('.').pop()?.toLowerCase() || 'png';
-      const mimeType = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'image/png';
+      const rawFileName = asset.fileName || asset.uri.split('/').pop() || 'receipt.png';
 
+      const compressed = await compressImageToWebP(asset.uri, rawFileName, {
+        maxWidth: 1920,
+        maxHeight: 1920,
+        quality: 0.8,
+        originalWidth: asset.width,
+        originalHeight: asset.height,
+      });
+
+      const blob = await uriToBlob(compressed.uri, compressed.mimeType);
       const formData = new FormData();
-      if (Platform.OS === 'web') {
-        const res = await fetch(fileUri);
-        const blob = await res.blob();
-        formData.append('file', blob, fileName);
-      } else {
-        formData.append('file', {
-          uri: fileUri,
-          name: fileName,
-          type: mimeType,
-        } as any);
-      }
+      formData.append('file', blob, compressed.fileName);
 
       const uploadRes = await searchApiClient.postFormData<{
         id: string;

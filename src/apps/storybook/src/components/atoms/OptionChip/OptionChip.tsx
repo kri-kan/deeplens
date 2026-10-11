@@ -31,7 +31,11 @@ export function OptionChip({
       accessibilityState={{ selected }}
       accessibilityLabel={accessibilityLabel ?? label}
       onPress={onSelect}
-      hitSlop={4}
+      hitSlop={6}
+      style={({ pressed }) => ({
+        opacity: pressed ? 0.75 : 1,
+        transform: [{ scale: pressed ? 0.96 : 1 }],
+      })}
     >
       <XStack
         paddingHorizontal={paddingHorizontal}
@@ -43,8 +47,7 @@ export function OptionChip({
         alignItems="center"
         justifyContent="center"
         gap={4}
-        hoverStyle={{ borderColor: tokens.accent }}
-        pressStyle={{ scale: 0.96 }}
+        pointerEvents="none"
       >
         <Text
           fontSize={12}

@@ -39,12 +39,14 @@ export const InstagramPrepaid: Story = {
   ),
 };
 
-export const InstagramFullUrl: Story = {
-  name: 'Instagram with Full URL',
+export const WhatsAppCODReseller: Story = {
+  name: 'WhatsApp COD (Reseller with Boutique Name)',
   args: {
-    source: 'instagram',
-    sourceContact: 'https://www.instagram.com/priya_designs/?hl=en',
-    paymentType: 'prepaid',
+    source: 'whatsapp',
+    sourceContact: '9876543210',
+    paymentType: 'cod',
+    orderType: 'reseller',
+    resellerName: 'Sri Krishna Silk Sarees',
   },
   render: (args: any) => (
     <YStack width={390} paddingHorizontal={16} paddingVertical={8}>
@@ -52,3 +54,19 @@ export const InstagramFullUrl: Story = {
     </YStack>
   ),
 };
+
+export const InstagramPrepaidCustomer: Story = {
+  name: 'Instagram Prepaid (Customer Direct B2C)',
+  args: {
+    source: 'instagram',
+    sourceContact: '@priya_designs',
+    paymentType: 'prepaid',
+    orderType: 'customer',
+  },
+  render: (args: any) => (
+    <YStack width={390} paddingHorizontal={16} paddingVertical={8}>
+      <SourceRow {...(args as SourceRowProps)} />
+    </YStack>
+  ),
+};
+

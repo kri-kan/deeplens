@@ -383,29 +383,50 @@ function ImageGridSection({ images, onAddImage }: ImageGridSectionProps) {
 export interface AddressCardProps {
   address: AddressData | null;
   onEditPress: () => void;
+  isReviewed?: boolean;
 }
 
-export function AddressCard({ address, onEditPress }: AddressCardProps) {
+export function AddressCard({ address, onEditPress, isReviewed = true }: AddressCardProps) {
   const { tokens } = useTheme();
+  const isUnreviewed = isReviewed === false;
 
   return (
     <YStack gap={6}>
-      <Text
-        fontSize={11}
-        fontWeight="700"
-        color={tokens.textMuted}
-        textTransform="uppercase"
-        letterSpacing={0.8}
-      >
-        Delivery Address
-      </Text>
+      <XStack justifyContent="space-between" alignItems="center">
+        <Text
+          fontSize={11}
+          fontWeight="700"
+          color={tokens.textMuted}
+          textTransform="uppercase"
+          letterSpacing={0.8}
+        >
+          Delivery Address
+        </Text>
+        {isUnreviewed && (
+          <XStack
+            backgroundColor={`${tokens.warning}22`}
+            borderWidth={1}
+            borderColor={`${tokens.warning}55`}
+            borderRadius={tokens.radius.xs}
+            paddingHorizontal={7}
+            paddingVertical={2}
+            alignItems="center"
+            gap={4}
+          >
+            <LuTriangleAlert size={11} color={tokens.warning} />
+            <Text fontSize={10} fontWeight="800" color={tokens.warning} letterSpacing={0.4}>
+              NOT REVIEWED
+            </Text>
+          </XStack>
+        )}
+      </XStack>
 
       {address ? (
         /* Filled address card */
         <YStack
-          backgroundColor={tokens.surface}
-          borderWidth={1}
-          borderColor={tokens.border}
+          backgroundColor={isUnreviewed ? `${tokens.warning}0F` : tokens.surface}
+          borderWidth={isUnreviewed ? 1.5 : 1}
+          borderColor={isUnreviewed ? tokens.warning : tokens.border}
           borderRadius={tokens.radius.md}
           padding={12}
           gap={6}
@@ -414,18 +435,42 @@ export function AddressCard({ address, onEditPress }: AddressCardProps) {
           shadowRadius={6}
           shadowOffset={{ width: 0, height: 2 }}
         >
+          {isUnreviewed && (
+            <XStack
+              backgroundColor={`${tokens.warning}1A`}
+              borderRadius={tokens.radius.xs}
+              paddingHorizontal={8}
+              paddingVertical={5}
+              alignItems="center"
+              justifyContent="space-between"
+              marginBottom={2}
+            >
+              <XStack gap={6} alignItems="center" flex={1}>
+                <LuTriangleAlert size={13} color={tokens.warning} />
+                <Text fontSize={11} fontWeight="700" color={tokens.warning} numberOfLines={1}>
+                  Copied from cloned order — please review address
+                </Text>
+              </XStack>
+              <Pressable onPress={onEditPress}>
+                <Text fontSize={11} fontWeight="800" color={tokens.warning} textDecorationLine="underline">
+                  Review
+                </Text>
+              </Pressable>
+            </XStack>
+          )}
+
           <XStack justifyContent="space-between" alignItems="flex-start">
             <XStack gap={8} alignItems="center" flex={1}>
               <YStack
                 width={28}
                 height={28}
                 borderRadius={tokens.radius.full}
-                backgroundColor={tokens.accentSubtle}
+                backgroundColor={isUnreviewed ? `${tokens.warning}25` : tokens.accentSubtle}
                 alignItems="center"
                 justifyContent="center"
                 flexShrink={0}
               >
-                <LuMapPin size={14} color={tokens.accent} />
+                <LuMapPin size={14} color={isUnreviewed ? tokens.warning : tokens.accent} />
               </YStack>
               <Text fontSize={13} fontWeight="700" color={tokens.text} flex={1}>
                 {address.name}
