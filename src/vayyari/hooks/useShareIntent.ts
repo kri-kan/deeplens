@@ -65,11 +65,18 @@ export function useShareIntent() {
             };
           });
 
-          if (actionParam === 'order' || actionParam === 'product') {
+          if (actionParam === 'order' || actionParam === 'product' || actionParam === 'append') {
             setSharedMedia(items, sessionIdParam);
             setModalVisible(false);
             setModalMedia([]);
             setModalSessionId(undefined);
+            if (actionParam === 'order') {
+              router.push('/utilities/order-create');
+            } else if (actionParam === 'product') {
+              router.push('/utilities/create-product');
+            } else if (actionParam === 'append') {
+              router.push('/utilities/append-to-order');
+            }
           } else {
             // action === 'chooser' or no action
             setModalMedia(items);

@@ -1,38 +1,47 @@
 import React, { useState, useEffect } from 'react';
 import {
-  StyleSheet,
-  View,
   ScrollView,
   Image,
-  TouchableOpacity,
+  Pressable,
   ActivityIndicator,
   Alert,
-} from 'react-native';
-import {
-  Surface,
-  Text,
   TextInput,
-  IconButton,
-  Button,
-  useTheme,
-  SegmentedButtons,
-  Chip,
-  Divider,
-} from 'react-native-paper';
+  View,
+} from 'react-native';
+import { YStack, XStack, Text } from 'tamagui';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import {
+  LuArrowLeft,
+  LuSearch,
+  LuX,
+  LuImage,
+  LuVideo,
+  LuTrash2,
+  LuCheck,
+  LuPlus,
+  LuPackage,
+  LuTag,
+  LuPhone,
+  LuMapPin,
+  LuTruck,
+} from '@/components/tamagui-ui/icons/lu';
+import { useTheme } from '@/theme';
 import { searchApiClient } from '@/api/client';
 import { API_ROUTES } from '@/constants/api-routes';
 import { getSearchApiUrl } from '@/utils/api-config';
 import { uriToBlob, compressImageToWebP } from '@/utils/media-helpers';
 import { useShareIntentContext, SharedMediaItem } from '@/context/ShareIntentContext';
-import { OrderIdEntry, OrderGroup, OrderItem, OrderUpdateRequest } from '@/types/orders';
+import { OrderIdEntry, OrderUpdateRequest } from '@/types/orders';
 
 type AttachmentType = 'item' | 'tracking_label';
 
 export const AppendToOrderScreen: React.FC = () => {
-  const theme = useTheme();
+  const { tokens } = useTheme();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { sharedMedia, clearSharedMedia, commitCurrentSession, discardCurrentSession } =
+
+  const { sharedMedia, commitCurrentSession, discardCurrentSession } =
     useShareIntentContext();
 
   const activeMedia: SharedMediaItem | undefined = sharedMedia[0];
@@ -69,7 +78,7 @@ export const AppendToOrderScreen: React.FC = () => {
     try {
       setLoadingOrders(true);
       const orders = await searchApiClient.get<OrderIdEntry[]>(API_ROUTES.ORDERS.HISTORY, {
-        params: { limit: 20 },
+        params: { limit: 25 },
       });
       if (orders && Array.isArray(orders)) {
         setRecentOrders(orders);
@@ -230,9 +239,6 @@ export const AppendToOrderScreen: React.FC = () => {
 
       // 2. Branch: Tracking Label vs Item
       if (attachmentType === 'tracking_label') {
-        const targetGroup = orderDetail.groups?.find((g) => g.orderGrpId === selectedGroupKey);
-        const groupVendor = targetGroup?.vendorName || 'Unassigned';
-
         const updatedGroups = (orderDetail.groups || []).map((g) => {
           if (g.orderGrpId === selectedGroupKey) {
             return {
@@ -243,7 +249,6 @@ export const AppendToOrderScreen: React.FC = () => {
           return g;
         });
 
-        // Ensure current items comments retain their properties
         const payloadItems = (orderDetail.items || []).map((it) => ({
           productId: it.productId,
           productTitle: it.productTitle,
@@ -368,601 +373,720 @@ export const AppendToOrderScreen: React.FC = () => {
   };
 
   return (
-    <View style={[styles.screen, { backgroundColor: theme.colors.background }]}>
-      {/* App Bar / Header */}
-      <Surface style={[styles.headerBar, { backgroundColor: theme.colors.surface }]} elevation={2}>
-        <IconButton icon="arrow-left" size={24} onPress={() => router.back()} />
-        <View style={styles.headerTitleContainer}>
-          <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>
-            Append to Order
-          </Text>
-          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-            Attach shared media to existing order
-          </Text>
-        </View>
-        <IconButton icon="trash-can-outline" iconColor={theme.colors.error} size={22} onPress={handleDiscard} />
-      </Surface>
-
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        {/* Top Tile: Staged Media Preview */}
-        <Surface
-          style={[
-            styles.mediaCard,
-            {
-              backgroundColor: (theme.colors as any).surfaceContainerLow || theme.colors.surfaceVariant,
-              borderColor: theme.colors.outlineVariant,
-            },
-          ]}
-          elevation={1}
-        >
-          <View style={styles.mediaRow}>
-            {activeMedia ? (
-              <Image source={{ uri: activeMedia.uri }} style={styles.thumbnail} />
-            ) : (
-              <View style={[styles.thumbnail, styles.placeholderThumbnail]}>
-                <IconButton icon="image-off" size={24} />
-              </View>
-            )}
-            <View style={styles.mediaDetails}>
-              <View style={styles.badgeRow}>
-                <Chip compact icon={activeMedia?.type === 'video' ? 'video' : 'image'} textStyle={{ fontSize: 11 }}>
-                  {activeMedia?.type === 'video' ? 'Video' : 'Single Photo'}
-                </Chip>
-                <Chip compact mode="outlined" textStyle={{ fontSize: 11, color: theme.colors.secondary }}>
-                  Staged
-                </Chip>
-              </View>
-              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
-                Ready to append. Select attachment target below.
-              </Text>
-            </View>
-          </View>
-        </Surface>
-
-        {/* Attachment Type Switcher */}
-        <Surface
-          style={[
-            styles.sectionCard,
-            {
-              backgroundColor: (theme.colors as any).surfaceContainerLow || theme.colors.surfaceVariant,
-              borderColor: theme.colors.outlineVariant,
-            },
-          ]}
-          elevation={1}
-        >
-          <Text variant="titleSmall" style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
-            Attachment Type
-          </Text>
-          <SegmentedButtons
-            value={attachmentType}
-            onValueChange={(val) => setAttachmentType(val as AttachmentType)}
-            buttons={[
-              {
-                value: 'item',
-                label: '👕 Item Reference',
-                icon: 'tshirt-crew',
-              },
-              {
-                value: 'tracking_label',
-                label: '📦 Tracking Label',
-                icon: 'barcode-scan',
-              },
-            ]}
-            style={styles.segmentedButtons}
-          />
-        </Surface>
-
-        {/* Order Selector */}
-        <Surface
-          style={[
-            styles.sectionCard,
-            {
-              backgroundColor: (theme.colors as any).surfaceContainerLow || theme.colors.surfaceVariant,
-              borderColor: theme.colors.outlineVariant,
-            },
-          ]}
-          elevation={1}
-        >
-          <View style={styles.sectionHeaderRow}>
-            <Text variant="titleSmall" style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
-              Target Order
+    <YStack
+      flex={1}
+      backgroundColor={tokens.background}
+      paddingTop={insets.top}
+      paddingBottom={insets.bottom}
+    >
+      {/* ─── App Bar Header ─── */}
+      <XStack
+        alignItems="center"
+        justifyContent="space-between"
+        paddingHorizontal={16}
+        paddingVertical={12}
+        borderBottomWidth={1}
+        borderBottomColor={tokens.border}
+        backgroundColor={tokens.surface}
+      >
+        <XStack alignItems="center" gap={12}>
+          <Pressable
+            onPress={() => router.back()}
+            hitSlop={12}
+            style={({ pressed }) => ({
+              opacity: pressed ? 0.6 : 1,
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              backgroundColor: tokens.surfaceRaised,
+              alignItems: 'center',
+              justifyContent: 'center',
+            })}
+          >
+            <LuArrowLeft size={18} color={tokens.text} />
+          </Pressable>
+          <YStack>
+            <Text fontSize={16} fontWeight="800" color={tokens.text}>
+              Append to Order
             </Text>
-            {selectedOrderId && (
-              <TouchableOpacity onPress={() => setSelectedOrderId(null)}>
-                <Text style={{ color: theme.colors.primary, fontWeight: 'bold', fontSize: 12 }}>
-                  Change
-                </Text>
-              </TouchableOpacity>
+            <Text fontSize={11} color={tokens.textMuted}>
+              Attach shared media to customer order
+            </Text>
+          </YStack>
+        </XStack>
+
+        <Pressable
+          onPress={handleDiscard}
+          hitSlop={12}
+          style={({ pressed }) => ({
+            opacity: pressed ? 0.6 : 1,
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            borderRadius: 8,
+            backgroundColor: `${tokens.error}12`,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+          })}
+        >
+          <LuTrash2 size={13} color={tokens.error} />
+          <Text fontSize={11} fontWeight="700" color={tokens.error}>
+            Discard
+          </Text>
+        </Pressable>
+      </XStack>
+
+      <ScrollView
+        contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 100 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ─── Staged Media Hero Preview ─── */}
+        <XStack
+          padding={12}
+          borderRadius={tokens.radius.lg}
+          backgroundColor={tokens.surface}
+          borderWidth={1}
+          borderColor={tokens.border}
+          gap={14}
+          alignItems="center"
+        >
+          <YStack
+            width={72}
+            height={90}
+            borderRadius={tokens.radius.md}
+            overflow="hidden"
+            backgroundColor="#000"
+            borderWidth={1}
+            borderColor={tokens.border}
+            position="relative"
+            alignItems="center"
+            justifyContent="center"
+          >
+            {activeMedia?.uri ? (
+              <Image
+                source={{ uri: activeMedia.uri }}
+                style={{ width: '100%', height: '100%', resizeMode: 'cover' }}
+              />
+            ) : (
+              <LuImage size={24} color={tokens.textMuted} />
             )}
-          </View>
+            <XStack
+              position="absolute"
+              bottom={4}
+              left={4}
+              paddingHorizontal={5}
+              paddingVertical={2}
+              borderRadius={4}
+              backgroundColor="rgba(0,0,0,0.65)"
+              alignItems="center"
+              gap={3}
+            >
+              {activeMedia?.type === 'video' ? (
+                <LuVideo size={10} color="#fff" />
+              ) : (
+                <LuImage size={10} color="#fff" />
+              )}
+              <Text fontSize={9} fontWeight="700" color="#fff">
+                {activeMedia?.type === 'video' ? 'VIDEO' : 'PHOTO'}
+              </Text>
+            </XStack>
+          </YStack>
+
+          <YStack flex={1} gap={4}>
+            <XStack alignItems="center" gap={6}>
+              <XStack
+                paddingHorizontal={8}
+                paddingVertical={2}
+                borderRadius={6}
+                backgroundColor={`${tokens.accent}16`}
+              >
+                <Text fontSize={10} fontWeight="800" color={tokens.accent} letterSpacing={0.5}>
+                  SHARED MEDIA STAGED
+                </Text>
+              </XStack>
+            </XStack>
+            <Text fontSize={14} fontWeight="800" color={tokens.text}>
+              Incoming Media Reference
+            </Text>
+            <Text fontSize={11} color={tokens.textMuted} lineHeight={16}>
+              Select the order and target item or shipping group to append this media.
+            </Text>
+          </YStack>
+        </XStack>
+
+        {/* ─── Target Type Segmented Switcher ─── */}
+        <YStack gap={8}>
+          <Text fontSize={11} fontWeight="800" color={tokens.textMuted} letterSpacing={0.8}>
+            ATTACHMENT TARGET TYPE
+          </Text>
+          <XStack
+            padding={4}
+            borderRadius={tokens.radius.md}
+            backgroundColor={tokens.surfaceRaised}
+            borderWidth={1}
+            borderColor={tokens.border}
+            gap={6}
+          >
+            <Pressable
+              onPress={() => {
+                setAttachmentType('item');
+                setSelectedItemTarget('__NEW__');
+              }}
+              style={{
+                flex: 1,
+                paddingVertical: 10,
+                borderRadius: tokens.radius.sm,
+                backgroundColor: attachmentType === 'item' ? tokens.surface : 'transparent',
+                borderWidth: attachmentType === 'item' ? 1 : 0,
+                borderColor: tokens.border,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+              }}
+            >
+              <LuTag
+                size={14}
+                color={attachmentType === 'item' ? tokens.accent : tokens.textMuted}
+              />
+              <Text
+                fontSize={12}
+                fontWeight="800"
+                color={attachmentType === 'item' ? tokens.accent : tokens.textMuted}
+              >
+                Product Item
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                setAttachmentType('tracking_label');
+                if (orderDetail?.groups && orderDetail.groups.length > 0) {
+                  setSelectedGroupKey(orderDetail.groups[0].orderGrpId);
+                }
+              }}
+              style={{
+                flex: 1,
+                paddingVertical: 10,
+                borderRadius: tokens.radius.sm,
+                backgroundColor: attachmentType === 'tracking_label' ? tokens.surface : 'transparent',
+                borderWidth: attachmentType === 'tracking_label' ? 1 : 0,
+                borderColor: tokens.border,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+              }}
+            >
+              <LuTruck
+                size={14}
+                color={attachmentType === 'tracking_label' ? tokens.accent : tokens.textMuted}
+              />
+              <Text
+                fontSize={12}
+                fontWeight="800"
+                color={attachmentType === 'tracking_label' ? tokens.accent : tokens.textMuted}
+              >
+                Tracking Label
+              </Text>
+            </Pressable>
+          </XStack>
+        </YStack>
+
+        {/* ─── Target Order Selection ─── */}
+        <YStack
+          padding={14}
+          borderRadius={tokens.radius.lg}
+          backgroundColor={tokens.surface}
+          borderWidth={1}
+          borderColor={tokens.border}
+          gap={12}
+        >
+          <XStack alignItems="center" justifyContent="space-between">
+            <XStack alignItems="center" gap={6}>
+              <LuPackage size={14} color={tokens.textMuted} />
+              <Text fontSize={11} fontWeight="800" color={tokens.textMuted} letterSpacing={0.8}>
+                TARGET ORDER
+              </Text>
+            </XStack>
+            {selectedOrderId && (
+              <Pressable
+                onPress={() => {
+                  setSelectedOrderId(null);
+                  setOrderDetail(null);
+                }}
+                hitSlop={8}
+                style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+              >
+                <Text fontSize={11} fontWeight="800" color={tokens.accent}>
+                  CHANGE ORDER
+                </Text>
+              </Pressable>
+            )}
+          </XStack>
 
           {selectedOrderId && orderDetail ? (
-            <Surface
-              style={[
-                styles.selectedOrderBanner,
-                {
-                  backgroundColor: (theme.colors as any).primaryContainer || '#EADDFF',
-                  borderColor: theme.colors.outlineVariant,
-                },
-              ]}
+            /* Selected Order Banner */
+            <YStack
+              padding={12}
+              borderRadius={tokens.radius.md}
+              backgroundColor={`${tokens.accent}0C`}
+              borderWidth={1.5}
+              borderColor={tokens.accent}
+              gap={8}
             >
-              <View style={styles.selectedOrderHeader}>
-                <View style={{ flex: 1 }}>
-                  <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>
-                    Order #{orderDetail.id}
+              <XStack alignItems="center" justifyContent="space-between">
+                <Text fontSize={15} fontWeight="900" color={tokens.text}>
+                  Order #{orderDetail.id}
+                </Text>
+                <XStack
+                  paddingHorizontal={8}
+                  paddingVertical={2}
+                  borderRadius={4}
+                  backgroundColor={tokens.accent}
+                >
+                  <Text fontSize={10} fontWeight="800" color="#fff">
+                    SELECTED
                   </Text>
-                  <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                    {orderDetail.customerName || 'Customer'} • 📞 {orderDetail.customerPhone || 'N/A'}
-                  </Text>
-                  {orderDetail.shippingCity && (
-                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                      📍 {orderDetail.shippingCity}, {orderDetail.shippingPincode}
-                    </Text>
-                  )}
-                </View>
-                <Chip compact textStyle={{ fontSize: 11, fontWeight: 'bold' }}>
-                  {orderDetail.status || 'Active'}
-                </Chip>
-              </View>
-            </Surface>
-          ) : (
-            <>
-              <TextInput
-                label="Search Order ID, Phone, or Customer..."
-                value={searchQuery}
-                onChangeText={handleSearchChange}
-                mode="outlined"
-                left={<TextInput.Icon icon="magnify" />}
-                right={loadingOrders ? <TextInput.Icon icon="loading" /> : undefined}
-                style={styles.searchInput}
-              />
+                </XStack>
+              </XStack>
 
-              <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 8 }}>
-                Recent Orders ({filteredOrders.length})
+              <XStack flexWrap="wrap" gap={12}>
+                <XStack alignItems="center" gap={4}>
+                  <LuPhone size={12} color={tokens.textMuted} />
+                  <Text fontSize={12} fontWeight="600" color={tokens.text}>
+                    {orderDetail.customerName || 'Customer'} • {orderDetail.customerPhone || 'N/A'}
+                  </Text>
+                </XStack>
+                {orderDetail.shippingCity && (
+                  <XStack alignItems="center" gap={4}>
+                    <LuMapPin size={12} color={tokens.textMuted} />
+                    <Text fontSize={12} color={tokens.textMuted}>
+                      {orderDetail.shippingCity}, {orderDetail.shippingPincode}
+                    </Text>
+                  </XStack>
+                )}
+              </XStack>
+            </YStack>
+          ) : (
+            /* Order Search & Recent List */
+            <YStack gap={10}>
+              <XStack
+                alignItems="center"
+                backgroundColor={tokens.surfaceRaised}
+                borderRadius={tokens.radius.md}
+                borderWidth={1}
+                borderColor={tokens.border}
+                paddingHorizontal={12}
+                height={40}
+                gap={8}
+              >
+                <LuSearch size={15} color={tokens.textMuted} />
+                <TextInput
+                  value={searchQuery}
+                  onChangeText={handleSearchChange}
+                  placeholder="Search by Order ID, Phone, or Handle..."
+                  placeholderTextColor={tokens.textMuted}
+                  style={{
+                    flex: 1,
+                    fontSize: 13,
+                    color: tokens.text,
+                  }}
+                />
+                {searchQuery ? (
+                  <Pressable onPress={() => handleSearchChange('')}>
+                    <LuX size={14} color={tokens.textMuted} />
+                  </Pressable>
+                ) : null}
+              </XStack>
+
+              <Text fontSize={11} fontWeight="700" color={tokens.textMuted}>
+                RECENT ORDERS ({filteredOrders.length})
               </Text>
 
-              <View style={styles.ordersList}>
-                {filteredOrders.slice(0, 5).map((ord) => (
-                  <TouchableOpacity
-                    key={ord.id}
-                    style={[
-                      styles.orderListItem,
-                      {
-                        borderBottomColor: theme.colors.outlineVariant,
-                        backgroundColor: (theme.colors as any).surfaceContainerLowest || theme.colors.surface,
-                      },
-                    ]}
-                    onPress={() => handleSelectOrder(ord.id)}
-                  >
-                    <View style={styles.orderItemRow}>
-                      <Text variant="titleSmall" style={{ fontWeight: 'bold', color: theme.colors.primary }}>
-                        #{ord.id}
-                      </Text>
-                      <Chip compact textStyle={{ fontSize: 10 }}>
-                        {ord.paymentMode || 'COD'}
-                      </Chip>
-                    </View>
-                    <Text variant="bodySmall" numberOfLines={1} style={{ color: theme.colors.onSurfaceVariant }}>
-                      {ord.customerName ? `${ord.customerName} • ` : ''}
-                      {ord.customerPhone ? `📞 ${ord.customerPhone} • ` : ''}
-                      {ord.status || 'Active'}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </>
-          )}
-        </Surface>
-
-        {/* Loading detail indicator */}
-        {loadingOrderDetail && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color={theme.colors.primary} />
-            <Text variant="bodySmall" style={{ marginTop: 6, color: theme.colors.onSurfaceVariant }}>
-              Loading order items and groups...
-            </Text>
-          </View>
-        )}
-
-        {/* Branch: Tracking Label -> Order Groups List */}
-        {selectedOrderId && orderDetail && !loadingOrderDetail && attachmentType === 'tracking_label' && (
-          <Surface
-            style={[
-              styles.sectionCard,
-              {
-                backgroundColor: (theme.colors as any).surfaceContainerLow || theme.colors.surfaceVariant,
-                borderColor: theme.colors.outlineVariant,
-              },
-            ]}
-            elevation={1}
-          >
-            <Text variant="titleSmall" style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
-              Select Order Group for Shipping Label
-            </Text>
-            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>
-              Choose which vendor shipment group receives this tracking label:
-            </Text>
-
-            {(!orderDetail.groups || orderDetail.groups.length === 0) ? (
-              <View style={styles.emptyCard}>
-                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                  No groups formed yet for this order. Media will attach to default group ({selectedOrderId}-G1).
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.groupsContainer}>
-                {orderDetail.groups.map((grp) => {
-                  const isSelected = selectedGroupKey === grp.orderGrpId;
-                  return (
-                    <TouchableOpacity
-                      key={grp.orderGrpId}
-                      style={[
-                        styles.groupCard,
-                        {
-                          borderColor: isSelected ? theme.colors.primary : theme.colors.outlineVariant,
-                          backgroundColor: isSelected
-                            ? (theme.colors as any).primaryContainer || '#EADDFF'
-                            : (theme.colors as any).surfaceContainerLowest || theme.colors.surface,
-                        },
-                      ]}
-                      onPress={() => setSelectedGroupKey(grp.orderGrpId)}
+              {loadingOrders ? (
+                <YStack padding={20} alignItems="center">
+                  <ActivityIndicator color={tokens.accent} size="small" />
+                </YStack>
+              ) : (
+                <YStack gap={6}>
+                  {filteredOrders.slice(0, 5).map((ord) => (
+                    <Pressable
+                      key={ord.id}
+                      onPress={() => handleSelectOrder(ord.id)}
+                      style={({ pressed }) => ({
+                        opacity: pressed ? 0.7 : 1,
+                        padding: 10,
+                        borderRadius: tokens.radius.sm,
+                        backgroundColor: tokens.surfaceRaised,
+                        borderWidth: 1,
+                        borderColor: tokens.border,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      })}
                     >
-                      <View style={styles.groupHeaderRow}>
-                        <View style={{ flex: 1 }}>
-                          <Text variant="titleSmall" style={{ fontWeight: 'bold' }}>
-                            {grp.orderGrpId} ({grp.vendorName || 'Unassigned'})
+                      <YStack gap={2}>
+                        <XStack alignItems="center" gap={6}>
+                          <Text fontSize={13} fontWeight="800" color={tokens.text}>
+                            #{ord.id}
                           </Text>
-                          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                            Status: {grp.status || 'Active'} {grp.awbNumber ? `• AWB: ${grp.awbNumber}` : ''}
-                          </Text>
-                        </View>
-                        {isSelected && (
-                          <IconButton icon="check-circle" iconColor={theme.colors.primary} size={20} style={{ margin: 0 }} />
-                        )}
-                      </View>
-                      {grp.labelUrl && (
-                        <View style={styles.hasLabelNotice}>
-                          <Text variant="labelSmall" style={{ color: theme.colors.tertiary, fontWeight: '600' }}>
-                            ⚠️ Already has a label. Attaching will replace it.
-                          </Text>
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            )}
-          </Surface>
+                          <XStack
+                            paddingHorizontal={6}
+                            paddingVertical={1}
+                            borderRadius={3}
+                            backgroundColor={tokens.border}
+                          >
+                            <Text fontSize={9} fontWeight="700" color={tokens.textMuted}>
+                              {ord.paymentMode?.toUpperCase() || 'COD'}
+                            </Text>
+                          </XStack>
+                        </XStack>
+                        <Text fontSize={11} color={tokens.textMuted}>
+                          {ord.customerPhone || ord.sourceHandle || 'Direct customer'}
+                        </Text>
+                      </YStack>
+                      <LuPlus size={16} color={tokens.accent} />
+                    </Pressable>
+                  ))}
+                </YStack>
+              )}
+            </YStack>
+          )}
+        </YStack>
+
+        {loadingOrderDetail && (
+          <YStack padding={20} alignItems="center" gap={8}>
+            <ActivityIndicator color={tokens.accent} size="small" />
+            <Text fontSize={12} color={tokens.textMuted}>
+              Loading order items and shipment groups...
+            </Text>
+          </YStack>
         )}
 
-        {/* Branch: Item -> Select existing item without media or [+] New Item */}
-        {selectedOrderId && orderDetail && !loadingOrderDetail && attachmentType === 'item' && (
-          <Surface
-            style={[
-              styles.sectionCard,
-              {
-                backgroundColor: (theme.colors as any).surfaceContainerLow || theme.colors.surfaceVariant,
-                borderColor: theme.colors.outlineVariant,
-              },
-            ]}
-            elevation={1}
+        {/* ─── Item Selection OR Tracking Group Selection ─── */}
+        {selectedOrderId && orderDetail && !loadingOrderDetail && (
+          <YStack
+            padding={14}
+            borderRadius={tokens.radius.lg}
+            backgroundColor={tokens.surface}
+            borderWidth={1}
+            borderColor={tokens.border}
+            gap={12}
           >
-            <Text variant="titleSmall" style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
-              Attach to Item
-            </Text>
-            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 12 }}>
-              Choose an existing item missing a photo, or create a new item:
-            </Text>
+            {attachmentType === 'item' ? (
+              <>
+                <XStack alignItems="center" justifyContent="space-between">
+                  <XStack alignItems="center" gap={6}>
+                    <LuTag size={14} color={tokens.textMuted} />
+                    <Text fontSize={11} fontWeight="800" color={tokens.textMuted} letterSpacing={0.8}>
+                      SELECT PRODUCT DESTINATION
+                    </Text>
+                  </XStack>
+                  <Text fontSize={11} color={tokens.textMuted}>
+                    {(orderDetail.items || []).length} item{(orderDetail.items || []).length === 1 ? '' : 's'}
+                  </Text>
+                </XStack>
 
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.itemTilesScroll}>
-              {/* Existing Items */}
-              {(orderDetail.items || []).map((it, idx) => {
-                const targetKey = it.itemId || String(it.id);
-                const isSelected = selectedItemTarget === targetKey;
-
-                let hasMedia = false;
-                let existingPhoto: string | undefined = it.photoUrl;
-                if (it.attachments && it.attachments.length > 0) {
-                  hasMedia = true;
-                  existingPhoto = it.attachments[0].key;
-                }
-                if (it.comments) {
-                  try {
-                    const parsed = JSON.parse(it.comments);
-                    if (parsed.photoUri || parsed.image || parsed.catalogImageUrl) {
-                      hasMedia = true;
-                      existingPhoto = parsed.photoUri || parsed.image || parsed.catalogImageUrl;
-                    }
-                  } catch {
-                    // ignore
-                  }
-                }
-
-                return (
-                  <TouchableOpacity
-                    key={targetKey}
-                    style={[
-                      styles.itemTile,
-                      {
-                        borderColor: isSelected ? theme.colors.primary : theme.colors.outlineVariant,
-                        backgroundColor: isSelected
-                          ? (theme.colors as any).primaryContainer || '#EADDFF'
-                          : (theme.colors as any).surfaceContainerLowest || theme.colors.surface,
-                      },
-                    ]}
-                    onPress={() => setSelectedItemTarget(targetKey)}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 10, paddingVertical: 4 }}
+                >
+                  {/* [+] Add as New Line Item Tile */}
+                  <Pressable
+                    onPress={() => setSelectedItemTarget('__NEW__')}
+                    style={({ pressed }) => ({
+                      opacity: pressed ? 0.75 : 1,
+                      width: 120,
+                      borderRadius: tokens.radius.md,
+                      borderWidth: selectedItemTarget === '__NEW__' ? 2 : 1,
+                      borderStyle: selectedItemTarget === '__NEW__' ? 'solid' : 'dashed',
+                      borderColor: selectedItemTarget === '__NEW__' ? tokens.accent : tokens.border,
+                      backgroundColor:
+                        selectedItemTarget === '__NEW__' ? `${tokens.accent}10` : tokens.surfaceRaised,
+                      padding: 10,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                    })}
                   >
-                    {existingPhoto ? (
-                      <Image source={{ uri: existingPhoto }} style={styles.itemTileImage} />
-                    ) : (
-                      <View style={[styles.itemTileImage, styles.noImagePlaceholder]}>
-                        <IconButton icon="image-off-outline" size={20} iconColor={theme.colors.onSurfaceVariant} />
-                        <Text variant="labelSmall" style={{ fontSize: 9, color: theme.colors.onSurfaceVariant }}>
-                          No Media
-                        </Text>
-                      </View>
+                    <YStack
+                      width={40}
+                      height={40}
+                      borderRadius={20}
+                      backgroundColor={
+                        selectedItemTarget === '__NEW__' ? tokens.accent : `${tokens.accent}18`
+                      }
+                      alignItems="center"
+                      justifyContent="center"
+                    >
+                      <LuPlus
+                        size={20}
+                        color={selectedItemTarget === '__NEW__' ? '#fff' : tokens.accent}
+                      />
+                    </YStack>
+                    <Text
+                      fontSize={12}
+                      fontWeight="800"
+                      color={selectedItemTarget === '__NEW__' ? tokens.accent : tokens.text}
+                      textAlign="center"
+                    >
+                      + New Item
+                    </Text>
+                    <Text fontSize={9} color={tokens.textMuted} textAlign="center">
+                      Create fresh slot
+                    </Text>
+                    {selectedItemTarget === '__NEW__' && (
+                      <XStack
+                        position="absolute"
+                        top={6}
+                        right={6}
+                        width={18}
+                        height={18}
+                        borderRadius={9}
+                        backgroundColor={tokens.accent}
+                        alignItems="center"
+                        justifyContent="center"
+                      >
+                        <LuCheck size={11} color="#fff" />
+                      </XStack>
                     )}
-                    <View style={styles.itemTileMeta}>
-                      <Text variant="labelMedium" numberOfLines={1} style={{ fontWeight: 'bold' }}>
-                        {it.productTitle || `Item #${idx + 1}`}
-                      </Text>
-                      <Text variant="labelSmall" numberOfLines={1} style={{ color: theme.colors.onSurfaceVariant }}>
-                        {it.vendorName || 'Unassigned'}
-                      </Text>
-                      {hasMedia ? (
-                        <Text variant="labelSmall" style={{ fontSize: 9, color: theme.colors.error, marginTop: 2 }}>
-                          Has Media
-                        </Text>
-                      ) : (
-                        <Text variant="labelSmall" style={{ fontSize: 9, color: theme.colors.primary, marginTop: 2 }}>
-                          Missing Media ⭐
-                        </Text>
-                      )}
-                    </View>
-                    {isSelected && (
-                      <View style={styles.tileCheckBadge}>
-                        <IconButton icon="check" iconColor="#fff" size={12} style={{ margin: 0 }} />
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
+                  </Pressable>
 
-              {/* [+] Add as New Item Tile */}
-              <TouchableOpacity
-                style={[
-                  styles.itemTile,
-                  styles.newItemTile,
-                  {
-                    borderColor: selectedItemTarget === '__NEW__' ? theme.colors.primary : theme.colors.outlineVariant,
-                    backgroundColor:
-                      selectedItemTarget === '__NEW__'
-                        ? (theme.colors as any).primaryContainer || '#EADDFF'
-                        : (theme.colors as any).surfaceContainerLowest || theme.colors.surface,
-                  },
-                ]}
-                onPress={() => setSelectedItemTarget('__NEW__')}
-              >
-                <View style={styles.newItemIconBox}>
-                  <IconButton icon="plus" size={28} iconColor={theme.colors.primary} />
-                </View>
-                <Text variant="labelMedium" style={{ fontWeight: 'bold', textAlign: 'center', marginTop: 4 }}>
-                  [+] New Item
-                </Text>
-                <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center', fontSize: 10 }}>
-                  Add as new tile
-                </Text>
-                {selectedItemTarget === '__NEW__' && (
-                  <View style={styles.tileCheckBadge}>
-                    <IconButton icon="check" iconColor="#fff" size={12} style={{ margin: 0 }} />
-                  </View>
-                )}
-              </TouchableOpacity>
-            </ScrollView>
-          </Surface>
+                  {/* Existing Items Tiles */}
+                  {(orderDetail.items || []).map((item, idx) => {
+                    const targetKey = item.itemId || String(item.id);
+                    const isSelected = selectedItemTarget === targetKey;
+
+                    let hasMedia = false;
+                    let existingPhoto: string | undefined = item.photoUrl;
+                    if (item.attachments && item.attachments.length > 0) {
+                      hasMedia = true;
+                      existingPhoto = item.attachments[0].key;
+                    }
+                    if (item.comments) {
+                      try {
+                        const parsed = JSON.parse(item.comments);
+                        if (parsed.photoUri || parsed.image || parsed.catalogImageUrl) {
+                          hasMedia = true;
+                          existingPhoto = parsed.photoUri || parsed.image || parsed.catalogImageUrl;
+                        }
+                      } catch {
+                        // ignore
+                      }
+                    }
+
+                    return (
+                      <Pressable
+                        key={targetKey}
+                        onPress={() => setSelectedItemTarget(targetKey)}
+                        style={({ pressed }) => ({
+                          opacity: pressed ? 0.75 : 1,
+                          width: 120,
+                          borderRadius: tokens.radius.md,
+                          borderWidth: isSelected ? 2 : 1,
+                          borderColor: isSelected ? tokens.accent : tokens.border,
+                          backgroundColor: isSelected ? `${tokens.accent}10` : tokens.surfaceRaised,
+                          padding: 8,
+                          gap: 6,
+                          position: 'relative',
+                        })}
+                      >
+                        <YStack
+                          width="100%"
+                          height={74}
+                          borderRadius={tokens.radius.sm}
+                          overflow="hidden"
+                          backgroundColor="#000"
+                          alignItems="center"
+                          justifyContent="center"
+                        >
+                          {existingPhoto ? (
+                            <Image
+                              source={{ uri: existingPhoto }}
+                              style={{ width: '100%', height: '100%', resizeMode: 'cover' }}
+                            />
+                          ) : (
+                            <YStack alignItems="center" gap={2}>
+                              <LuImage size={20} color={tokens.textMuted} />
+                              <Text fontSize={9} color={tokens.textMuted}>
+                                No Photo
+                              </Text>
+                            </YStack>
+                          )}
+                        </YStack>
+
+                        <YStack gap={2}>
+                          <Text
+                            fontSize={11}
+                            fontWeight="800"
+                            color={isSelected ? tokens.accent : tokens.text}
+                            numberOfLines={1}
+                          >
+                            {item.productTitle || `Item #${idx + 1}`}
+                          </Text>
+                          <Text fontSize={9} color={tokens.textMuted} numberOfLines={1}>
+                            {item.vendorName || 'Unassigned'}
+                          </Text>
+                          {hasMedia ? (
+                            <Text fontSize={9} fontWeight="700" color={tokens.error}>
+                              Has photo (replaces)
+                            </Text>
+                          ) : (
+                            <Text fontSize={9} fontWeight="800" color={tokens.accent}>
+                              Missing media ⭐
+                            </Text>
+                          )}
+                        </YStack>
+
+                        {isSelected && (
+                          <XStack
+                            position="absolute"
+                            top={6}
+                            right={6}
+                            width={18}
+                            height={18}
+                            borderRadius={9}
+                            backgroundColor={tokens.accent}
+                            alignItems="center"
+                            justifyContent="center"
+                          >
+                            <LuCheck size={11} color="#fff" />
+                          </XStack>
+                        )}
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </>
+            ) : (
+              <>
+                <XStack alignItems="center" justifyContent="space-between">
+                  <XStack alignItems="center" gap={6}>
+                    <LuTruck size={14} color={tokens.textMuted} />
+                    <Text fontSize={11} fontWeight="800" color={tokens.textMuted} letterSpacing={0.8}>
+                      SELECT SHIPMENT GROUP FOR LABEL
+                    </Text>
+                  </XStack>
+                </XStack>
+
+                <YStack gap={8}>
+                  {(!orderDetail.groups || orderDetail.groups.length === 0) ? (
+                    <Text fontSize={12} color={tokens.textMuted}>
+                      No shipping groups formed yet. Label will attach to default group ({selectedOrderId}-G1).
+                    </Text>
+                  ) : (
+                    orderDetail.groups.map((grp) => {
+                      const isSelected = selectedGroupKey === grp.orderGrpId;
+                      return (
+                        <Pressable
+                          key={grp.orderGrpId}
+                          onPress={() => setSelectedGroupKey(grp.orderGrpId)}
+                          style={({ pressed }) => ({
+                            opacity: pressed ? 0.75 : 1,
+                            padding: 12,
+                            borderRadius: tokens.radius.md,
+                            borderWidth: isSelected ? 2 : 1,
+                            borderColor: isSelected ? tokens.accent : tokens.border,
+                            backgroundColor: isSelected ? `${tokens.accent}0C` : tokens.surfaceRaised,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                          })}
+                        >
+                          <YStack gap={2}>
+                            <XStack alignItems="center" gap={8}>
+                              <Text
+                                fontSize={13}
+                                fontWeight="800"
+                                color={isSelected ? tokens.accent : tokens.text}
+                              >
+                                {grp.orderGrpId}
+                              </Text>
+                              <XStack
+                                paddingHorizontal={6}
+                                paddingVertical={1}
+                                borderRadius={4}
+                                backgroundColor={tokens.border}
+                              >
+                                <Text fontSize={10} color={tokens.textMuted}>
+                                  {grp.vendorName || 'Unassigned Vendor'}
+                                </Text>
+                              </XStack>
+                            </XStack>
+                            <Text fontSize={11} color={tokens.textMuted}>
+                              Status: {grp.status || 'Active'} {grp.awbNumber ? `• AWB: ${grp.awbNumber}` : ''}
+                            </Text>
+                          </YStack>
+
+                          {isSelected && (
+                            <XStack
+                              width={22}
+                              height={22}
+                              borderRadius={11}
+                              backgroundColor={tokens.accent}
+                              alignItems="center"
+                              justifyContent="center"
+                            >
+                              <LuCheck size={13} color="#fff" />
+                            </XStack>
+                          )}
+                        </Pressable>
+                      );
+                    })
+                  )}
+                </YStack>
+              </>
+            )}
+          </YStack>
         )}
       </ScrollView>
 
-      {/* Bottom Action Footer */}
-      <Surface style={[styles.footerBar, { backgroundColor: theme.colors.surface }]} elevation={4}>
-        <Button
-          mode="contained"
+      {/* ─── Sticky Bottom Action Footer ─── */}
+      <XStack
+        position="absolute"
+        bottom={0}
+        left={0}
+        right={0}
+        paddingHorizontal={16}
+        paddingVertical={12}
+        borderTopWidth={1}
+        borderTopColor={tokens.border}
+        backgroundColor={tokens.surface}
+      >
+        <Pressable
           onPress={handleAttach}
-          loading={submitting}
-          disabled={submitting || !selectedOrderId}
-          style={styles.attachButton}
-          contentStyle={{ height: 48 }}
-          labelStyle={{ fontWeight: 'bold', fontSize: 15 }}
+          disabled={!selectedOrderId || submitting}
+          style={({ pressed }) => ({
+            flex: 1,
+            height: 48,
+            borderRadius: tokens.radius.md,
+            backgroundColor: !selectedOrderId ? tokens.border : tokens.accent,
+            opacity: pressed ? 0.8 : !selectedOrderId ? 0.6 : 1,
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexDirection: 'row',
+            gap: 8,
+          })}
         >
-          {attachmentType === 'tracking_label' ? 'Attach Tracking Label' : 'Attach to Order Item'}
-        </Button>
-      </Surface>
-    </View>
+          {submitting ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <>
+              <LuCheck size={18} color="#fff" />
+              <Text fontSize={14} fontWeight="800" color="#fff" letterSpacing={0.5}>
+                {attachmentType === 'tracking_label'
+                  ? 'ATTACH TRACKING LABEL'
+                  : selectedItemTarget === '__NEW__'
+                  ? 'APPEND AS NEW ITEM'
+                  : 'UPDATE ITEM PHOTO'}
+              </Text>
+            </>
+          )}
+        </Pressable>
+      </XStack>
+    </YStack>
   );
 };
-
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-  },
-  headerBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
-  },
-  headerTitleContainer: {
-    flex: 1,
-    marginLeft: 4,
-  },
-  scrollContent: {
-    padding: 16,
-    gap: 16,
-    paddingBottom: 90,
-  },
-  mediaCard: {
-    padding: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-  },
-  mediaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  thumbnail: {
-    width: 68,
-    height: 84,
-    borderRadius: 10,
-    backgroundColor: '#000',
-  },
-  placeholderThumbnail: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.05)',
-  },
-  mediaDetails: {
-    flex: 1,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    gap: 6,
-    alignItems: 'center',
-  },
-  sectionCard: {
-    padding: 14,
-    borderRadius: 16,
-    borderWidth: 1,
-    gap: 10,
-  },
-  sectionTitle: {
-    fontWeight: 'bold',
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  segmentedButtons: {
-    marginTop: 4,
-  },
-  searchInput: {
-    backgroundColor: 'transparent',
-  },
-  ordersList: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.08)',
-    overflow: 'hidden',
-  },
-  orderListItem: {
-    padding: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  orderItemRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 2,
-  },
-  selectedOrderBanner: {
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  selectedOrderHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-  },
-  loadingContainer: {
-    padding: 16,
-    alignItems: 'center',
-  },
-  groupsContainer: {
-    gap: 8,
-  },
-  groupCard: {
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1.5,
-  },
-  groupHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  hasLabelNotice: {
-    marginTop: 4,
-  },
-  emptyCard: {
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.08)',
-  },
-  itemTilesScroll: {
-    gap: 12,
-    paddingVertical: 4,
-  },
-  itemTile: {
-    position: 'relative',
-    width: 110,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    overflow: 'hidden',
-    padding: 6,
-  },
-  itemTileImage: {
-    width: '100%',
-    height: 90,
-    borderRadius: 8,
-    backgroundColor: '#000',
-  },
-  noImagePlaceholder: {
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  itemTileMeta: {
-    marginTop: 6,
-  },
-  newItemTile: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderStyle: 'dashed',
-    paddingVertical: 14,
-  },
-  newItemIconBox: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(0,0,0,0.04)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tileCheckBadge: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    backgroundColor: '#10B981',
-    borderRadius: 10,
-    width: 20,
-    height: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  footerBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 16,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(0,0,0,0.1)',
-  },
-  attachButton: {
-    borderRadius: 12,
-  },
-});
