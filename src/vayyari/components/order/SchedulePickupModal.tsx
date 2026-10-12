@@ -52,16 +52,40 @@ const TIME_SLOTS: TimeSlot[] = [
 ];
 
 function buildDateTiles(): DateTile[] {
-  const today = new Date();
+  const IST_TZ = 'Asia/Kolkata';
+  const now = new Date();
+
+  // Create formatters in Asia/Kolkata timezone
+  const datePartsFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: IST_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const monthFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: IST_TZ,
+    month: 'short',
+  });
+  const weekdayFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: IST_TZ,
+    weekday: 'short',
+  });
+
   return [0, 1, 2].map(offset => {
-    const d = new Date(today);
-    d.setDate(today.getDate() + offset);
-    const label =
-      offset === 0 ? 'TODAY' :
-      offset === 1 ? 'TOM' :
-      d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
-    const display = `${d.getDate()} ${d.toLocaleDateString('en-US', { month: 'short' })}`;
-    const date = d.toISOString().split('T')[0];
+    // Offset by 24h intervals from current time
+    const target = new Date(now.getTime() + offset * 86400000);
+    const parts = datePartsFormatter.formatToParts(target);
+    const y = parts.find(p => p.type === 'year')?.value;
+    const m = parts.find(p => p.type === 'month')?.value;
+    const d = parts.find(p => p.type === 'day')?.value;
+    const date = `${y}-${m}-${d}`;
+
+    const monthStr = monthFormatter.format(target);
+    const weekdayStr = weekdayFormatter.format(target).toUpperCase();
+    const dayNum = parseInt(d || '1', 10);
+
+    const label = offset === 0 ? 'TODAY' : offset === 1 ? 'TOM' : weekdayStr;
+    const display = `${dayNum} ${monthStr}`;
     return { label, date, display };
   });
 }
@@ -81,9 +105,18 @@ export function SchedulePickupModal({
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
 
-  const dates = buildDateTiles();
-  const [selectedDate, setSelectedDate] = useState<DateTile>(dates[0]);
+  const [dates, setDates] = useState<DateTile[]>(() => buildDateTiles());
+  const [selectedDate, setSelectedDate] = useState<DateTile>(() => dates[0] || buildDateTiles()[0]);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot>(TIME_SLOTS[0]);
+
+  // Recalculate dates dynamically every time the modal becomes visible
+  React.useEffect(() => {
+    if (visible) {
+      const freshDates = buildDateTiles();
+      setDates(freshDates);
+      setSelectedDate(freshDates[0]);
+    }
+  }, [visible]);
   const [loading, setLoading] = useState(false);
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [scheduledInfo, setScheduledInfo] = useState('');
