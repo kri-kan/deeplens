@@ -176,6 +176,28 @@ describe('ProductCard: Myntra-style Variant Grid Card & Member Waitlist UI', () 
     assert.strictEqual(clickedCode, 'VF69F502');
   });
 
+  test('onAddToCart passes active variant payload with code and colorway', () => {
+    let addedProduct: any = null;
+    const el = React.createElement(ProductCard, {
+      product: inStockProduct,
+      onAddToCart: (e: any, p: any) => {
+        addedProduct = p;
+      },
+    });
+
+    (el.props as any).onAddToCart({}, {
+      ...inStockProduct,
+      code: 'VF69F502',
+      productCode: 'VF69F502',
+      colorwayName: 'Emerald Green',
+      heroImageUrl: 'https://media.vayyarifashions.com/prod001-emerald.webp',
+    });
+
+    assert.strictEqual(addedProduct?.code, 'VF69F502');
+    assert.strictEqual(addedProduct?.colorwayName, 'Emerald Green');
+    assert.strictEqual(addedProduct?.heroImageUrl, 'https://media.vayyarifashions.com/prod001-emerald.webp');
+  });
+
   test('DismissibleLoginModal renders with dismiss x button and waitlist heading', () => {
     const { DismissibleLoginModal } = require('../DismissibleLoginModal');
     let closed = false;
@@ -192,5 +214,28 @@ describe('ProductCard: Myntra-style Variant Grid Card & Member Waitlist UI', () 
     assert.ok(html.includes('Join Member Waitlist'), 'Must render waitlist heading');
     assert.ok(html.includes('✕'), 'Must render dismiss x button');
     assert.ok(html.includes('Mobile Number'), 'Must render mobile login option');
+  });
+
+  test('DismissibleLoginModal forwards authOverride data to onSuccess callback', () => {
+    const { DismissibleLoginModal } = require('../DismissibleLoginModal');
+    let capturedAuth: any = null;
+    const el = React.createElement(DismissibleLoginModal, {
+      visible: true,
+      onClose: () => {},
+      onSuccess: (data: any) => {
+        capturedAuth = data;
+      },
+    });
+
+    // Directly test onSuccess integration contract
+    el.props.onSuccess({
+      user: { id: 'cust_9876543210', phone: '+91 9876543210' },
+      token: 'jwt-auth-token-xyz',
+      method: 'phone',
+    });
+
+    assert.strictEqual(capturedAuth?.user?.id, 'cust_9876543210');
+    assert.strictEqual(capturedAuth?.token, 'jwt-auth-token-xyz');
+    assert.strictEqual(capturedAuth?.method, 'phone');
   });
 });

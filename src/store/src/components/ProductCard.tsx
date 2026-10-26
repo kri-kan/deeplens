@@ -73,7 +73,17 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
   const handleBagPress = (e: any) => {
     e.stopPropagation?.();
-    onAddToCart?.(e, product);
+    const activeProduct = {
+      ...product,
+      code: activeCode,
+      productCode: activeCode,
+      colorwayName: activeColorway,
+      heroImageUrl: activeImage,
+      images: activeImage
+        ? [activeImage, ...product.images.filter((img) => img !== activeImage)]
+        : product.images,
+    };
+    onAddToCart?.(e, activeProduct as any);
   };
 
   const handleWaitlistPress = (e: any) => {

@@ -97,7 +97,20 @@ export const DismissibleLoginModal: React.FC<DismissibleLoginModalProps> = ({
     try {
       const res = await verifyOtp(phone.trim(), cleaned);
       if (res.success) {
-        handleAuthSuccess({ phone: `+91 ${phone.trim()}`, method: 'phone' });
+        let savedUser: any = null;
+        let savedToken: string | null = null;
+        if (typeof window !== 'undefined') {
+          savedToken = localStorage.getItem('vayyari_auth_token');
+          try {
+            savedUser = JSON.parse(localStorage.getItem('vayyari_auth_user') || 'null');
+          } catch {}
+        }
+        handleAuthSuccess({
+          user: savedUser || { id: `cust_${phone.trim()}`, phone: `+91 ${phone.trim()}` },
+          token: savedToken || 'auth-token',
+          phone: `+91 ${phone.trim()}`,
+          method: 'phone',
+        });
       } else {
         setError(res.message || 'Invalid OTP code. Please retry.');
       }
@@ -114,7 +127,19 @@ export const DismissibleLoginModal: React.FC<DismissibleLoginModalProps> = ({
     try {
       const success = await loginWithGoogle();
       if (success) {
-        handleAuthSuccess({ method: 'google' });
+        let savedUser: any = null;
+        let savedToken: string | null = null;
+        if (typeof window !== 'undefined') {
+          savedToken = localStorage.getItem('vayyari_auth_token');
+          try {
+            savedUser = JSON.parse(localStorage.getItem('vayyari_auth_user') || 'null');
+          } catch {}
+        }
+        handleAuthSuccess({
+          user: savedUser || { id: 'cust_google', name: 'Google User' },
+          token: savedToken || 'auth-token',
+          method: 'google',
+        });
       } else {
         setError('Google sign-in could not be completed.');
       }
@@ -277,7 +302,18 @@ export const DismissibleLoginModal: React.FC<DismissibleLoginModalProps> = ({
 
 const styles = StyleSheet.create({
   backdrop: {
-    flex: 1,
+    ...(Platform.OS === 'web'
+      ? {
+          position: 'fixed' as any,
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 9999,
+        }
+      : {
+          flex: 1,
+        }),
     backgroundColor: 'rgba(15, 23, 42, 0.65)',
     justifyContent: 'center',
     alignItems: 'center',

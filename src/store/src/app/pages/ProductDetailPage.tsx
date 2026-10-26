@@ -355,8 +355,34 @@ export const ProductDetailPage: React.FC = () => {
     (product.stockQuantity !== undefined && product.stockQuantity <= 0) ||
     product.inStock === false;
 
-  const handleJoinWaitlist = async () => {
-    if (!isAuthenticated || !token || !user) {
+  const handleJoinWaitlist = async (authOverride?: { token?: string; user?: any }) => {
+    let effectiveToken = authOverride?.token || token;
+    let effectiveUser = authOverride?.user || user;
+
+    if (!effectiveToken && typeof window !== 'undefined') {
+      const storedToken = localStorage.getItem('vayyari_auth_token');
+      if (storedToken && storedToken !== 'guest-token') {
+        effectiveToken = storedToken;
+      }
+    }
+
+    if (!effectiveUser && typeof window !== 'undefined') {
+      try {
+        const storedUser = JSON.parse(localStorage.getItem('vayyari_auth_user') || 'null');
+        if (storedUser && !storedUser.isGuest) {
+          effectiveUser = storedUser;
+        }
+      } catch {}
+    }
+
+    const isAuthed = Boolean(
+      effectiveToken &&
+      effectiveToken !== 'guest-token' &&
+      effectiveUser &&
+      !effectiveUser.isGuest
+    );
+
+    if (!isAuthed) {
       setLoginModalVisible(true);
       return;
     }
@@ -375,9 +401,9 @@ export const ProductDetailPage: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          'X-Customer-Token': token,
-          'X-Customer-Id': user.id,
+          Authorization: `Bearer ${effectiveToken}`,
+          'X-Customer-Token': effectiveToken,
+          'X-Customer-Id': effectiveUser?.id || '',
         },
       });
 
@@ -838,8 +864,8 @@ export const ProductDetailPage: React.FC = () => {
             ? window.location.pathname
             : `/product/${product.code}`
         }
-        onSuccess={() => {
-          handleJoinWaitlist();
+        onSuccess={(authData) => {
+          handleJoinWaitlist(authData);
         }}
         title="Join Restock Waitlist"
         subtitle={`Sign in to receive immediate notification when ${product.title} restocks.`}
