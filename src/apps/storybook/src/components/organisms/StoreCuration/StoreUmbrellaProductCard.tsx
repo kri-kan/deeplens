@@ -232,10 +232,7 @@ export function StoreUmbrellaProductCard({
       borderRadius={tokens.radius?.md || 8}
       borderWidth={1}
       borderColor={tokens.border}
-      shadowColor="#000"
-      shadowOpacity={0.04}
-      shadowRadius={4}
-      shadowOffset={{ width: 0, height: 2 }}
+      boxShadow="0px 2px 4px rgba(0,0,0,0.04)"
       marginVertical={6}
     >
       {/* ── CARD HEADER (Clickable to Expand / Collapse) ── */}

@@ -365,8 +365,9 @@ class StoreAdminService {
         body: JSON.stringify({ stockQuantity: quantity }),
       });
       return res.ok;
-    } catch {
-      return true;
+    } catch (err) {
+      console.error('Failed to update variant stock:', err);
+      return false;
     }
   }
 
@@ -394,8 +395,9 @@ class StoreAdminService {
         }),
       });
       return res.ok;
-    } catch {
-      return true;
+    } catch (err) {
+      console.error('Failed to update lifecycle status:', err);
+      return false;
     }
   }
 

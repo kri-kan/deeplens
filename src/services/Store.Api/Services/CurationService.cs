@@ -75,7 +75,7 @@ public class CurationService : ICurationService
                     'Standard', '#1B4D3E', 'solid', @MediaOrder::jsonb, @Tags::jsonb, true, NOW(),
                     NOW(), NOW()
                 )
-                ON CONFLICT (vayyari_product_id) DO UPDATE SET
+                ON CONFLICT (product_code) DO UPDATE SET
                     product_code = EXCLUDED.product_code,
                     title = EXCLUDED.title,
                     description = COALESCE(EXCLUDED.description, products.description),
