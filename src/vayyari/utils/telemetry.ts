@@ -81,6 +81,9 @@ export const initOtel = async () => {
   }
 };
 
+let cachedTrace: any = null;
+let cachedSpanStatusCode: any = null;
+
 /**
  * Wraps a critical business flow in an OpenTelemetry Span.
  * Tracks execution time, success, and any exceptions thrown.
@@ -90,16 +93,20 @@ export const wrapInSpan = async <T>(spanName: string, operation: () => Promise<T
     return operation();
   }
   try {
-    const { trace, SpanStatusCode } = await import('@opentelemetry/api');
-    const tracer = trace.getTracer('manual-instrumentation');
+    if (!cachedTrace) {
+      const api = await import('@opentelemetry/api');
+      cachedTrace = api.trace;
+      cachedSpanStatusCode = api.SpanStatusCode;
+    }
+    const tracer = cachedTrace.getTracer('manual-instrumentation');
 
-    return tracer.startActiveSpan(spanName, async (span) => {
+    return tracer.startActiveSpan(spanName, async (span: any) => {
       try {
         const result = await operation();
-        span.setStatus({ code: SpanStatusCode.OK });
+        span.setStatus({ code: cachedSpanStatusCode.OK });
         return result;
       } catch (error) {
-        span.setStatus({ code: SpanStatusCode.ERROR, message: error instanceof Error ? error.message : String(error) });
+        span.setStatus({ code: cachedSpanStatusCode?.ERROR ?? 2, message: error instanceof Error ? error.message : String(error) });
         if (error instanceof Error) {
           span.recordException(error);
         }

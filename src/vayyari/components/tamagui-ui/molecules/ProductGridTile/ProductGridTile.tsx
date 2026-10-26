@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { TouchableOpacity, Animated, Platform } from 'react-native';
+import React, { useState, useEffect, useRef, memo } from 'react';
+import { TouchableOpacity, Pressable, Animated, Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { YStack, XStack, Text } from 'tamagui';
@@ -41,7 +41,7 @@ export interface ProductGridTileProps {
   onError?: (message: string) => void;
 }
 
-export function ProductGridTile({
+export const ProductGridTile = memo(function ProductGridTile({
   item,
   selected = false,
   selectionMode = false,
@@ -234,38 +234,37 @@ export function ProductGridTile({
 
         {/* Top-Right: Star Button */}
         {!selectionMode && onToggleStar && (
-          <TouchableOpacity
+          <Pressable
             accessibilityRole="checkbox"
             accessibilityState={{ checked: localStarred }}
             accessibilityLabel={localStarred ? 'Unstar product' : 'Star product'}
             onPress={handleStarPress}
-            activeOpacity={0.7}
-            delayPressIn={0}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            style={{
+            hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+            style={({ pressed }) => ({
               position: 'absolute',
               top: 6,
               right: 6,
               zIndex: 10,
-            }}
+              opacity: pressed ? 0.7 : 1,
+            })}
           >
             <Animated.View style={{ transform: [{ scale: starScale }] }}>
               <XStack
-                width={26}
-                height={26}
+                width={28}
+                height={28}
                 borderRadius={tokens.radius.full}
-                backgroundColor="rgba(0,0,0,0.45)"
+                backgroundColor="rgba(0,0,0,0.5)"
                 alignItems="center"
                 justifyContent="center"
               >
                 <LuStar
-                  size={14}
+                  size={15}
                   color={localStarred ? '#FBBF24' : '#ffffff'}
                   filled={localStarred}
                 />
               </XStack>
             </Animated.View>
-          </TouchableOpacity>
+          </Pressable>
         )}
 
         {/* Bottom Metadata Bar */}
@@ -338,4 +337,4 @@ export function ProductGridTile({
       </YStack>
     </TouchableOpacity>
   );
-}
+});
