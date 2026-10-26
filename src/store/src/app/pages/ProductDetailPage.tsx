@@ -401,8 +401,8 @@ export const ProductDetailPage: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${effectiveToken}`,
-          'X-Customer-Token': effectiveToken,
+          Authorization: `Bearer ${effectiveToken || ''}`,
+          'X-Customer-Token': effectiveToken || '',
           'X-Customer-Id': effectiveUser?.id || '',
         },
       });
@@ -658,7 +658,7 @@ export const ProductDetailPage: React.FC = () => {
                   alignItems="center"
                   justifyContent="center"
                   cursor={isOnWaitlist ? 'default' : 'pointer'}
-                  onPress={isOnWaitlist ? undefined : handleJoinWaitlist}
+                  onPress={isOnWaitlist ? undefined : () => handleJoinWaitlist()}
                   hoverStyle={isOnWaitlist ? undefined : { opacity: 0.92, scale: 1.02 }}
                   pressStyle={isOnWaitlist ? undefined : { scale: 0.96 }}
                 >
