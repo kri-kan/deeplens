@@ -80,7 +80,12 @@ export const ZoomableImage = forwardRef<ZoomableImageRef, ZoomableImageProps>(fu
     savedTranslateX.value = 0;
     savedTranslateY.value = 0;
 
-    runOnJS(updateZoomState)(false);
+    const isWorklet = typeof (global as any)._WORKLET !== 'undefined' && (global as any)._WORKLET;
+    if (isWorklet) {
+      runOnJS(updateZoomState)(false);
+    } else {
+      updateZoomState(false);
+    }
   };
 
   // Expose imperative reset to parent
@@ -121,9 +126,10 @@ export const ZoomableImage = forwardRef<ZoomableImageRef, ZoomableImageProps>(fu
       }
     });
 
-  // Pan gesture is enabled and active when zoomed in (scale > ZOOM_ACTIVE_THRESHOLD).
-  // Translates the image within scale bounds.
+  // Pan gesture is enabled and active only when zoomed in (isZoomedInternal).
+  // When unzoomed, pan is disabled so parent FlatList can freely swipe horizontally.
   const panGesture = Gesture.Pan()
+    .enabled(isZoomedInternal)
     .averageTouches(true)
     .onStart(() => {
       savedTranslateX.value = translateX.value;
