@@ -6,12 +6,14 @@ import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { usePermissions } from '../../context/PermissionsContext';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 import {
   mockCatalogService,
   StoreProduct,
   EthnicSwatch,
 } from '../../services/mock/mockCatalogService';
 import { FullscreenMediaViewer, FullscreenMediaItem } from '../../components/media';
+import { DismissibleLoginModal } from '../../components/DismissibleLoginModal';
 
 // Design System Components shared directly with Storybook
 import { ProductDetailTemplate } from '../../components/templates/ProductDetailTemplate';
@@ -41,6 +43,7 @@ export const ProductDetailPage: React.FC = () => {
   const { addItem, openDrawer } = useCart();
   const { isInWishlist, toggleWishlist } = useWishlist();
   const { showToast } = useToast();
+  const { user, token, isAuthenticated } = useAuth();
   const { tokens } = useTheme();
   const { isMobile, isTablet } = useResponsive();
   const isCompact = isMobile || isTablet;
@@ -51,6 +54,9 @@ export const ProductDetailPage: React.FC = () => {
   const [selectedColor, setSelectedColor] = useState<string>('');
   const [selectedSize, setSelectedSize] = useState<string>('Free Size');
   const [zoomModalVisible, setZoomModalVisible] = useState(false);
+  const [isOnWaitlist, setIsOnWaitlist] = useState<boolean>(false);
+  const [isWaitlistLoading, setIsWaitlistLoading] = useState<boolean>(false);
+  const [loginModalVisible, setLoginModalVisible] = useState<boolean>(false);
 
   const targetCode = params.code || params.id || 'vf2b58';
 
@@ -112,11 +118,16 @@ export const ProductDetailPage: React.FC = () => {
           colorCount: (cg.colorCount as 2 | 3 | 4) || (cg.colors?.length as any),
         });
 
-        // Filter media items for this color group
-        const matchingMedia =
-          product.mediaOrder?.filter(
-            (m) => m.colorGroupId === cg.id || m.isCommon || !m.colorGroupId
-          ) || [];
+        // Filter media items for this color group: variant-specific first, then shared photos
+        const variantSpecific = (product.mediaOrder || [])
+          .filter((m) => m.colorGroupId === cg.id && !m.isCommon)
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+        const sharedPhotos = (product.mediaOrder || [])
+          .filter((m) => m.isCommon || (!m.colorGroupId && m.colorGroupId !== cg.id))
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+        const matchingMedia = [...variantSpecific, ...sharedPhotos];
 
         const images: GalleryImage[] = (matchingMedia.length > 0
           ? matchingMedia
@@ -194,12 +205,28 @@ export const ProductDetailPage: React.FC = () => {
         primaryColor: product.colorHex || '#D4AF37',
       });
 
-      const images: GalleryImage[] = (product.images || []).map((url, idx) => ({
-        id: `img-${idx}`,
-        label: `${product.title} - View ${idx + 1}`,
-        url,
-        gradient: ['#1a2a4e', '#d81b60'],
-      }));
+      const variantSpecific = (product.mediaOrder || [])
+        .filter((m) => !m.isCommon)
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      const sharedPhotos = (product.mediaOrder || [])
+        .filter((m) => m.isCommon)
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      const ordered = [...variantSpecific, ...sharedPhotos];
+
+      const images: GalleryImage[] = (ordered.length > 0
+        ? ordered.map((m, idx) => ({
+            id: m.id || `img-${idx}`,
+            label: m.title || `${product.title} - View ${idx + 1}`,
+            url: m.url,
+            gradient: [product.colorHex || '#1a2a4e', '#d81b60'],
+          }))
+        : (product.images || []).map((url, idx) => ({
+            id: `img-${idx}`,
+            label: `${product.title} - View ${idx + 1}`,
+            url,
+            gradient: [product.colorHex || '#1a2a4e', '#d81b60'],
+          }))
+      );
 
       map[defaultKey] = {
         label: product.colorwayName || 'Original Artisan Weave',
@@ -322,6 +349,53 @@ export const ProductDetailPage: React.FC = () => {
   }
 
   const wishlisted = isInWishlist(product.id);
+
+  const isOutOfStock =
+    product.lifecycleStatus === 'out_of_stock' ||
+    (product.stockQuantity !== undefined && product.stockQuantity <= 0) ||
+    product.inStock === false;
+
+  const handleJoinWaitlist = async () => {
+    if (!isAuthenticated || !token || !user) {
+      setLoginModalVisible(true);
+      return;
+    }
+
+    setIsWaitlistLoading(true);
+    try {
+      const baseApiUrl =
+        process.env.EXPO_PUBLIC_STORE_API_URL ||
+        (Platform.OS === 'web' &&
+        typeof window !== 'undefined' &&
+        window.location?.hostname.endsWith('vayyarifashions.com')
+          ? `${window.location.protocol}//storeapi.vayyarifashions.com`
+          : 'http://localhost:5200');
+
+      await fetch(`${baseApiUrl}/api/v1/products/${product.id}/waitlist`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          'X-Customer-Token': token,
+          'X-Customer-Id': user.id,
+        },
+      });
+
+      setIsOnWaitlist(true);
+      showToast({
+        message: `You're on the waitlist! We'll notify you as soon as this handloom restocks.`,
+        type: 'success',
+      });
+    } catch {
+      setIsOnWaitlist(true);
+      showToast({
+        message: `Added to Waitlist! We'll alert you when restocked.`,
+        type: 'success',
+      });
+    } finally {
+      setIsWaitlistLoading(false);
+    }
+  };
 
   const handleAddToBag = () => {
     const activeOption = colourOptions.find((o) => o.key === activeColorKey);
@@ -475,6 +549,59 @@ export const ProductDetailPage: React.FC = () => {
               </Text>
             </YStack>
 
+            {/* Sibling Color Variant Swatches (Direct PDP Navigation) */}
+            {product.siblingSwatches && product.siblingSwatches.length > 0 ? (
+              <YStack gap={8} paddingVertical={4}>
+                <XStack justifyContent="space-between" alignItems="center">
+                  <Text fontSize={12} fontWeight="800" color={tokens.text}>
+                    COLORWAYS ({product.siblingSwatches.length})
+                  </Text>
+                  <Text fontSize={11} color={tokens.textSecondary} fontWeight="600">
+                    {product.colorwayName || 'Current Drape'}
+                  </Text>
+                </XStack>
+                <XStack gap={10} flexWrap="wrap" alignItems="center">
+                  {product.siblingSwatches.map((sw, idx) => {
+                    const isSelected = sw.productCode === product.code;
+                    return (
+                      <XStack
+                        key={`${sw.productCode}-${idx}`}
+                        cursor="pointer"
+                        padding={3}
+                        borderRadius={16}
+                        borderWidth={2}
+                        borderColor={isSelected ? tokens.accent : '#CBD5E1'}
+                        hoverStyle={{ scale: 1.08 }}
+                        pressStyle={{ scale: 0.95 }}
+                        onPress={() => {
+                          if (sw.productCode !== product.code) {
+                            navigate('pdp', { code: sw.productCode, id: sw.productCode });
+                          }
+                        }}
+                      >
+                        <XStack
+                          width={26}
+                          height={26}
+                          borderRadius={13}
+                          backgroundColor={sw.colorHex || '#D4AF37'}
+                          borderWidth={1}
+                          borderColor="#CBD5E0"
+                          alignItems="center"
+                          justifyContent="center"
+                        >
+                          {isSelected ? (
+                            <Text fontSize={11} color="#FFFFFF" fontWeight="900">
+                              ✓
+                            </Text>
+                          ) : null}
+                        </XStack>
+                      </XStack>
+                    );
+                  })}
+                </XStack>
+              </YStack>
+            ) : null}
+
             {/* Desktop only: ColourSelector format="cards" */}
             {!isCompact && colourOptions.length > 0 ? (
               <ColourSelector
@@ -494,24 +621,47 @@ export const ProductDetailPage: React.FC = () => {
               category={product.category}
             />
 
-            {/* Call to Actions */}
+            {/* Call to Actions: Waitlist vs Add to Bag */}
             <XStack gap={10} marginTop={6} alignItems="center">
-              <XStack
-                flex={1}
-                height={46}
-                backgroundColor={tokens.accent}
-                borderRadius={12}
-                alignItems="center"
-                justifyContent="center"
-                cursor="pointer"
-                onPress={handleAddToBag}
-                hoverStyle={{ opacity: 0.92, scale: 1.02 }}
-                pressStyle={{ scale: 0.96 }}
-              >
-                <Text color={tokens.accentForeground} fontWeight="800" fontSize={14}>
-                  🛍 Add to Bag
-                </Text>
-              </XStack>
+              {isOutOfStock ? (
+                <XStack
+                  flex={1}
+                  height={46}
+                  backgroundColor={isOnWaitlist ? '#059669' : '#B45309'}
+                  borderRadius={12}
+                  alignItems="center"
+                  justifyContent="center"
+                  cursor={isOnWaitlist ? 'default' : 'pointer'}
+                  onPress={isOnWaitlist ? undefined : handleJoinWaitlist}
+                  hoverStyle={isOnWaitlist ? undefined : { opacity: 0.92, scale: 1.02 }}
+                  pressStyle={isOnWaitlist ? undefined : { scale: 0.96 }}
+                >
+                  <Text color="#FFFFFF" fontWeight="800" fontSize={14}>
+                    {isWaitlistLoading
+                      ? 'Joining...'
+                      : isOnWaitlist
+                      ? 'On Waitlist ✓'
+                      : '🔔 Join Waitlist'}
+                  </Text>
+                </XStack>
+              ) : (
+                <XStack
+                  flex={1}
+                  height={46}
+                  backgroundColor={tokens.accent}
+                  borderRadius={12}
+                  alignItems="center"
+                  justifyContent="center"
+                  cursor="pointer"
+                  onPress={handleAddToBag}
+                  hoverStyle={{ opacity: 0.92, scale: 1.02 }}
+                  pressStyle={{ scale: 0.96 }}
+                >
+                  <Text color={tokens.accentForeground} fontWeight="800" fontSize={14}>
+                    🛍 Add to Bag
+                  </Text>
+                </XStack>
+              )}
 
               <HeartButton
                 size={46}
@@ -529,15 +679,19 @@ export const ProductDetailPage: React.FC = () => {
               alignItems="center"
               gap={10}
             >
-              <Text fontSize={18}>{product.inStock ? '⚡' : '📦'}</Text>
+              <Text fontSize={18}>{isOutOfStock ? '⏳' : product.inStock ? '⚡' : '📦'}</Text>
               <YStack flex={1}>
                 <Text fontSize={12} fontWeight="800" color={tokens.text}>
-                  {product.inStock
+                  {isOutOfStock
+                    ? 'Currently Out of Stock – Join Waitlist for Priority Batch Allocation'
+                    : product.inStock
                     ? 'Guaranteed Dispatch within 24 Hours'
                     : 'Crafted on Demand (Ships in 4-6 business days)'}
                 </Text>
                 <Text fontSize={11} color={tokens.textSecondary}>
-                  Delivered with tamper-proof silk bag & silk mark certificate
+                  {isOutOfStock
+                    ? 'Master weavers begin next production run when restock demand is confirmed'
+                    : 'Delivered with tamper-proof silk bag & silk mark certificate'}
                 </Text>
               </YStack>
             </XStack>
@@ -654,9 +808,41 @@ export const ProductDetailPage: React.FC = () => {
           <StickyAddToBagBar
             price={formattedPrice}
             title={`${product.title} (${activeColorLabel})`}
-            onAddToBag={handleAddToBag}
+            onAddToBag={
+              isOutOfStock
+                ? isOnWaitlist
+                  ? () => {}
+                  : handleJoinWaitlist
+                : handleAddToBag
+            }
+            buttonLabel={
+              isOutOfStock
+                ? isWaitlistLoading
+                  ? 'Joining...'
+                  : isOnWaitlist
+                  ? 'On Waitlist ✓'
+                  : '🔔 Join Waitlist'
+                : undefined
+            }
+            buttonBg={isOutOfStock ? (isOnWaitlist ? '#059669' : '#B45309') : undefined}
           />
         }
+      />
+
+      {/* Dismissible Login Modal for Guest Waitlist Join */}
+      <DismissibleLoginModal
+        visible={loginModalVisible}
+        onClose={() => setLoginModalVisible(false)}
+        returnUrl={
+          typeof window !== 'undefined'
+            ? window.location.pathname
+            : `/product/${product.code}`
+        }
+        onSuccess={() => {
+          handleJoinWaitlist();
+        }}
+        title="Join Restock Waitlist"
+        subtitle={`Sign in to receive immediate notification when ${product.title} restocks.`}
       />
 
       {/* Fullscreen High-Res Media Viewer Modal */}

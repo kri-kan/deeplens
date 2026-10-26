@@ -15,6 +15,7 @@ import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { useToast } from '../../context/ToastContext';
 import { mockCatalogService, StoreProduct } from '../../services/mock/mockCatalogService';
+import { ProductCard } from '../../components/ProductCard';
 
 export const FILTER_CATEGORIES = [
   { id: 'all', label: 'All Handlooms' },
@@ -144,8 +145,14 @@ export const CatalogPage: React.FC = () => {
     return filteredProducts.slice(0, visibleCount);
   }, [filteredProducts, visibleCount]);
 
-  const handleProductClick = (product: StoreProduct) => {
-    const productCode = product.code || product.id;
+  const handleProductClick = (product: StoreProduct, activeCode?: string) => {
+    const productCode = activeCode || product.code || product.id;
+    navigate('pdp', { id: productCode, code: productCode });
+  };
+
+  const handleJoinWaitlist = (e: any, product: StoreProduct, activeCode?: string) => {
+    e?.stopPropagation?.();
+    const productCode = activeCode || product.code || product.id;
     navigate('pdp', { id: productCode, code: productCode });
   };
 
@@ -325,56 +332,16 @@ export const CatalogPage: React.FC = () => {
             {displayedProducts.map((p) => {
               const wishlisted = isInWishlist(p.id);
               return (
-                <TouchableOpacity
+                <ProductCard
                   key={p.id}
-                  style={[styles.card, { width: isDesktop ? '31.5%' : '48%' }]}
-                  onPress={() => handleProductClick(p)}
-                  activeOpacity={0.9}
-                >
-                  <View style={styles.imageContainer}>
-                    <Image source={{ uri: p.images[0] }} style={styles.image} resizeMode="cover" />
-                    <TouchableOpacity
-                      style={[styles.heartButton, wishlisted && styles.heartButtonActive]}
-                      onPress={(e) => handleWishlistToggle(e, p)}
-                    >
-                      <Text style={[styles.heartIcon, wishlisted && styles.heartIconActive]}>
-                        {wishlisted ? '♥' : '♡'}
-                      </Text>
-                    </TouchableOpacity>
-                    <View style={styles.provenancePill}>
-                      <Text style={styles.provenanceText}>{p.weaveOrigin.split(',')[0]}</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.details}>
-                    <Text style={styles.brandText}>{p.brand}</Text>
-                    <Text style={styles.productName} numberOfLines={2}>{p.title}</Text>
-
-                    <View style={styles.swatchRow}>
-                      {p.swatches.map((sw) => (
-                        <View
-                          key={sw.id}
-                          style={[
-                            styles.swatchDot,
-                            { backgroundColor: sw.primaryHex },
-                            sw.type === 'contrast' && { borderRightColor: sw.secondaryHex, borderRightWidth: 5 },
-                          ]}
-                        />
-                      ))}
-                      <Text style={styles.swatchLabel}>+{p.swatches.length} colorways</Text>
-                    </View>
-
-                    <View style={styles.priceRow}>
-                      <Text style={styles.currentPrice}>₹{p.price.toLocaleString('en-IN')}</Text>
-                      <Text style={styles.originalPrice}>₹{p.originalPrice.toLocaleString('en-IN')}</Text>
-                      <Text style={styles.discountText}>{p.discountPercentage}% OFF</Text>
-                    </View>
-
-                    <TouchableOpacity style={styles.bagBtn} onPress={(e) => handleAddToCart(e, p)}>
-                      <Text style={styles.bagBtnText}>Add to Bag</Text>
-                    </TouchableOpacity>
-                  </View>
-                </TouchableOpacity>
+                  product={p}
+                  cardWidth={isDesktop ? '31.5%' : '48%'}
+                  isWishlisted={wishlisted}
+                  onPress={handleProductClick}
+                  onAddToCart={handleAddToCart}
+                  onWishlistToggle={handleWishlistToggle}
+                  onJoinWaitlist={handleJoinWaitlist}
+                />
               );
             })}
           </View>

@@ -39,6 +39,13 @@ export interface StoreMediaItem {
   title?: string;
 }
 
+export interface SiblingSwatch {
+  productCode: string;
+  colorHex: string;
+  colorwayName: string;
+  heroImageUrl?: string;
+}
+
 export interface StoreProduct {
   id: string;
   code: string;
@@ -64,6 +71,9 @@ export interface StoreProduct {
   swatchTemplate?: SwatchTemplateType;
   colorGroups?: StoreColorGroup[];
   mediaOrder?: StoreMediaItem[];
+  lifecycleStatus?: string;
+  siblingSwatches?: SiblingSwatch[];
+  waitlistCount?: number;
 }
 
 export const MOCK_STORE_PRODUCTS: StoreProduct[] = [];
@@ -150,6 +160,20 @@ const mapRawProduct = (p: any, defaultCode?: string): StoreProduct => {
       ? [{ id: 'sw-1', name: p.color, type: 'solid', primaryHex: p.colorHex || '#8B0000' }]
       : [];
 
+    const isOutOfStock =
+    p.lifecycleStatus === 'out_of_stock' ||
+    (p.stockQuantity !== undefined && p.stockQuantity <= 0) ||
+    p.inStock === false;
+
+  const rawSiblings: SiblingSwatch[] = Array.isArray(p.siblingSwatches)
+    ? p.siblingSwatches.map((s: any) => ({
+        productCode: s.productCode || s.code,
+        colorHex: s.colorHex || '#D4AF37',
+        colorwayName: s.colorwayName || s.name || 'Colorway',
+        heroImageUrl: normalizeMediaUrl(s.heroImageUrl || s.image || s.url),
+      }))
+    : [];
+
   return {
     id: p.id,
     code: p.productCode || defaultCode || 'VY-LIVE-01',
@@ -161,8 +185,8 @@ const mapRawProduct = (p: any, defaultCode?: string): StoreProduct => {
     discountPercentage: p.discountPercentage ?? 0,
     rating: 4.9,
     reviewCount: 12,
-    inStock: p.inStock ?? true,
-    stockQuantity: p.stockQuantity ?? 1,
+    inStock: !isOutOfStock,
+    stockQuantity: p.stockQuantity ?? (isOutOfStock ? 0 : 1),
     images: derivedImages,
     swatches: derivedSwatches,
     fabric: p.fabric || 'Pure Silk',
@@ -175,6 +199,9 @@ const mapRawProduct = (p: any, defaultCode?: string): StoreProduct => {
     swatchTemplate: p.swatchTemplate,
     colorGroups: mappedColorGroups,
     mediaOrder: mappedMediaOrder,
+    lifecycleStatus: p.lifecycleStatus || (isOutOfStock ? 'out_of_stock' : 'active'),
+    siblingSwatches: rawSiblings,
+    waitlistCount: p.waitlistCount ?? 0,
   };
 };
 
