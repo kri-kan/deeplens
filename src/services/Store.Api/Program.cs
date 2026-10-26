@@ -38,7 +38,11 @@ builder.Services.AddSingleton<IStoreEventPublisher, StoreEventPublisher>();
 builder.Services.AddSingleton<IMediaStorageService, MediaStorageService>();
 builder.Services.AddSingleton<ICartService, CartService>();
 builder.Services.AddSingleton<ICurationService, CurationService>();
+builder.Services.AddSingleton<ITelemetryService, TelemetryService>();
+builder.Services.AddSingleton<IWhatsAppCloudApiClient, WhatsAppCloudApiClient>();
+builder.Services.AddSingleton<IAuthService, AuthService>();
 builder.Services.AddHostedService<CartPruningBackgroundService>();
+builder.Services.AddHostedService<TelemetryRollupBackgroundWorker>();
 
 // Add CORS
 builder.Services.AddCors(options =>
@@ -119,6 +123,9 @@ app.MapGet("/api/v1/products", async ([FromQuery] string? search, [FromQuery] st
     {
         id = p.Id.ToString(),
         productCode = p.ProductCode,
+        parentCatalogId = p.ParentCatalogId,
+        catalogColorGroupId = p.CatalogColorGroupId,
+        parentProductCode = p.ParentProductCode,
         title = p.Title,
         brand = "Vayyari Handloom",
         category = p.CategoryName,
@@ -129,7 +136,10 @@ app.MapGet("/api/v1/products", async ([FromQuery] string? search, [FromQuery] st
         discountPercentage = p.Mrp > p.SalePrice && p.Mrp > 0 ? (int)Math.Round(((p.Mrp - p.SalePrice) / p.Mrp) * 100) : 0,
         currency = "INR",
         inStock = p.LifecycleStatus == "available" || p.LifecycleStatus == "few_left",
+        lifecycleStatus = p.LifecycleStatus,
         stockQuantity = p.StockQuantity,
+        waitlistCount = p.WaitlistCount,
+        siblingSwatches = p.SiblingSwatches,
         primaryImageUri = p.MediaOrder.FirstOrDefault()?.Url ?? "https://picsum.photos/seed/saree/600/800",
         allMediaUris = p.MediaOrder.Select(m => m.Url).ToArray(),
         colorGroupId = p.ColorGroupId,
@@ -146,27 +156,20 @@ app.MapGet("/api/v1/products", async ([FromQuery] string? search, [FromQuery] st
 .WithName("GetProducts")
 .WithOpenApi();
 
-// ── Dedicated Product Lookup by Product Code (Human-facing SKU/ID, e.g. vf2b58) ──
+// ── Dedicated Product Lookup by Product Code (Human-facing SKU/ID, e.g. vf2b58 or vf2b5801) ──
 app.MapGet("/api/v1/products/code/{code}", async (string code, ICurationService curationService) =>
 {
-    var inStore = await curationService.GetInStoreProductsAsync();
-    var match = inStore.FirstOrDefault(p => string.Equals(p.ProductCode, code, StringComparison.OrdinalIgnoreCase));
-    if (match == null && Guid.TryParse(code, out var guid))
-    {
-        match = inStore.FirstOrDefault(p => p.Id == guid);
-    }
-    if (match == null)
+    var p = await curationService.GetProductByCodeAsync(code);
+    if (p == null)
         return Results.NotFound(new { message = $"Product with code '{code}' not found" });
 
-    var curation = await curationService.GetProductCurationAsync(match.Id);
-    if (curation == null)
-        return Results.NotFound(new { message = $"Product curation for '{code}' not found" });
-
-    var p = curation.Product;
     var detail = new
     {
         id = p.Id.ToString(),
         productCode = p.ProductCode,
+        parentCatalogId = p.ParentCatalogId,
+        catalogColorGroupId = p.CatalogColorGroupId,
+        parentProductCode = p.ParentProductCode,
         title = p.Title,
         brand = "Vayyari Handloom",
         category = p.CategoryName,
@@ -177,7 +180,10 @@ app.MapGet("/api/v1/products/code/{code}", async (string code, ICurationService 
         discountPercentage = p.Mrp > p.SalePrice && p.Mrp > 0 ? (int)Math.Round(((p.Mrp - p.SalePrice) / p.Mrp) * 100) : 0,
         currency = "INR",
         inStock = p.LifecycleStatus == "available" || p.LifecycleStatus == "few_left",
+        lifecycleStatus = p.LifecycleStatus,
         stockQuantity = p.StockQuantity,
+        waitlistCount = p.WaitlistCount,
+        siblingSwatches = p.SiblingSwatches,
         primaryImageUri = p.MediaOrder.FirstOrDefault()?.Url ?? "",
         allMediaUris = p.MediaOrder.Select(m => m.Url).ToArray(),
         colorGroupId = p.ColorGroupId,
@@ -197,24 +203,17 @@ app.MapGet("/api/v1/products/code/{code}", async (string code, ICurationService 
 // Alias for singular /api/v1/product/code/{code}
 app.MapGet("/api/v1/product/code/{code}", async (string code, ICurationService curationService) =>
 {
-    var inStore = await curationService.GetInStoreProductsAsync();
-    var match = inStore.FirstOrDefault(p => string.Equals(p.ProductCode, code, StringComparison.OrdinalIgnoreCase));
-    if (match == null && Guid.TryParse(code, out var guid))
-    {
-        match = inStore.FirstOrDefault(p => p.Id == guid);
-    }
-    if (match == null)
+    var p = await curationService.GetProductByCodeAsync(code);
+    if (p == null)
         return Results.NotFound(new { message = $"Product with code '{code}' not found" });
 
-    var curation = await curationService.GetProductCurationAsync(match.Id);
-    if (curation == null)
-        return Results.NotFound(new { message = $"Product curation for '{code}' not found" });
-
-    var p = curation.Product;
     var detail = new
     {
         id = p.Id.ToString(),
         productCode = p.ProductCode,
+        parentCatalogId = p.ParentCatalogId,
+        catalogColorGroupId = p.CatalogColorGroupId,
+        parentProductCode = p.ParentProductCode,
         title = p.Title,
         brand = "Vayyari Handloom",
         category = p.CategoryName,
@@ -225,7 +224,10 @@ app.MapGet("/api/v1/product/code/{code}", async (string code, ICurationService c
         discountPercentage = p.Mrp > p.SalePrice && p.Mrp > 0 ? (int)Math.Round(((p.Mrp - p.SalePrice) / p.Mrp) * 100) : 0,
         currency = "INR",
         inStock = p.LifecycleStatus == "available" || p.LifecycleStatus == "few_left",
+        lifecycleStatus = p.LifecycleStatus,
         stockQuantity = p.StockQuantity,
+        waitlistCount = p.WaitlistCount,
+        siblingSwatches = p.SiblingSwatches,
         primaryImageUri = p.MediaOrder.FirstOrDefault()?.Url ?? "",
         allMediaUris = p.MediaOrder.Select(m => m.Url).ToArray(),
         colorGroupId = p.ColorGroupId,
@@ -244,29 +246,27 @@ app.MapGet("/api/v1/product/code/{code}", async (string code, ICurationService c
 
 app.MapGet("/api/v1/products/{id}", async (string id, ICurationService curationService) =>
 {
-    Store.Api.Models.StoreProductCurationDto? curation = null;
+    Store.Api.Models.StoreProductDto? p = null;
     if (Guid.TryParse(id, out var guid))
     {
-        curation = await curationService.GetProductCurationAsync(guid);
+        var curation = await curationService.GetProductCurationAsync(guid);
+        p = curation?.Product;
     }
     else
     {
-        var inStore = await curationService.GetInStoreProductsAsync();
-        var match = inStore.FirstOrDefault(p => string.Equals(p.ProductCode, id, StringComparison.OrdinalIgnoreCase));
-        if (match != null)
-        {
-            curation = await curationService.GetProductCurationAsync(match.Id);
-        }
+        p = await curationService.GetProductByCodeAsync(id);
     }
 
-    if (curation == null)
+    if (p == null)
         return Results.NotFound(new { message = "Product not found" });
 
-    var p = curation.Product;
     var detail = new
     {
         id = p.Id.ToString(),
         productCode = p.ProductCode,
+        parentCatalogId = p.ParentCatalogId,
+        catalogColorGroupId = p.CatalogColorGroupId,
+        parentProductCode = p.ParentProductCode,
         title = p.Title,
         brand = "Vayyari Handloom",
         category = p.CategoryName,
@@ -277,7 +277,10 @@ app.MapGet("/api/v1/products/{id}", async (string id, ICurationService curationS
         discountPercentage = p.Mrp > p.SalePrice && p.Mrp > 0 ? (int)Math.Round(((p.Mrp - p.SalePrice) / p.Mrp) * 100) : 0,
         currency = "INR",
         inStock = p.LifecycleStatus == "available" || p.LifecycleStatus == "few_left",
+        lifecycleStatus = p.LifecycleStatus,
         stockQuantity = p.StockQuantity,
+        waitlistCount = p.WaitlistCount,
+        siblingSwatches = p.SiblingSwatches,
         primaryImageUri = p.MediaOrder.FirstOrDefault()?.Url ?? "",
         allMediaUris = p.MediaOrder.Select(m => m.Url).ToArray(),
         colorGroupId = p.ColorGroupId,
@@ -292,6 +295,55 @@ app.MapGet("/api/v1/products/{id}", async (string id, ICurationService curationS
     return Results.Ok(detail);
 })
 .WithName("GetProductById")
+.WithOpenApi();
+
+// ── Member Restock Waitlist Registration ──
+app.MapPost("/api/v1/products/{id}/waitlist", async (string id, HttpContext ctx, ICurationService curationService, IAuthService authService) =>
+{
+    Guid? customerId = null;
+    var customerIdHeader = ctx.Request.Headers["X-Customer-Id"].FirstOrDefault();
+    if (!string.IsNullOrWhiteSpace(customerIdHeader) && Guid.TryParse(customerIdHeader, out var parsedCustId))
+    {
+        customerId = parsedCustId;
+    }
+    else
+    {
+        var token = ctx.Request.Headers["X-Customer-Token"].FirstOrDefault()
+            ?? ctx.Request.Headers["Authorization"].FirstOrDefault()?.Replace("Bearer ", "", StringComparison.OrdinalIgnoreCase).Trim();
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            var validation = await authService.ValidateSessionAsync(token);
+            if (validation.IsValid && validation.Customer != null && Guid.TryParse(validation.Customer.UserId, out var authCustId))
+            {
+                customerId = authCustId;
+            }
+        }
+    }
+
+    if (!customerId.HasValue)
+    {
+        return Results.Unauthorized();
+    }
+
+    Guid productId;
+    if (Guid.TryParse(id, out var parsedId))
+    {
+        productId = parsedId;
+    }
+    else
+    {
+        var product = await curationService.GetProductByCodeAsync(id);
+        if (product == null)
+            return Results.NotFound(new { message = $"Product with code '{id}' not found." });
+        productId = product.Id;
+    }
+
+    var success = await curationService.JoinWaitlistAsync(productId, customerId.Value);
+    return success
+        ? Results.Ok(new { status = "WaitlistJoined", productId = productId, customerId = customerId.Value, timestamp = DateTime.UtcNow })
+        : Results.NotFound(new { message = $"Product '{productId}' not found." });
+})
+.WithName("JoinProductWaitlist")
 .WithOpenApi();
 
 // ── Anonymous Device Cart Endpoints (30-Day TTL) ──
@@ -355,6 +407,219 @@ app.MapPost("/api/v1/cart/prune", async (ICartService cartService) =>
 .WithName("PruneExpiredCarts")
 .WithOpenApi();
 
+// ── Unified High-Throughput Telemetry Ingestion (Epic 2) ──
+app.MapPost("/api/v1/telemetry/signals", async ([FromBody] BatchTelemetrySignalsRequest request, HttpContext ctx, ITelemetryService telemetryService) =>
+{
+    var clientIp = ctx.Connection.RemoteIpAddress?.ToString();
+    var forwarded = ctx.Request.Headers["X-Forwarded-For"].FirstOrDefault();
+    if (!string.IsNullOrWhiteSpace(forwarded))
+    {
+        clientIp = forwarded.Split(',')[0].Trim();
+    }
+
+    var count = await telemetryService.RecordSignalsAsync(request, clientIp);
+    return Results.Accepted("/api/v1/telemetry/signals", new
+    {
+        status = "Accepted",
+        count = count,
+        timestamp = DateTime.UtcNow
+    });
+})
+.WithName("RecordTelemetrySignals")
+.WithOpenApi();
+
+// ── Admin Device Fleet & Telemetry Analytics (Protected via Auth Token) ──
+app.MapGet("/api/v1/admin/telemetry/stats", async ([FromQuery] string? token, HttpContext ctx, ITelemetryService telemetryService) =>
+{
+    var authHeader = ctx.Request.Headers["Authorization"].FirstOrDefault();
+    var patHeader = ctx.Request.Headers["X-Store-Admin-Key"].FirstOrDefault();
+    if (string.IsNullOrWhiteSpace(authHeader) && string.IsNullOrWhiteSpace(patHeader) && string.IsNullOrWhiteSpace(token))
+    {
+        return Results.Unauthorized();
+    }
+
+    var stats = await telemetryService.GetFleetStatsAsync();
+    return Results.Ok(stats);
+})
+.WithName("GetDeviceFleetStats")
+.WithOpenApi();
+
+app.MapGet("/api/v1/admin/telemetry/devices", async ([FromQuery] string? token, [FromQuery] string? platform, [FromQuery] int? limit, [FromQuery] int? offset, HttpContext ctx, ITelemetryService telemetryService) =>
+{
+    var authHeader = ctx.Request.Headers["Authorization"].FirstOrDefault();
+    var patHeader = ctx.Request.Headers["X-Store-Admin-Key"].FirstOrDefault();
+    if (string.IsNullOrWhiteSpace(authHeader) && string.IsNullOrWhiteSpace(patHeader) && string.IsNullOrWhiteSpace(token))
+    {
+        return Results.Unauthorized();
+    }
+
+    var devices = await telemetryService.GetDevicesAsync(platform, limit ?? 50, offset ?? 0);
+    return Results.Ok(devices);
+})
+.WithName("GetRegisteredDevices")
+.WithOpenApi();
+
+// ── Identity Stitching: Anonymous Device <-> Known User (Epic 3) ──
+app.MapPost("/api/v1/telemetry/stitch", async ([FromBody] StitchIdentityRequest request, ITelemetryService telemetryService) =>
+{
+    if (string.IsNullOrWhiteSpace(request.DeviceId) || string.IsNullOrWhiteSpace(request.UserId))
+    {
+        return Results.BadRequest(new { message = "Both deviceId and userId are required for identity stitching." });
+    }
+    var link = await telemetryService.StitchDeviceToUserAsync(request);
+    return Results.Ok(link);
+})
+.WithName("StitchDeviceToUser")
+.WithOpenApi();
+
+// ── Session Summaries & Taste Profiles (Epic 2 Tier 2 / Tier 3) ──
+app.MapGet("/api/v1/admin/telemetry/sessions", async ([FromQuery] string? token, [FromQuery] string? deviceId, [FromQuery] string? userId, [FromQuery] int? limit, HttpContext ctx, ITelemetryService telemetryService) =>
+{
+    var authHeader = ctx.Request.Headers["Authorization"].FirstOrDefault();
+    var patHeader = ctx.Request.Headers["X-Store-Admin-Key"].FirstOrDefault();
+    if (string.IsNullOrWhiteSpace(authHeader) && string.IsNullOrWhiteSpace(patHeader) && string.IsNullOrWhiteSpace(token))
+    {
+        return Results.Unauthorized();
+    }
+
+    var sessions = await telemetryService.GetSessionSummariesAsync(deviceId, userId, limit ?? 50);
+    return Results.Ok(sessions);
+})
+.WithName("GetSessionSummaries")
+.WithOpenApi();
+
+app.MapGet("/api/v1/admin/telemetry/devices/{deviceId}/profile", async (string deviceId, [FromQuery] string? token, HttpContext ctx, ITelemetryService telemetryService) =>
+{
+    var authHeader = ctx.Request.Headers["Authorization"].FirstOrDefault();
+    var patHeader = ctx.Request.Headers["X-Store-Admin-Key"].FirstOrDefault();
+    if (string.IsNullOrWhiteSpace(authHeader) && string.IsNullOrWhiteSpace(patHeader) && string.IsNullOrWhiteSpace(token))
+    {
+        return Results.Unauthorized();
+    }
+
+    var profile = await telemetryService.GetDeviceTasteProfileAsync(deviceId);
+    if (profile == null) return Results.NotFound(new { message = $"Device '{deviceId}' profile not found." });
+    return Results.Ok(profile);
+})
+.WithName("GetDeviceTasteProfile")
+.WithOpenApi();
+
+app.MapPost("/api/v1/admin/telemetry/rollup/trigger", async ([FromQuery] string? token, [FromQuery] int? retentionDays, HttpContext ctx, ITelemetryService telemetryService) =>
+{
+    var authHeader = ctx.Request.Headers["Authorization"].FirstOrDefault();
+    var patHeader = ctx.Request.Headers["X-Store-Admin-Key"].FirstOrDefault();
+    if (string.IsNullOrWhiteSpace(authHeader) && string.IsNullOrWhiteSpace(patHeader) && string.IsNullOrWhiteSpace(token))
+    {
+        return Results.Unauthorized();
+    }
+
+    var result = await telemetryService.RollupTelemetrySignalsAsync(retentionDays ?? 30);
+    return Results.Ok(result);
+})
+.WithName("TriggerTelemetryRollup")
+.WithOpenApi();
+
+app.MapGet("/api/v1/admin/telemetry/activity/hourly", async ([FromQuery] string? token, [FromQuery] int? days, HttpContext ctx, ITelemetryService telemetryService) =>
+{
+    var authHeader = ctx.Request.Headers["Authorization"].FirstOrDefault();
+    var patHeader = ctx.Request.Headers["X-Store-Admin-Key"].FirstOrDefault();
+    if (string.IsNullOrWhiteSpace(authHeader) && string.IsNullOrWhiteSpace(patHeader) && string.IsNullOrWhiteSpace(token))
+    {
+        return Results.Unauthorized();
+    }
+
+    var summary = await telemetryService.GetHourlyActivitySummaryAsync(days ?? 30);
+    return Results.Ok(summary);
+})
+.WithName("GetHourlyActivitySummary")
+.WithOpenApi();
+
+// =============================================================================
+// ── WHATSAPP-FIRST IDENTITY & 365-DAY CUSTOMER SESSIONS ENDPOINTS ──
+// =============================================================================
+
+// 1. Send OTP via WhatsApp Cloud API
+app.MapPost("/api/v1/auth/whatsapp/send-otp", async ([FromBody] SendOtpRequest request, IAuthService authService) =>
+{
+    var result = await authService.SendOtpAsync(request);
+    return result.Success ? Results.Ok(result) : Results.BadRequest(result);
+})
+.WithName("AuthSendWhatsAppOtp")
+.WithOpenApi();
+
+// 2. Verify OTP & Issue Long-Lived Session
+app.MapPost("/api/v1/auth/whatsapp/verify-otp", async ([FromBody] VerifyOtpRequest request, IAuthService authService) =>
+{
+    var result = await authService.VerifyOtpAsync(request);
+    return result.Success ? Results.Ok(result) : Results.BadRequest(result);
+})
+.WithName("AuthVerifyWhatsAppOtp")
+.WithOpenApi();
+
+// 3. Validate Session Token
+app.MapGet("/api/v1/auth/session", async (HttpContext ctx, IAuthService authService) =>
+{
+    var token = ctx.Request.Headers["X-Customer-Token"].FirstOrDefault()
+        ?? ctx.Request.Headers["Authorization"].FirstOrDefault()?.Replace("Bearer ", "", StringComparison.OrdinalIgnoreCase).Trim()
+        ?? ctx.Request.Query["token"].FirstOrDefault();
+
+    if (string.IsNullOrWhiteSpace(token))
+    {
+        return Results.Ok(new SessionValidationResponse { IsValid = false });
+    }
+
+    var result = await authService.ValidateSessionAsync(token);
+    return Results.Ok(result);
+})
+.WithName("AuthValidateSession")
+.WithOpenApi();
+
+// 4. Get Customer Profile
+app.MapGet("/api/v1/auth/profile", async (HttpContext ctx, IAuthService authService) =>
+{
+    var token = ctx.Request.Headers["X-Customer-Token"].FirstOrDefault()
+        ?? ctx.Request.Headers["Authorization"].FirstOrDefault()?.Replace("Bearer ", "", StringComparison.OrdinalIgnoreCase).Trim()
+        ?? ctx.Request.Query["token"].FirstOrDefault();
+
+    if (string.IsNullOrWhiteSpace(token)) return Results.Unauthorized();
+
+    var profile = await authService.GetProfileAsync(token);
+    return profile != null ? Results.Ok(profile) : Results.Unauthorized();
+})
+.WithName("AuthGetCustomerProfile")
+.WithOpenApi();
+
+// 5. Update Customer Profile (Name, Email, Default Address)
+app.MapPut("/api/v1/auth/profile", async ([FromBody] UpdateCustomerProfileRequest request, HttpContext ctx, IAuthService authService) =>
+{
+    var token = ctx.Request.Headers["X-Customer-Token"].FirstOrDefault()
+        ?? ctx.Request.Headers["Authorization"].FirstOrDefault()?.Replace("Bearer ", "", StringComparison.OrdinalIgnoreCase).Trim()
+        ?? ctx.Request.Query["token"].FirstOrDefault();
+
+    if (string.IsNullOrWhiteSpace(token)) return Results.Unauthorized();
+
+    var profile = await authService.UpdateProfileAsync(token, request);
+    return profile != null ? Results.Ok(profile) : Results.Unauthorized();
+})
+.WithName("AuthUpdateCustomerProfile")
+.WithOpenApi();
+
+// 6. Logout / Terminate Session
+app.MapPost("/api/v1/auth/logout", async ([FromBody] LogoutRequest? req, HttpContext ctx, IAuthService authService) =>
+{
+    var token = req?.SessionToken
+        ?? ctx.Request.Headers["X-Customer-Token"].FirstOrDefault()
+        ?? ctx.Request.Headers["Authorization"].FirstOrDefault()?.Replace("Bearer ", "", StringComparison.OrdinalIgnoreCase).Trim();
+
+    if (!string.IsNullOrWhiteSpace(token))
+    {
+        await authService.LogoutAsync(token);
+    }
+    return Results.Ok(new { success = true, message = "Logged out successfully." });
+})
+.WithName("AuthLogout")
+.WithOpenApi();
+
 // =============================================================================
 // ── STORE ADMIN & CURATION ENDPOINTS (Protected via JWT / PAT) ──
 // =============================================================================
@@ -405,6 +670,27 @@ app.MapPatch("/api/v1/admin/products/{id}/curation", async (Guid id, [FromBody] 
         : Results.NotFound(new { message = $"Store product '{id}' not found." });
 })
 .WithName("AdminUpdateProductCuration")
+.WithOpenApi();
+
+// 4a. Update Product Lifecycle (Cascade Parent Pause/Reactivation or Variant Level)
+app.MapPatch("/api/v1/admin/products/lifecycle", async ([FromBody] UpdateLifecycleRequest request, HttpContext ctx, ICurationService curationService) =>
+{
+    var author = GetAuthorEmail(ctx);
+    var success = await curationService.UpdateLifecycleStatusAsync(request, author);
+    return success
+        ? Results.Ok(new { status = "LifecycleUpdated", targetStatus = request.Status, updatedBy = author, timestamp = DateTime.UtcNow })
+        : Results.BadRequest(new { message = "Failed to update lifecycle status. Ensure either productId or parentId is provided and exists." });
+})
+.WithName("AdminUpdateProductLifecycle")
+.WithOpenApi();
+
+// 4b. Get Expired Paused Products Re-Evaluation Queue
+app.MapGet("/api/v1/admin/products/re-evaluation-queue", async (ICurationService curationService) =>
+{
+    var queue = await curationService.GetReEvaluationQueueAsync();
+    return Results.Ok(queue);
+})
+.WithName("AdminGetReEvaluationQueue")
 .WithOpenApi();
 
 // 5. Upload Client-Modified Media (WebP blob from Admin Canvas)

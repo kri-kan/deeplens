@@ -49,29 +49,6 @@ public record StoreColorGroupDto(
     [property: JsonPropertyName("isAvailable")] bool? IsAvailable = null
 );
 
-public record StoreProductDto(
-    [property: JsonPropertyName("id")] Guid Id,
-    [property: JsonPropertyName("vayyariProductId")] Guid VayyariProductId,
-    [property: JsonPropertyName("productCode")] string ProductCode,
-    [property: JsonPropertyName("title")] string Title,
-    [property: JsonPropertyName("description")] string? Description,
-    [property: JsonPropertyName("categoryName")] string CategoryName,
-    [property: JsonPropertyName("fabric")] string? Fabric,
-    [property: JsonPropertyName("baseCost")] decimal BaseCost,
-    [property: JsonPropertyName("mrp")] decimal Mrp,
-    [property: JsonPropertyName("salePrice")] decimal SalePrice,
-    [property: JsonPropertyName("lifecycleStatus")] string LifecycleStatus,
-    [property: JsonPropertyName("stockQuantity")] int StockQuantity,
-    [property: JsonPropertyName("colorGroupId")] Guid? ColorGroupId,
-    [property: JsonPropertyName("colorwayName")] string ColorwayName,
-    [property: JsonPropertyName("colorHex")] string ColorHex,
-    [property: JsonPropertyName("swatchTemplate")] string? SwatchTemplate,
-    [property: JsonPropertyName("colorGroups")] List<StoreColorGroupDto>? ColorGroups,
-    [property: JsonPropertyName("mediaOrder")] List<StoreMediaItemDto> MediaOrder,
-    [property: JsonPropertyName("tags")] List<string> Tags,
-    [property: JsonPropertyName("isPublished")] bool IsPublished,
-    [property: JsonPropertyName("publishedAt")] DateTime PublishedAt
-);
 
 public record StoreProductAuditDto(
     [property: JsonPropertyName("id")] Guid Id,

@@ -13,6 +13,11 @@ public class CurationService : ICurationService
     private readonly IStoreEventPublisher _eventPublisher;
     private readonly ILogger<CurationService> _logger;
 
+    static CurationService()
+    {
+        DefaultTypeMap.MatchNamesWithUnderscores = true;
+    }
+
     public CurationService(
         IConfiguration config,
         IMediaStorageService mediaStorage,
@@ -124,31 +129,305 @@ public class CurationService : ICurationService
         return count;
     }
 
+    public async Task<StoreProductDto?> GetProductByCodeAsync(string code)
+    {
+        if (string.IsNullOrWhiteSpace(code)) return null;
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        var trimmedCode = code.Trim();
+        var isGuid = Guid.TryParse(trimmedCode, out var guidVal);
+
+        const string sql = @"
+            WITH siblings AS (
+                SELECT 
+                    p2.parent_catalog_id,
+                    json_agg(
+                        json_build_object(
+                            'productCode', p2.product_code,
+                            'colorHex', p2.color_hex,
+                            'colorwayName', p2.colorway_name,
+                            'heroImageUrl', p2.media_order->0->>'url'
+                        ) ORDER BY p2.product_code
+                    ) AS sibling_swatches
+                FROM products p2
+                WHERE p2.is_published = true 
+                  AND p2.parent_catalog_id IS NOT NULL
+                  AND p2.lifecycle_status != 'deleted'
+                GROUP BY p2.parent_catalog_id
+            ),
+            waitlist_counts AS (
+                SELECT product_id, COUNT(*) AS waitlist_count
+                FROM product_waitlists
+                GROUP BY product_id
+            )
+            SELECT 
+                p.id, p.vayyari_product_id AS VayyariProductId, p.product_code AS ProductCode,
+                p.title, p.description, p.category_name AS CategoryName, p.fabric,
+                p.base_cost AS BaseCost, p.mrp, p.sale_price AS SalePrice,
+                p.lifecycle_status AS LifecycleStatus, p.stock_quantity AS StockQuantity,
+                p.color_group_id AS ColorGroupId, p.colorway_name AS ColorwayName, p.color_hex AS ColorHex,
+                p.swatch_template AS SwatchTemplate,
+                p.parent_catalog_id AS ParentCatalogId,
+                p.catalog_color_group_id AS CatalogColorGroupId,
+                p.parent_product_code AS ParentProductCode,
+                p.previous_lifecycle_status AS PreviousLifecycleStatus,
+                p.take_down_expires_at AS TakeDownExpiresAt,
+                COALESCE(p.is_re_evaluation_pending, false) AS IsReEvaluationPending,
+                COALESCE(w.waitlist_count, 0) AS WaitlistCount,
+                p.color_groups::text AS ColorGroupsJson,
+                p.media_order::text AS MediaOrderJson, 
+                p.tags::text AS TagsJson,
+                p.is_published AS IsPublished, 
+                p.published_at AS PublishedAt,
+                s.sibling_swatches::text AS SiblingSwatchesJson
+            FROM products p
+            LEFT JOIN siblings s ON p.parent_catalog_id = s.parent_catalog_id
+            LEFT JOIN waitlist_counts w ON p.id = w.product_id
+            WHERE LOWER(p.product_code) = LOWER(@Code)
+               OR (LOWER(p.product_code) = LOWER(@Code || '01'))
+               OR (@IsGuid = true AND (p.id = @GuidVal OR p.vayyari_product_id = @GuidVal))
+            ORDER BY (CASE WHEN LOWER(p.product_code) = LOWER(@Code) THEN 0 ELSE 1 END)
+            LIMIT 1;";
+
+        var row = await conn.QuerySingleOrDefaultAsync<ProductDbRow>(sql, new
+        {
+            Code = trimmedCode,
+            IsGuid = isGuid,
+            GuidVal = isGuid ? guidVal : Guid.Empty
+        });
+
+        return row != null ? MapToDto(row) : null;
+    }
+
+    public async Task<bool> UpdateLifecycleStatusAsync(UpdateLifecycleRequest req, string authorEmail)
+    {
+        if (req == null || string.IsNullOrWhiteSpace(req.Status)) return false;
+        if (!req.ProductId.HasValue && !req.ParentId.HasValue) return false;
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        DateTime? expiresAt = req.TakeDownExpiresAt;
+        if (!expiresAt.HasValue && req.TimeoutHours.HasValue)
+        {
+            expiresAt = DateTime.UtcNow.AddHours(req.TimeoutHours.Value);
+        }
+        else if (!expiresAt.HasValue && req.TimeoutDays.HasValue)
+        {
+            expiresAt = DateTime.UtcNow.AddDays(req.TimeoutDays.Value);
+        }
+
+        var normalizedStatus = req.Status.Trim().ToLowerInvariant();
+
+        const string updateSql = @"
+            UPDATE products
+            SET
+                lifecycle_status = CASE 
+                    WHEN @Status = 'paused' THEN 'paused'
+                    WHEN @Status IN ('available', 'reactivate') AND lifecycle_status = 'paused' 
+                        THEN COALESCE(previous_lifecycle_status, 'available')
+                    ELSE @Status
+                END,
+                previous_lifecycle_status = CASE
+                    WHEN @Status = 'paused' THEN 
+                        CASE WHEN lifecycle_status != 'paused' THEN lifecycle_status ELSE previous_lifecycle_status END
+                    WHEN @Status IN ('available', 'reactivate') AND lifecycle_status = 'paused' THEN NULL
+                    ELSE previous_lifecycle_status
+                END,
+                take_down_expires_at = CASE
+                    WHEN @Status = 'paused' THEN @TakeDownExpiresAt::timestamptz
+                    ELSE NULL
+                END,
+                is_re_evaluation_pending = FALSE,
+                updated_at = NOW()
+            WHERE (@ParentId IS NOT NULL AND (parent_catalog_id = @ParentId OR id = @ParentId))
+               OR (@ProductId IS NOT NULL AND (id = @ProductId OR vayyari_product_id = @ProductId))
+            RETURNING id, product_code, lifecycle_status, previous_lifecycle_status;";
+
+        var updatedRows = (await conn.QueryAsync<(Guid Id, string ProductCode, string LifecycleStatus, string? PreviousStatus)>(updateSql, new
+        {
+            ParentId = req.ParentId,
+            ProductId = req.ProductId,
+            Status = normalizedStatus,
+            TakeDownExpiresAt = expiresAt
+        })).ToList();
+
+        if (updatedRows.Count == 0) return false;
+
+        foreach (var row in updatedRows)
+        {
+            await LogAuditAsync(conn, row.Id, "lifecycle_changed", "lifecycleStatus", row.PreviousStatus, row.LifecycleStatus, authorEmail);
+            await _eventPublisher.PublishAsync(
+                "store.product.curation.updated",
+                row.Id.ToString(),
+                new
+                {
+                    productId = row.Id,
+                    productCode = row.ProductCode,
+                    lifecycleStatus = row.LifecycleStatus,
+                    updatedBy = authorEmail,
+                    updatedAt = DateTime.UtcNow
+                }
+            );
+        }
+
+        _logger.LogInformation("Updated lifecycle status to {Status} for {Count} products by {Author}", req.Status, updatedRows.Count, authorEmail);
+        return true;
+    }
+
+    public async Task<bool> JoinWaitlistAsync(Guid productId, Guid customerId)
+    {
+        if (productId == Guid.Empty || customerId == Guid.Empty) return false;
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        const string findSql = @"SELECT id FROM products WHERE id = @Id OR vayyari_product_id = @Id LIMIT 1;";
+        var realId = await conn.ExecuteScalarAsync<Guid?>(findSql, new { Id = productId });
+        if (!realId.HasValue) return false;
+
+        const string insertSql = @"
+            INSERT INTO product_waitlists (id, product_id, customer_id, created_at)
+            VALUES (gen_random_uuid(), @ProductId, @CustomerId, NOW())
+            ON CONFLICT (product_id, customer_id) DO NOTHING;";
+
+        await conn.ExecuteAsync(insertSql, new
+        {
+            ProductId = realId.Value,
+            CustomerId = customerId
+        });
+
+        _logger.LogInformation("Customer {CustomerId} joined waitlist for product {ProductId}", customerId, realId.Value);
+        return true;
+    }
+
+    public async Task<List<StoreProductDto>> GetReEvaluationQueueAsync()
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        await conn.ExecuteAsync(@"
+            UPDATE products 
+            SET is_re_evaluation_pending = TRUE, updated_at = NOW() 
+            WHERE lifecycle_status = 'paused' 
+              AND take_down_expires_at <= NOW() 
+              AND is_re_evaluation_pending = FALSE;");
+
+        const string sql = @"
+            WITH siblings AS (
+                SELECT 
+                    p2.parent_catalog_id,
+                    json_agg(
+                        json_build_object(
+                            'productCode', p2.product_code,
+                            'colorHex', p2.color_hex,
+                            'colorwayName', p2.colorway_name,
+                            'heroImageUrl', p2.media_order->0->>'url'
+                        ) ORDER BY p2.product_code
+                    ) AS sibling_swatches
+                FROM products p2
+                WHERE p2.is_published = true 
+                  AND p2.parent_catalog_id IS NOT NULL
+                  AND p2.lifecycle_status != 'deleted'
+                GROUP BY p2.parent_catalog_id
+            ),
+            waitlist_counts AS (
+                SELECT product_id, COUNT(*) AS waitlist_count
+                FROM product_waitlists
+                GROUP BY product_id
+            )
+            SELECT 
+                p.id, p.vayyari_product_id AS VayyariProductId, p.product_code AS ProductCode,
+                p.title, p.description, p.category_name AS CategoryName, p.fabric,
+                p.base_cost AS BaseCost, p.mrp, p.sale_price AS SalePrice,
+                p.lifecycle_status AS LifecycleStatus, p.stock_quantity AS StockQuantity,
+                p.color_group_id AS ColorGroupId, p.colorway_name AS ColorwayName, p.color_hex AS ColorHex,
+                p.swatch_template AS SwatchTemplate,
+                p.parent_catalog_id AS ParentCatalogId,
+                p.catalog_color_group_id AS CatalogColorGroupId,
+                p.parent_product_code AS ParentProductCode,
+                p.previous_lifecycle_status AS PreviousLifecycleStatus,
+                p.take_down_expires_at AS TakeDownExpiresAt,
+                COALESCE(p.is_re_evaluation_pending, false) AS IsReEvaluationPending,
+                COALESCE(w.waitlist_count, 0) AS WaitlistCount,
+                p.color_groups::text AS ColorGroupsJson,
+                p.media_order::text AS MediaOrderJson, 
+                p.tags::text AS TagsJson,
+                p.is_published AS IsPublished, 
+                p.published_at AS PublishedAt,
+                s.sibling_swatches::text AS SiblingSwatchesJson
+            FROM products p
+            LEFT JOIN siblings s ON p.parent_catalog_id = s.parent_catalog_id
+            LEFT JOIN waitlist_counts w ON p.id = w.product_id
+            WHERE p.lifecycle_status = 'paused' 
+              AND (p.take_down_expires_at <= NOW() OR p.is_re_evaluation_pending = TRUE)
+            ORDER BY p.take_down_expires_at ASC NULLS LAST;";
+
+        var rows = await conn.QueryAsync<ProductDbRow>(sql);
+        return rows.Select(MapToDto).ToList();
+    }
+
     public async Task<List<StoreProductDto>> GetInStoreProductsAsync(string? category = null, string? search = null, string? lifecycle = null)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync();
 
         var sql = @"
+            WITH siblings AS (
+                SELECT 
+                    p2.parent_catalog_id,
+                    json_agg(
+                        json_build_object(
+                            'productCode', p2.product_code,
+                            'colorHex', p2.color_hex,
+                            'colorwayName', p2.colorway_name,
+                            'heroImageUrl', p2.media_order->0->>'url'
+                        ) ORDER BY p2.product_code
+                    ) AS sibling_swatches
+                FROM products p2
+                WHERE p2.is_published = true 
+                  AND p2.parent_catalog_id IS NOT NULL
+                  AND p2.lifecycle_status != 'deleted'
+                GROUP BY p2.parent_catalog_id
+            ),
+            waitlist_counts AS (
+                SELECT product_id, COUNT(*) AS waitlist_count
+                FROM product_waitlists
+                GROUP BY product_id
+            )
             SELECT 
-                id, vayyari_product_id AS VayyariProductId, product_code AS ProductCode,
-                title, description, category_name AS CategoryName, fabric,
-                base_cost AS BaseCost, mrp, sale_price AS SalePrice,
-                lifecycle_status AS LifecycleStatus, stock_quantity AS StockQuantity,
-                color_group_id AS ColorGroupId, colorway_name AS ColorwayName, color_hex AS ColorHex,
-                swatch_template AS SwatchTemplate,
-                color_groups::text AS ColorGroupsJson,
-                media_order::text AS MediaOrderJson, tags::text AS TagsJson,
-                is_published AS IsPublished, published_at AS PublishedAt
-            FROM products
-            WHERE is_published = true
-              AND (@Category IS NULL OR LOWER(category_name) = LOWER(@Category) OR @Category = 'All')
-              AND (@Lifecycle IS NULL OR LOWER(lifecycle_status) = LOWER(@Lifecycle) OR @Lifecycle = 'All')
+                p.id, p.vayyari_product_id AS VayyariProductId, p.product_code AS ProductCode,
+                p.title, p.description, p.category_name AS CategoryName, p.fabric,
+                p.base_cost AS BaseCost, p.mrp, p.sale_price AS SalePrice,
+                p.lifecycle_status AS LifecycleStatus, p.stock_quantity AS StockQuantity,
+                p.color_group_id AS ColorGroupId, p.colorway_name AS ColorwayName, p.color_hex AS ColorHex,
+                p.swatch_template AS SwatchTemplate,
+                p.parent_catalog_id AS ParentCatalogId,
+                p.catalog_color_group_id AS CatalogColorGroupId,
+                p.parent_product_code AS ParentProductCode,
+                p.previous_lifecycle_status AS PreviousLifecycleStatus,
+                p.take_down_expires_at AS TakeDownExpiresAt,
+                COALESCE(p.is_re_evaluation_pending, false) AS IsReEvaluationPending,
+                COALESCE(w.waitlist_count, 0) AS WaitlistCount,
+                p.color_groups::text AS ColorGroupsJson,
+                p.media_order::text AS MediaOrderJson, 
+                p.tags::text AS TagsJson,
+                p.is_published AS IsPublished, 
+                p.published_at AS PublishedAt,
+                s.sibling_swatches::text AS SiblingSwatchesJson
+            FROM products p
+            LEFT JOIN siblings s ON p.parent_catalog_id = s.parent_catalog_id
+            LEFT JOIN waitlist_counts w ON p.id = w.product_id
+            WHERE p.is_published = true
+              AND (@Category IS NULL OR LOWER(p.category_name) = LOWER(@Category) OR @Category = 'All')
+              AND (@Lifecycle IS NULL OR LOWER(p.lifecycle_status) = LOWER(@Lifecycle) OR @Lifecycle = 'All')
               AND (@Search IS NULL OR 
-                   title ILIKE '%' || @Search || '%' OR 
-                   product_code ILIKE '%' || @Search || '%' OR 
-                   category_name ILIKE '%' || @Search || '%')
-            ORDER BY published_at DESC;";
+                   p.title ILIKE '%' || @Search || '%' OR 
+                   p.product_code ILIKE '%' || @Search || '%' OR 
+                   p.category_name ILIKE '%' || @Search || '%')
+            ORDER BY p.published_at DESC;";
 
         var rows = await conn.QueryAsync<ProductDbRow>(sql, new
         {
@@ -166,18 +445,52 @@ public class CurationService : ICurationService
         await conn.OpenAsync();
 
         const string sql = @"
+            WITH siblings AS (
+                SELECT 
+                    p2.parent_catalog_id,
+                    json_agg(
+                        json_build_object(
+                            'productCode', p2.product_code,
+                            'colorHex', p2.color_hex,
+                            'colorwayName', p2.colorway_name,
+                            'heroImageUrl', p2.media_order->0->>'url'
+                        ) ORDER BY p2.product_code
+                    ) AS sibling_swatches
+                FROM products p2
+                WHERE p2.is_published = true 
+                  AND p2.parent_catalog_id IS NOT NULL
+                  AND p2.lifecycle_status != 'deleted'
+                GROUP BY p2.parent_catalog_id
+            ),
+            waitlist_counts AS (
+                SELECT product_id, COUNT(*) AS waitlist_count
+                FROM product_waitlists
+                GROUP BY product_id
+            )
             SELECT 
-                id, vayyari_product_id AS VayyariProductId, product_code AS ProductCode,
-                title, description, category_name AS CategoryName, fabric,
-                base_cost AS BaseCost, mrp, sale_price AS SalePrice,
-                lifecycle_status AS LifecycleStatus, stock_quantity AS StockQuantity,
-                color_group_id AS ColorGroupId, colorway_name AS ColorwayName, color_hex AS ColorHex,
-                swatch_template AS SwatchTemplate,
-                color_groups::text AS ColorGroupsJson,
-                media_order::text AS MediaOrderJson, tags::text AS TagsJson,
-                is_published AS IsPublished, published_at AS PublishedAt
-            FROM products
-            WHERE id = @Id OR vayyari_product_id = @Id
+                p.id, p.vayyari_product_id AS VayyariProductId, p.product_code AS ProductCode,
+                p.title, p.description, p.category_name AS CategoryName, p.fabric,
+                p.base_cost AS BaseCost, p.mrp, p.sale_price AS SalePrice,
+                p.lifecycle_status AS LifecycleStatus, p.stock_quantity AS StockQuantity,
+                p.color_group_id AS ColorGroupId, p.colorway_name AS ColorwayName, p.color_hex AS ColorHex,
+                p.swatch_template AS SwatchTemplate,
+                p.parent_catalog_id AS ParentCatalogId,
+                p.catalog_color_group_id AS CatalogColorGroupId,
+                p.parent_product_code AS ParentProductCode,
+                p.previous_lifecycle_status AS PreviousLifecycleStatus,
+                p.take_down_expires_at AS TakeDownExpiresAt,
+                COALESCE(p.is_re_evaluation_pending, false) AS IsReEvaluationPending,
+                COALESCE(w.waitlist_count, 0) AS WaitlistCount,
+                p.color_groups::text AS ColorGroupsJson,
+                p.media_order::text AS MediaOrderJson, 
+                p.tags::text AS TagsJson,
+                p.is_published AS IsPublished, 
+                p.published_at AS PublishedAt,
+                s.sibling_swatches::text AS SiblingSwatchesJson
+            FROM products p
+            LEFT JOIN siblings s ON p.parent_catalog_id = s.parent_catalog_id
+            LEFT JOIN waitlist_counts w ON p.id = w.product_id
+            WHERE p.id = @Id OR p.vayyari_product_id = @Id
             LIMIT 1;";
 
         var row = await conn.QuerySingleOrDefaultAsync<ProductDbRow>(sql, new { Id = id });
@@ -506,6 +819,10 @@ public class CurationService : ICurationService
             ? new List<string>()
             : JsonSerializer.Deserialize<List<string>>(r.TagsJson, JsonOptions) ?? new();
 
+        var siblingSwatches = string.IsNullOrEmpty(r.SiblingSwatchesJson)
+            ? new List<SiblingSwatchDto>()
+            : JsonSerializer.Deserialize<List<SiblingSwatchDto>>(r.SiblingSwatchesJson, JsonOptions) ?? new();
+
         return new StoreProductDto(
             Id: r.Id,
             VayyariProductId: r.VayyariProductId,
@@ -527,7 +844,15 @@ public class CurationService : ICurationService
             MediaOrder: media,
             Tags: tags,
             IsPublished: r.IsPublished,
-            PublishedAt: r.PublishedAt
+            PublishedAt: r.PublishedAt,
+            ParentCatalogId: r.ParentCatalogId,
+            CatalogColorGroupId: r.CatalogColorGroupId,
+            ParentProductCode: r.ParentProductCode,
+            PreviousLifecycleStatus: r.PreviousLifecycleStatus,
+            TakeDownExpiresAt: r.TakeDownExpiresAt,
+            IsReEvaluationPending: r.IsReEvaluationPending,
+            WaitlistCount: r.WaitlistCount,
+            SiblingSwatches: siblingSwatches
         );
     }
 
@@ -549,10 +874,18 @@ public class CurationService : ICurationService
         public string ColorwayName { get; set; } = string.Empty;
         public string ColorHex { get; set; } = string.Empty;
         public string? SwatchTemplate { get; set; }
+        public Guid? ParentCatalogId { get; set; }
+        public Guid? CatalogColorGroupId { get; set; }
+        public string? ParentProductCode { get; set; }
+        public string? PreviousLifecycleStatus { get; set; }
+        public DateTime? TakeDownExpiresAt { get; set; }
+        public bool IsReEvaluationPending { get; set; }
+        public int WaitlistCount { get; set; }
         public string? ColorGroupsJson { get; set; }
         public string? MediaOrderJson { get; set; }
         public string? TagsJson { get; set; }
         public bool IsPublished { get; set; }
         public DateTime PublishedAt { get; set; }
+        public string? SiblingSwatchesJson { get; set; }
     }
 }
