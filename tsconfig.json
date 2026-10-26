@@ -5,6 +5,9 @@
       "react-native": [
         "./src/vayyari/node_modules/react-native-web"
       ],
+      "@expo/vector-icons": [
+        "./src/vayyari/tests/mocks/vectorIconsMock.js"
+      ],
       "@/*": [
         "./src/vayyari/*"
       ]

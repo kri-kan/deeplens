@@ -10,7 +10,7 @@
   },
   "main": "dist/main.js",
   "scripts": {
-    "test": "./src/vayyari/node_modules/.bin/tsx --test"
+    "test": "./src/vayyari/node_modules/.bin/tsx --test --test-force-exit"
   },
   "dependencies": {
     "chrome-devtools-mcp": "^0.23.0",

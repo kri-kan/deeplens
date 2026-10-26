@@ -230,6 +230,8 @@ export function AdminProductDetailPage({
   initialEditSheetOpen = false,
   initialDeleteDialogOpen = false,
   initialTaxonomyExpanded = false,
+  initialQueueTab = 'all',
+  onSyncDelta,
 }: AdminProductDetailPageProps) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
@@ -1689,7 +1691,7 @@ export function AdminProductDetailPage({
                           )}
                           <YStack flex={1}>
                             <Text fontSize={12} fontWeight="700" color={tokens.text}>
-                              Photo #{idx + 1} {photo.title ? `• ${photo.title}` : ''}
+                              Photo #{idx + 1} {(photo as any).title ? `• ${(photo as any).title}` : ''}
                             </Text>
                             <Text fontSize={10} color={tokens.textMuted}>
                               Merged from incoming vendor chat

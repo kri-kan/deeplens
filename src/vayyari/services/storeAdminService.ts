@@ -350,9 +350,11 @@ class StoreAdminService {
 
 export interface DeltaMediaAllocation {
   mediaId: string;
+  id?: string;
   url?: string;
   allocationType: 'existing_color' | 'new_color' | 'shared_pool';
   colorGroupId?: string;
+  isCommon?: boolean;
   newColorGroup?: {
     id?: string;
     name: string;

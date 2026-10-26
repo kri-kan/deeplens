@@ -1,5 +1,9 @@
 import test, { describe } from 'node:test';
 import assert from 'node:assert';
+import React from 'react';
+
+(globalThis as any).__DEV__ = true;
+
 import {
   hasPendingStoreUpdates,
   getMediaDeltaCount,
@@ -187,5 +191,134 @@ describe('StoreAdminService: Delta Sync and Timestamp Tracking', () => {
     const res = await storeAdminService.updateStorePublishTimestamp('prod-001');
     assert.ok(res.store_publish_updated_at);
     assert.ok(new Date(res.store_publish_updated_at).getTime() <= Date.now());
+  });
+});
+
+describe('AdminProductDetailPage: Component Mount & Rendering', () => {
+  test('renders without crashing when provided mock props including initialQueueTab and delta props', async () => {
+    (globalThis as any).__DEV__ = false;
+    (globalThis as any).expo = {
+      EventEmitter: class EventEmitter {},
+      modules: new Proxy({}, { get: () => ({}) }),
+    };
+    (globalThis as any).ErrorUtils = { getGlobalHandler: () => () => {}, setGlobalHandler: () => {} };
+
+    const Module = require('node:module');
+    const origResolve = Module._resolveFilename;
+    const rnWebPath = require.resolve('../../../../node_modules/react-native-web');
+    const gestureMockPath = require.resolve('../../../../node_modules/react-native-gesture-handler/lib/commonjs/mocks/mocks.js');
+
+    Module._resolveFilename = function (req: string, parent: any, isMain: boolean, options: any) {
+      if (req === 'react-native' || req === 'react-native-web' || req.startsWith('react-native/')) return rnWebPath;
+      if (req === 'expo-image') return rnWebPath;
+      if (req === 'expo-video' || req.startsWith('expo-video')) return rnWebPath;
+      if (req === 'react-native-reanimated') return require.resolve('../../../../node_modules/react-native-reanimated/mock');
+      if (req === 'react-native-gesture-handler' || req.startsWith('react-native-gesture-handler')) return gestureMockPath;
+      return origResolve.call(this, req, parent, isMain, options);
+    };
+
+    const rnWeb = require(rnWebPath);
+    rnWeb.TurboModuleRegistry = { get: () => ({}), getEnforcing: () => ({}) };
+
+    const safeAreaPath = require.resolve('react-native-safe-area-context', { paths: ['./src/vayyari'] });
+    require.cache[safeAreaPath] = {
+      id: safeAreaPath,
+      filename: safeAreaPath,
+      loaded: true,
+      exports: {
+        useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+        SafeAreaProvider: ({ children }: any) => children,
+        SafeAreaConsumer: ({ children }: any) => children({ top: 0, bottom: 0, left: 0, right: 0 }),
+      },
+    };
+
+    const [pageMod, themeMod, tamaguiConfigMod, tamaguiMod] = await Promise.all([
+      import('../AdminProductDetailPage'),
+      import('../../../../theme/ThemeContext'),
+      import('../../../../tamagui.config'),
+      import('../../../../node_modules/tamagui/dist/cjs/index.cjs'),
+    ]);
+    const { AdminProductDetailPage } = pageMod;
+
+    const mockProduct = {
+      id: 'prod-001',
+      productCode: 'VF69F5',
+      title: 'Banarasi Kadwa Silk Saree',
+      category: 'Saree',
+      fabric: 'Pure Silk',
+      price: 18500,
+      isPublished: true,
+      isPublishedToStore: true,
+      media_updated_at: '2026-10-26T18:00:00Z',
+      store_publish_updated_at: '2026-10-25T10:00:00Z',
+      mediaCount: 7,
+      syncedMediaCount: 4,
+      media: [
+        { id: 'm1', url: 'https://minio.local/p1.webp', title: 'Pallu' },
+        { id: 'm2', url: 'https://minio.local/p2.webp', title: 'Pleats' },
+        { id: 'm3', url: 'https://minio.local/p3.webp', title: 'Border' },
+        { id: 'm4', url: 'https://minio.local/p4.webp', title: 'Blouse' },
+        { id: 'm5', url: 'https://minio.local/p5.webp', title: 'Close up' },
+        { id: 'm6', url: 'https://minio.local/p6.webp', title: 'Fold' },
+        { id: 'm7', url: 'https://minio.local/p7.webp', title: 'Full View' },
+      ],
+      unassignedMedia: [
+        { id: 'm5', url: 'https://minio.local/p5.webp', title: 'Close up' },
+        { id: 'm6', url: 'https://minio.local/p6.webp', title: 'Fold' },
+        { id: 'm7', url: 'https://minio.local/p7.webp', title: 'Full View' },
+      ],
+      colorGroups: [
+        { id: 'cg-1', name: 'Royal Blue', colorHex: '#1E3A8A', stockQuantity: 5 },
+      ],
+    };
+
+    let syncedPayload: any = null;
+    const element = React.createElement(AdminProductDetailPage, {
+      product: mockProduct as any,
+      initialQueueTab: 'publish_updates',
+      onSyncDelta: async (payload: any) => {
+        syncedPayload = payload;
+      },
+    });
+
+    assert.ok(element);
+    assert.strictEqual(element.type, AdminProductDetailPage);
+    assert.strictEqual(element.props.initialQueueTab, 'publish_updates');
+    assert.strictEqual(typeof element.props.onSyncDelta, 'function');
+
+    const mockThemeValue = {
+      theme: { colors: {} },
+      tokens: {
+        primary: '#1B4D3E',
+        accent: '#B45309',
+        accentForeground: '#FFFFFF',
+        text: '#111827',
+        textMuted: '#6B7280',
+        surface: '#FFFFFF',
+        border: '#E5E7EB',
+        radius: { sm: 4, md: 8, full: 9999 },
+      },
+      campaign: 'luxe',
+      colorScheme: 'light',
+      setCampaign: () => {},
+      setColorScheme: () => {},
+      toggleColorScheme: () => {},
+    };
+
+    const tree = React.createElement(
+      tamaguiMod.TamaguiProvider,
+      { config: tamaguiConfigMod.default || tamaguiConfigMod },
+      React.createElement(
+        themeMod.ThemeContext.Provider,
+        { value: mockThemeValue },
+        element
+      )
+    );
+
+    const ReactDOMServer = require('../../../../node_modules/react-dom/server.node.js');
+    const html = ReactDOMServer.renderToStaticMarkup(tree);
+    assert.ok(html);
+    assert.ok(html.length > 0);
+    assert.ok(html.includes('+3 new photos') || html.includes('Media Delta Detected'));
   });
 });

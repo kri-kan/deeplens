@@ -40,6 +40,7 @@ export interface DeltaNewColorGroupInput {
 
 export interface DeltaMediaAllocationItem {
   id: string;
+  mediaId: string;
   url?: string;
   colorGroupId?: string;
   isCommon?: boolean;
@@ -145,12 +146,15 @@ export function filterPublishUpdatesQueue<T extends ProductDeltaCheckable>(produ
 /**
  * Allocates a media item to an existing color group.
  */
-export function allocateMediaToExistingColor<T extends { id: string; url?: string }>(
+export function allocateMediaToExistingColor<T extends { id: string; url?: string; mediaId?: string }>(
   mediaItem: T,
   colorGroupId: string
 ): DeltaMediaAllocationItem & T {
+  const mediaId = (mediaItem as any).mediaId || mediaItem.id;
   return {
     ...mediaItem,
+    id: mediaItem.id || mediaId,
+    mediaId,
     colorGroupId,
     isCommon: false,
     allocationType: 'existing_color',
@@ -177,14 +181,17 @@ export function validateNewColorGroupStock(stockQuantity: number): number {
 /**
  * Allocates a media item to a brand new color group, validating mandatory initial stock.
  */
-export function allocateMediaToNewColor<T extends { id: string; url?: string }>(
+export function allocateMediaToNewColor<T extends { id: string; url?: string; mediaId?: string }>(
   mediaItem: T,
   newGroupConfig: DeltaNewColorGroupInput
 ): DeltaMediaAllocationItem & T {
   validateNewColorGroupStock(newGroupConfig.stockQuantity);
+  const mediaId = (mediaItem as any).mediaId || mediaItem.id;
 
   return {
     ...mediaItem,
+    id: mediaItem.id || mediaId,
+    mediaId,
     colorGroupId: newGroupConfig.id,
     isCommon: false,
     allocationType: 'new_color',
@@ -199,11 +206,14 @@ export function allocateMediaToNewColor<T extends { id: string; url?: string }>(
  * Allocates a media item to the universal shared group photos pool.
  * Shared photos are stored once in MinIO and common to all variant carousels.
  */
-export function allocateMediaToSharedPool<T extends { id: string; url?: string }>(
+export function allocateMediaToSharedPool<T extends { id: string; url?: string; mediaId?: string }>(
   mediaItem: T
 ): DeltaMediaAllocationItem & T {
+  const mediaId = (mediaItem as any).mediaId || mediaItem.id;
   return {
     ...mediaItem,
+    id: mediaItem.id || mediaId,
+    mediaId,
     colorGroupId: undefined,
     isCommon: true,
     allocationType: 'shared_pool',
@@ -233,10 +243,16 @@ export function buildDeltaSyncPayload(
     }
   }
 
+  const mappedAllocations = allocations.map((alloc) => ({
+    ...alloc,
+    id: alloc.id || alloc.mediaId,
+    mediaId: alloc.mediaId || alloc.id,
+  }));
+
   return {
     productId,
     parentCatalogId: options?.parentCatalogId,
-    mediaAllocations: allocations,
+    mediaAllocations: mappedAllocations,
     sharedMediaUrls: options?.sharedMediaUrls,
     colorGroupUpdates: options?.colorGroupUpdates,
   };
