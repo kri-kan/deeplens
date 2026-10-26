@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using DeepLens.SearchApi.Services;
+using DeepLens.SearchApi.Models;
 using DeepLens.Infrastructure.Services;
 using DeepLens.Application;
 using DeepLens.Infrastructure;
@@ -47,6 +48,8 @@ builder.Services.AddHttpClient<IAttributeExtractionService, LlmAttributeExtracti
 builder.Services.AddHttpClient<IInstagramSidecarService, InstagramSidecarService>();
 builder.Services.AddScoped<DeepLens.Infrastructure.Services.IStorageService, DeepLens.Infrastructure.Services.MinioStorageService>();
 builder.Services.AddScoped<IVendorService, VendorService>();
+builder.Services.AddScoped<ICatalogProductRepository, DapperCatalogProductRepository>();
+builder.Services.AddScoped<IProductMergeService, ProductMergeService>();
 builder.Services.AddScoped<IIdGeneratorService, IdGeneratorService>();
 builder.Services.AddScoped<IAttachmentService, AttachmentService>();
 builder.Services.AddScoped<ICommentService, CommentService>();
