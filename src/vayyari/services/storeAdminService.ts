@@ -239,6 +239,53 @@ class StoreAdminService {
 
     return res.json();
   }
+
+  async getFleetStats(): Promise<DeviceFleetStats> {
+    const headers = await this.getAuthHeaders();
+    const baseUrl = getStoreApiUrl();
+    const res = await fetch(`${baseUrl}/api/v1/admin/telemetry/stats`, { headers });
+    if (!res.ok) {
+      throw new Error(`Failed to load fleet stats: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async getRegisteredDevices(platform?: string): Promise<StoreDeviceItem[]> {
+    const headers = await this.getAuthHeaders();
+    const baseUrl = getStoreApiUrl();
+    const url = platform
+      ? `${baseUrl}/api/v1/admin/telemetry/devices?platform=${encodeURIComponent(platform)}`
+      : `${baseUrl}/api/v1/admin/telemetry/devices`;
+    const res = await fetch(url, { headers });
+    if (!res.ok) {
+      throw new Error(`Failed to load devices: ${res.status}`);
+    }
+    return res.json();
+  }
+}
+
+export interface StoreDeviceItem {
+  deviceId: string;
+  fingerprintHash?: string;
+  platform: string;
+  os?: string;
+  model?: string;
+  browser?: string;
+  screenResolution?: string;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  lastIp?: string;
+  lastUserId?: string;
+  totalEvents: number;
+}
+
+export interface DeviceFleetStats {
+  totalDevices: number;
+  activeToday: number;
+  activeLast7Days: number;
+  platformBreakdown: Record<string, number>;
+  topSignalTypes: Record<string, number>;
+  recentDevices: StoreDeviceItem[];
 }
 
 export const storeAdminService = new StoreAdminService();

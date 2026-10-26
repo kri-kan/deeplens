@@ -60,7 +60,9 @@ export function ProductGridTile({
 
   // Keep in sync with parent updates (e.g. initial load, filters, bulk actions)
   useEffect(() => {
-    setLocalStarred(Boolean(item.isStarred));
+    if (!isMutatingRef.current) {
+      setLocalStarred(Boolean(item.isStarred));
+    }
   }, [item.isStarred]);
 
   const handleStarPress = async (e: any) => {
@@ -237,7 +239,9 @@ export function ProductGridTile({
             accessibilityState={{ checked: localStarred }}
             accessibilityLabel={localStarred ? 'Unstar product' : 'Star product'}
             onPress={handleStarPress}
-            activeOpacity={0.85}
+            activeOpacity={0.7}
+            delayPressIn={0}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             style={{
               position: 'absolute',
               top: 6,

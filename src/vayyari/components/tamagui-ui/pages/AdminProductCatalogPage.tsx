@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
 import {
   FlatList,
   ScrollView,
@@ -173,6 +173,22 @@ export function AdminProductCatalogPage({
   const [catalogViewMode, setCatalogViewMode] = useState<'grid' | 'ai_matrix'>('grid');
   const [menuSheetVisible, setMenuSheetVisible] = useState(false);
 
+  // Retain products whose star state was toggled during this view session
+  // so starring an item while an unstarred (or starred) filter is active doesn't cause it to immediately vanish.
+  const [sessionToggledStarIds, setSessionToggledStarIds] = useState<Set<string>>(new Set());
+
+  const handleToggleStar = useCallback(
+    async (id: string, nextStarred?: boolean) => {
+      setSessionToggledStarIds((prev) => {
+        const next = new Set(prev);
+        next.add(id);
+        return next;
+      });
+      return onToggleStar?.(id, nextStarred);
+    },
+    [onToggleStar]
+  );
+
   const selectedIds = propSelectedIds !== undefined ? propSelectedIds : internalSelectedIds;
   const selectionMode = propSelectionMode !== undefined ? propSelectionMode : (internalIsSelectionMode || selectedIds.size > 0);
   const isAll = propIsAllSelected !== undefined ? propIsAllSelected : (products.length > 0 && selectedIds.size >= products.length);
@@ -185,8 +201,12 @@ export function AdminProductCatalogPage({
         return false;
       }
       // Starred filter
-      if (activeFilters.isStarred === true && !p.isStarred) return false;
-      if (activeFilters.isStarred === false && p.isStarred) return false;
+      // Retain items modified in the current view session so that starring/unstarring does not
+      // immediately remove them from view under the user's interaction (improves UX stability).
+      if (!sessionToggledStarIds.has(p.id)) {
+        if (activeFilters.isStarred === true && !p.isStarred) return false;
+        if (activeFilters.isStarred === false && p.isStarred) return false;
+      }
 
       // Price filter
       if (activeFilters.minPrice > 0 && (p.price || 0) < activeFilters.minPrice) return false;
@@ -289,7 +309,7 @@ export function AdminProductCatalogPage({
       }
       return true;
     });
-  }, [products, internalSelectedCat, internalQuery, activeFilters]);
+  }, [products, internalSelectedCat, internalQuery, activeFilters, sessionToggledStarIds]);
 
   // AI enrichment count across the catalog
   const aiEnrichedCount = useMemo(() => {
@@ -312,6 +332,7 @@ export function AdminProductCatalogPage({
 
   const handleCategorySelect = (id: string) => {
     setInternalSelectedCat(id);
+    setSessionToggledStarIds(new Set());
     onSelectCategory?.(id);
   };
 
@@ -402,6 +423,7 @@ export function AdminProductCatalogPage({
 
   const handleApplyFilters = (filters: FilterState) => {
     setActiveFilters(filters);
+    setSessionToggledStarIds(new Set());
     setFilterDrawerVisible(false);
     onApplyFilters?.(filters);
   };
@@ -410,6 +432,7 @@ export function AdminProductCatalogPage({
   React.useEffect(() => {
     if (propFilters) {
       setActiveFilters(propFilters);
+      setSessionToggledStarIds(new Set());
     }
   }, [propFilters]);
 
@@ -458,6 +481,7 @@ export function AdminProductCatalogPage({
   }, [initialFilterChips, activeFilters]);
 
   const handleRemoveFilterChip = (chipId: string) => {
+    setSessionToggledStarIds(new Set());
     setActiveFilters((prev) => {
       const next = { ...prev };
       if (chipId === 'f-star' || chipId === 'f-unstar') {
@@ -921,7 +945,10 @@ export function AdminProductCatalogPage({
           onRefresh ? (
             <RefreshControl
               refreshing={isRefreshing}
-              onRefresh={onRefresh}
+              onRefresh={() => {
+                setSessionToggledStarIds(new Set());
+                onRefresh();
+              }}
               tintColor={tokens.accent}
               colors={[tokens.accent]}
             />
@@ -949,7 +976,7 @@ export function AdminProductCatalogPage({
                   toggleSelection(id);
                 }
               }}
-              onToggleStar={onToggleStar}
+              onToggleStar={handleToggleStar}
               onQuickEdit={(p) => setEditingProduct(p)}
             />
           </YStack>

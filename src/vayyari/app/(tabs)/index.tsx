@@ -115,6 +115,14 @@ const STORE_UTILITIES: RawUtilityItem[] = [
     color: '#8B5CF6',
     permission: PERMISSIONS.CATALOG_CREATE,
   },
+  {
+    id: 'store-devices',
+    title: 'Fleet & Devices',
+    icon: <LuMonitor size={36} color="#06B6D4" />,
+    route: '/store/devices',
+    color: '#06B6D4',
+    permission: PERMISSIONS.CATALOG_VIEW,
+  },
 ];
 
 const SYSTEM_UTILITIES: RawUtilityItem[] = [

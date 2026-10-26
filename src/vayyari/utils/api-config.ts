@@ -44,7 +44,7 @@ export const getOtelEndpointUrl = () =>
   process.env.EXPO_PUBLIC_OTEL_ENDPOINT || `http://${getApiBaseHost()}:4318/v1/traces`;
 
 export const getStoreApiUrl = () =>
-  process.env.EXPO_PUBLIC_STORE_API_URL || 'http://storeapi.vayyarifashions.com';
+  process.env.EXPO_PUBLIC_STORE_API_URL || getSearchApiUrl() || 'http://adminapi.vayyarifashions.com';
 
 /**
  * Resolves a shipping label URL or storage path to a fully qualified downloadable HTTP URL.
