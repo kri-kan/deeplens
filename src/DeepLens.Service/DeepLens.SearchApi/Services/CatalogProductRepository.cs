@@ -71,12 +71,37 @@ public class DapperCatalogProductRepository : ICatalogProductRepository
         if (losers.Length == 0) return;
 
         using var conn = await GetConnectionAsync();
-        const string updateLosersSql = @"
-            UPDATE products
-            SET is_deleted = TRUE,
-                updated_at = NOW()
-            WHERE id = ANY(@Losers)";
+        using var trans = await conn.BeginTransactionAsync(ct);
 
-        await conn.ExecuteAsync(new CommandDefinition(updateLosersSql, new { Losers = losers }, cancellationToken: ct));
+        try
+        {
+            // 1. Soft-delete losers
+            const string updateLosersSql = @"
+                UPDATE products
+                SET is_deleted = TRUE,
+                    updated_at = NOW()
+                WHERE id = ANY(@Losers)";
+
+            await conn.ExecuteAsync(new CommandDefinition(updateLosersSql, new { Losers = losers }, transaction: trans, cancellationToken: ct));
+
+            // 2. Record merge relationship audit in product_merges
+            const string auditSql = @"
+                INSERT INTO product_merges (source_id, target_id, merged_at, metadata)
+                SELECT unnest(@Losers), @WinnerId, NOW(), jsonb_build_object('is_anchored', @IsAnchored, 'source', 'ProductMergeService')
+                ON CONFLICT (source_id) DO UPDATE 
+                SET target_id = EXCLUDED.target_id, 
+                    merged_at = EXCLUDED.merged_at, 
+                    metadata = EXCLUDED.metadata";
+
+            await conn.ExecuteAsync(new CommandDefinition(auditSql, new { Losers = losers, WinnerId = winnerId, IsAnchored = isAnchored }, transaction: trans, cancellationToken: ct));
+
+            await trans.CommitAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Failed to record merge audit for winner {WinnerId} and losers {Losers}", winnerId, string.Join(",", losers));
+            await trans.RollbackAsync(ct);
+            throw;
+        }
     }
 }

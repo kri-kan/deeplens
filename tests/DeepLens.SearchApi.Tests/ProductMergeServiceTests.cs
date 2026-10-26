@@ -144,4 +144,23 @@ public class ProductMergeServiceTests
         _repositoryMock.Verify(r => r.UpdateProductAsync(It.Is<CatalogProduct>(p => p.Id == publishedProduct.Id && p.MediaUpdatedAt == result.MediaUpdatedAt), It.IsAny<CancellationToken>()), Times.Once);
         _repositoryMock.Verify(r => r.RecordMergeAuditAsync(publishedProduct.Id, It.Is<IEnumerable<Guid>>(ids => ids.Contains(unpublishedProduct.Id)), true, It.IsAny<CancellationToken>()), Times.Once);
     }
+
+    [Fact]
+    public async Task MergeProductsAsync_WhenTargetIdPassedSeparatelyFromSourceIdsAndIsPublished_FetchesAndAnchorsPublishedTarget()
+    {
+        var unpublishedSource = CreateProduct(isPublished: false, createdAt: DateTime.UtcNow);
+        var publishedTarget = CreateProduct(isPublished: true, createdAt: DateTime.UtcNow.AddDays(-10));
+
+        // Pass unpublished in sourceIds and published in targetId separately
+        var request = new ProductMergeRequest(sourceIds: new[] { unpublishedSource.Id }, targetId: publishedTarget.Id);
+        var result = await _mergeService.MergeAsync(request);
+
+        Assert.Equal(publishedTarget.Id, result.WinnerId);
+        Assert.True(result.IsAnchored);
+
+        // Verify repository query fetched the union of SourceIds and TargetId
+        _repositoryMock.Verify(r => r.GetProductsByIdsAsync(
+            It.Is<IEnumerable<Guid>>(ids => ids.Contains(publishedTarget.Id) && ids.Contains(unpublishedSource.Id)),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
 }

@@ -45,12 +45,16 @@ public class ProductMergeService : IProductMergeService
     public async Task<ProductMergeResult> MergeAsync(ProductMergeRequest request, CancellationToken ct = default)
     {
         if (request == null) throw new ArgumentNullException(nameof(request));
-        if (request.SourceIds == null || request.SourceIds.Count == 0)
+        if ((request.SourceIds == null || request.SourceIds.Count == 0) && !request.TargetId.HasValue)
         {
             throw new ArgumentException("At least one product ID must be provided for merge.", nameof(request));
         }
 
-        var candidates = (await _repository.GetProductsByIdsAsync(request.SourceIds, ct)).ToList();
+        var candidateIds = request.TargetId.HasValue
+            ? (request.SourceIds ?? Array.Empty<Guid>()).Append(request.TargetId.Value).Distinct().ToList()
+            : (request.SourceIds ?? Array.Empty<Guid>()).Distinct().ToList();
+
+        var candidates = (await _repository.GetProductsByIdsAsync(candidateIds, ct)).ToList();
         if (candidates.Count == 0)
         {
             throw new InvalidOperationException("No matching candidate products found for merge.");
