@@ -62,9 +62,22 @@ export interface StoreProductEnrichmentSectionProps {
     stitch_type?: string;
     description?: string;
     unified_attributes?: any;
+    colorGroups?: any[];
     [key: string]: any;
   };
   unified_attributes?: any;
+  hasMediaDelta?: boolean;
+  mediaDeltaCount?: number;
+  colorGroups?: Array<{
+    id: string;
+    name: string;
+    colorHex?: string;
+    stockQuantity?: number;
+    colorwayCode?: string;
+  }>;
+  stockQuantities?: Record<string, number>;
+  onChangeStockQuantity?: (groupId: string, quantity: number) => void;
+  onOpenMediaAllocation?: () => void;
   onChangeDescription: (desc: string) => void;
   onChangeMrp: (mrp: string) => void;
   onChangeSalePrice: (price: string) => void;
@@ -324,6 +337,12 @@ export function StoreProductEnrichmentSection({
   specs: controlledSpecs,
   product,
   unified_attributes,
+  hasMediaDelta = false,
+  mediaDeltaCount = 0,
+  colorGroups: propColorGroups,
+  stockQuantities: propStockQuantities,
+  onChangeStockQuantity,
+  onOpenMediaAllocation,
   onChangeDescription,
   onChangeMrp,
   onChangeSalePrice,
@@ -337,6 +356,28 @@ export function StoreProductEnrichmentSection({
   const [tagInput, setTagInput] = useState('');
   const [customOccasionInput, setCustomOccasionInput] = useState('');
   const [isAddingOccasion, setIsAddingOccasion] = useState(false);
+
+  const effectiveColorGroups = useMemo(() => {
+    if (propColorGroups && propColorGroups.length > 0) return propColorGroups;
+    if (product?.colorGroups && product.colorGroups.length > 0) return product.colorGroups;
+    return [
+      { id: 'cg-emerald', name: 'Emerald Green', colorHex: '#1B4D3E', stockQuantity: 10, colorwayCode: 'VF2B58-01' },
+      { id: 'cg-gold', name: 'Mustard Gold', colorHex: '#D4AF37', stockQuantity: 8, colorwayCode: 'VF2B58-02' },
+    ];
+  }, [propColorGroups, product]);
+
+  const [stockState, setStockState] = useState<Record<string, number>>(() => {
+    const initial: Record<string, number> = {};
+    effectiveColorGroups.forEach((cg) => {
+      initial[cg.id] = propStockQuantities?.[cg.id] ?? cg.stockQuantity ?? 10;
+    });
+    return initial;
+  });
+
+  const handleStockChange = (groupId: string, qty: number) => {
+    setStockState((prev) => ({ ...prev, [groupId]: qty }));
+    onChangeStockQuantity?.(groupId, qty);
+  };
 
   // ── UNIFIED ATTRIBUTES SPEC RESOLUTION & PREFILL ────────────────────────────
   const effectiveUa = unified_attributes || product?.unified_attributes;
@@ -745,6 +786,56 @@ export function StoreProductEnrichmentSection({
               </Text>
             </XStack>
           )}
+
+          {(hasMediaDelta || (mediaDeltaCount && mediaDeltaCount > 0)) && (
+            <XStack
+              alignItems="center"
+              justifyContent="space-between"
+              backgroundColor="#FEF3C7"
+              paddingVertical={8}
+              paddingHorizontal={12}
+              borderRadius={8}
+              borderWidth={1}
+              borderColor="#FDE68A"
+              gap={8}
+              flexWrap="wrap"
+            >
+              <XStack alignItems="center" gap={8} flex={1}>
+                <LuSparkles size={16} color="#B45309" />
+                <YStack flex={1}>
+                  <XStack alignItems="center" gap={6}>
+                    <Text fontSize={12} fontWeight="900" color="#B45309">
+                      Pending Store Updates
+                    </Text>
+                    <View style={{ backgroundColor: '#D97706', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                      <Text testID="enrichment-delta-badge" fontSize={10} fontWeight="900" color="#FFFFFF">
+                        +{mediaDeltaCount || 3} new photos
+                      </Text>
+                    </View>
+                  </XStack>
+                  <Text fontSize={10.5} color="#92400E">
+                    Catalog merge added new vendor media. Allocate to color variants or universal shared pool.
+                  </Text>
+                </YStack>
+              </XStack>
+
+              {onOpenMediaAllocation && (
+                <Pressable
+                  onPress={onOpenMediaAllocation}
+                  style={{
+                    backgroundColor: '#D97706',
+                    paddingHorizontal={12}
+                    paddingVertical={6}
+                    borderRadius={6}
+                  }}
+                >
+                  <Text fontSize={11} fontWeight="800" color="#FFFFFF">
+                    Allocate Photos ➔
+                  </Text>
+                </Pressable>
+              )}
+            </XStack>
+          )}
         </YStack>
       </YStack>
 
@@ -1082,6 +1173,94 @@ export function StoreProductEnrichmentSection({
                 </Text>
               </YStack>
             </XStack>
+
+            {/* Mandatory Per-Color Stock Inputs (Variant-First Architecture) */}
+            <YStack gap={8} paddingTop={6}>
+              <XStack alignItems="center" justifyContent="space-between">
+                <XStack alignItems="center" gap={6}>
+                  <Text fontSize={12} fontWeight="900" color={tokens.text} textTransform="uppercase">
+                    Colorway Inventory Stock (Mandatory for Publish)
+                  </Text>
+                  <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 5, paddingVertical: 1.5, borderRadius: 4 }}>
+                    <Text fontSize={9} fontWeight="800" color="#15803D">
+                      Per-Colorway
+                    </Text>
+                  </View>
+                </XStack>
+                <Text fontSize={10.5} color={tokens.textMuted}>
+                  Explicit stock count required for each variant
+                </Text>
+              </XStack>
+
+              <YStack gap={6}>
+                {effectiveColorGroups.map((cg) => {
+                  const currentStock = stockState[cg.id] ?? cg.stockQuantity ?? 10;
+                  const isStockValid = currentStock > 0;
+                  return (
+                    <XStack
+                      key={cg.id}
+                      alignItems="center"
+                      justifyContent="space-between"
+                      backgroundColor={tokens.surfaceRaised}
+                      paddingHorizontal={12}
+                      paddingVertical={8}
+                      borderRadius={8}
+                      borderWidth={1}
+                      borderColor={isStockValid ? tokens.border : '#F59E0B'}
+                    >
+                      <XStack alignItems="center" gap={8} flex={1}>
+                        <View
+                          style={{
+                            width: 14,
+                            height: 14,
+                            borderRadius: 7,
+                            backgroundColor: cg.colorHex || '#1B4D3E',
+                            borderWidth: 1,
+                            borderColor: tokens.border,
+                          }}
+                        />
+                        <YStack>
+                          <Text fontSize={12} fontWeight="800" color={tokens.text}>
+                            {cg.name}
+                          </Text>
+                          {cg.colorwayCode && (
+                            <Text fontSize={9.5} color={tokens.textMuted}>
+                              {cg.colorwayCode}
+                            </Text>
+                          )}
+                        </YStack>
+                      </XStack>
+
+                      <XStack alignItems="center" gap={8}>
+                        <Text fontSize={11} fontWeight="700" color={tokens.textMuted}>
+                          Stock Qty:
+                        </Text>
+                        <TextInput
+                          value={String(currentStock)}
+                          keyboardType="numeric"
+                          onChangeText={(val) => {
+                            const num = parseInt(val || '0', 10);
+                            handleStockChange(cg.id, isNaN(num) ? 0 : num);
+                          }}
+                          style={{
+                            width: 70,
+                            height: 32,
+                            backgroundColor: '#FFFFFF',
+                            borderWidth: 1.5,
+                            borderColor: isStockValid ? tokens.accent : '#EF4444',
+                            borderRadius: 6,
+                            textAlign: 'center',
+                            fontSize: 13,
+                            fontWeight: '800',
+                            color: tokens.text,
+                          }}
+                        />
+                      </XStack>
+                    </XStack>
+                  );
+                })}
+              </YStack>
+            </YStack>
           </YStack>
 
           {/* Full-Bleed End-to-End Separator Line */}

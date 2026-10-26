@@ -9,6 +9,9 @@
     "email": "antigravity-support@google.com"
   },
   "main": "dist/main.js",
+  "scripts": {
+    "test": "./src/vayyari/node_modules/.bin/tsx --test"
+  },
   "dependencies": {
     "chrome-devtools-mcp": "^0.23.0",
     "electron-log": "^5.4.3",

@@ -28,6 +28,13 @@ import {
 } from '../icons/lu';
 import { useTheme } from '@/theme';
 
+import {
+  hasPendingStoreUpdates,
+  getMediaDeltaCount,
+  formatMediaDeltaBadge,
+  filterPublishUpdatesQueue,
+} from '@/utils/publishDeltaRules';
+
 export interface VayyariStarredProductItem {
   id: string;
   productCode: string;
@@ -42,7 +49,13 @@ export interface VayyariStarredProductItem {
   descriptions: string[];
   isStarred: boolean;
   isPublishedToStore?: boolean;
+  isPublished?: boolean;
   publishedAt?: string;
+  media_updated_at?: string;
+  mediaUpdatedAt?: string;
+  store_publish_updated_at?: string;
+  storePublishUpdatedAt?: string;
+  syncedMediaCount?: number;
 }
 
 export type StoreSortOption = 'newest' | 'price_low' | 'price_high' | 'media_count';
@@ -101,6 +114,7 @@ export function AdminVayyariStorePublishPage({
   const bottomInset = disableSafeArea ? 0 : insets.bottom;
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [activeQueue, setActiveQueue] = useState<'all' | 'publish_updates'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedFabric, setSelectedFabric] = useState('All');
@@ -109,6 +123,8 @@ export function AdminVayyariStorePublishPage({
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishSuccessToast, setPublishSuccessToast] = useState<string | null>(null);
+
+  const publishUpdatesCount = useMemo(() => filterPublishUpdatesQueue(products).length, [products]);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -150,6 +166,10 @@ export function AdminVayyariStorePublishPage({
       return matchCat && matchFabric && matchPrice && matchQuery;
     });
 
+    if (activeQueue === 'publish_updates') {
+      list = filterPublishUpdatesQueue(list);
+    }
+
     if (selectedSort === 'price_low') {
       list = [...list].sort((a, b) => (a.price || 8000) - (b.price || 8000));
     } else if (selectedSort === 'price_high') {
@@ -159,7 +179,7 @@ export function AdminVayyariStorePublishPage({
     }
 
     return list;
-  }, [products, selectedCategory, selectedFabric, selectedPriceRange, selectedSort, searchQuery]);
+  }, [products, activeQueue, selectedCategory, selectedFabric, selectedPriceRange, selectedSort, searchQuery]);
 
   const toggleSelectProduct = (id: string) => {
     if (selectedIds.includes(id)) {
@@ -233,6 +253,15 @@ export function AdminVayyariStorePublishPage({
         <View style={styles.starBadge}>
           <LuStar size={11} color="#F59E0B" />
         </View>
+
+        {/* Media Delta Badge */}
+        {hasPendingStoreUpdates(product) && (
+          <View style={styles.deltaBadge}>
+            <Text style={styles.deltaBadgeText}>
+              {formatMediaDeltaBadge(getMediaDeltaCount(product))}
+            </Text>
+          </View>
+        )}
 
         {/* Bottom Overlay Info - Click to Open PDP */}
         <View style={styles.bottomOverlay}>
@@ -314,6 +343,59 @@ export function AdminVayyariStorePublishPage({
             </XStack>
           </Pressable>
         )}
+      </XStack>
+
+      {/* ── QUEUE SELECTOR TABS ── */}
+      <XStack
+        backgroundColor={tokens.surface}
+        borderBottomWidth={1}
+        borderBottomColor={tokens.border}
+        paddingHorizontal={12}
+        paddingVertical={6}
+        gap={8}
+      >
+        <Pressable
+          onPress={() => setActiveQueue('all')}
+          style={{
+            flex: 1,
+            paddingVertical: 7,
+            borderRadius: 6,
+            alignItems: 'center',
+            backgroundColor: activeQueue === 'all' ? tokens.accent : 'rgba(0,0,0,0.03)',
+          }}
+        >
+          <Text
+            fontSize={12}
+            fontWeight="700"
+            color={activeQueue === 'all' ? tokens.accentForeground : tokens.text}
+          >
+            All Starred ({products.length})
+          </Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => setActiveQueue('publish_updates')}
+          style={{
+            flex: 1,
+            paddingVertical: 7,
+            borderRadius: 6,
+            alignItems: 'center',
+            backgroundColor: activeQueue === 'publish_updates' ? '#FEF3C7' : 'rgba(0,0,0,0.03)',
+            borderWidth: activeQueue === 'publish_updates' ? 1 : 0,
+            borderColor: '#F59E0B',
+          }}
+        >
+          <XStack alignItems="center" gap={4}>
+            <LuSparkles size={12} color={activeQueue === 'publish_updates' ? '#B45309' : tokens.textMuted} />
+            <Text
+              fontSize={12}
+              fontWeight="700"
+              color={activeQueue === 'publish_updates' ? '#B45309' : tokens.text}
+            >
+              Publish Updates ({publishUpdatesCount})
+            </Text>
+          </XStack>
+        </Pressable>
       </XStack>
 
       {/* ── SUCCESS TOAST ── */}
@@ -718,6 +800,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 2,
+  },
+  deltaBadge: {
+    position: 'absolute',
+    top: 30,
+    right: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
+  deltaBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#B45309',
   },
   bottomOverlay: {
     position: 'absolute',

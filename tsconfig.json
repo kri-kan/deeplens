@@ -1,4 +1,14 @@
 {
-  "compilerOptions": {},
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "react-native": [
+        "./src/vayyari/node_modules/react-native-web"
+      ],
+      "@/*": [
+        "./src/vayyari/*"
+      ]
+    }
+  },
   "extends": "expo/tsconfig.base"
 }
