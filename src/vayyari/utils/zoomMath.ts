@@ -51,9 +51,10 @@ export function calculateDoubleTapTarget(
   tapY: number,
   containerWidth: number,
   containerHeight: number,
-  targetScale: number = DOUBLE_TAP_SCALE
+  targetScale?: number
 ): ZoomTransformTarget {
   'worklet';
+  const effectiveTargetScale = targetScale ?? DOUBLE_TAP_SCALE;
   if (currentScale > 1.2) {
     return {
       scale: 1,
@@ -63,15 +64,17 @@ export function calculateDoubleTapTarget(
     };
   }
 
-  const maxTx = calculateMaxTranslation(targetScale, containerWidth);
-  const maxTy = calculateMaxTranslation(targetScale, containerHeight);
+  const maxTx = calculateMaxTranslation(effectiveTargetScale, containerWidth);
+  const maxTy = calculateMaxTranslation(effectiveTargetScale, containerHeight);
 
-  // Offset from viewport center magnified by scale factor
-  const rawTargetX = (containerWidth / 2 - tapX) * (targetScale - 1);
-  const rawTargetY = (containerHeight / 2 - tapY) * (targetScale - 1);
+  // Offset from viewport center magnified by scale factor (fallback if tap coordinates are undefined)
+  const resolvedTapX = typeof tapX === 'number' && !isNaN(tapX) ? tapX : containerWidth / 2;
+  const resolvedTapY = typeof tapY === 'number' && !isNaN(tapY) ? tapY : containerHeight / 2;
+  const rawTargetX = (containerWidth / 2 - resolvedTapX) * (effectiveTargetScale - 1);
+  const rawTargetY = (containerHeight / 2 - resolvedTapY) * (effectiveTargetScale - 1);
 
   return {
-    scale: targetScale,
+    scale: effectiveTargetScale,
     translateX: clamp(rawTargetX, -maxTx, maxTx),
     translateY: clamp(rawTargetY, -maxTy, maxTy),
     isZoomed: true,
@@ -82,9 +85,10 @@ export function calculateDoubleTapTarget(
  * Determines whether the image is in a zoomed state requiring pan lock
  * on the parent horizontal FlatList.
  */
-export function isZoomedState(scale: number, threshold: number = ZOOM_ACTIVE_THRESHOLD): boolean {
+export function isZoomedState(scale: number, threshold?: number): boolean {
   'worklet';
-  return scale > threshold;
+  const effectiveThreshold = threshold ?? ZOOM_ACTIVE_THRESHOLD;
+  return scale > effectiveThreshold;
 }
 
 /**

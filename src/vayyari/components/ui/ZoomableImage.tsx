@@ -13,6 +13,7 @@ import {
   calculateDoubleTapTarget,
   clamp,
   ZOOM_ACTIVE_THRESHOLD,
+  DOUBLE_TAP_SCALE,
   MIN_SCALE,
   MAX_SCALE,
 } from '@/utils/zoomMath';
@@ -151,13 +152,16 @@ export const ZoomableImage = forwardRef<ZoomableImageRef, ZoomableImageProps>(fu
   const doubleTapGesture = Gesture.Tap()
     .numberOfTaps(2)
     .maxDelay(300)
-    .onEnd((e) => {
+    .onEnd((e, success) => {
+      'worklet';
+      if (!success) return;
       const target = calculateDoubleTapTarget(
         scale.value,
         e.x,
         e.y,
         containerWidth,
-        containerHeight
+        containerHeight,
+        DOUBLE_TAP_SCALE
       );
 
       scale.value = withTiming(target.scale, { duration: 250 });
