@@ -521,7 +521,7 @@ export class GroupReadinessService {
                     `SELECT mg.group_id, mg.jid, mg.process_as_product, c.vendor_id, c.auto_process_products, mg.status as current_status
                      FROM wa.message_groups mg
                      JOIN wa.chats c ON mg.jid = c.jid
-                     WHERE mg.status IN ('staging', 'media_missing')
+                     WHERE mg.status IN ('staging')
                        AND mg.group_id LIKE 'product_%'
                        AND NOT (mg.group_id LIKE 'sticker_%')
                        AND mg.updated_at < NOW() - CAST($1 || ' seconds' AS INTERVAL)
@@ -675,16 +675,50 @@ export class GroupReadinessService {
         let recoveredStaleMedia = 0;
         let recoveredMediaMissing = 0;
 
+        const MAX_RETRIES = 5;
+        const BACKOFF_MINUTES = [5, 15, 60, 240, 720]; // 5m, 15m, 1h, 4h, 12h
+
         try {
-            // 1. Recover stuck product_create_sent events (> 10 mins old)
+            // 1. Recover stuck product_create_sent events (> 10 mins old) with exponential backoff & max retries
             const stuckRes = await client.query(
-                `SELECT group_id FROM wa.message_groups 
+                `SELECT group_id, COALESCE(retry_count, 0) as retry_count, last_retry_at 
+                 FROM wa.message_groups 
                  WHERE status = 'product_create_sent' 
                    AND deeplens_product_id IS NULL 
                    AND updated_at < NOW() - INTERVAL '10 minutes'`
             );
             for (const row of stuckRes.rows) {
-                await client.query(`UPDATE wa.message_groups SET status = 'staging' WHERE group_id = $1`, [row.group_id]);
+                const retries = parseInt(row.retry_count, 10) || 0;
+                if (retries >= MAX_RETRIES) {
+                    await client.query(
+                        `UPDATE wa.message_groups 
+                         SET status = 'error', 
+                             error_detail = 'Max retries (5) exceeded in product_create_sent without catalog confirmation. Manual review required.', 
+                             updated_at = NOW() 
+                         WHERE group_id = $1`,
+                        [row.group_id]
+                    );
+                    logger.warn({ groupId: row.group_id, retries }, 'Stuck group exceeded max retries; flagged for review');
+                    continue;
+                }
+
+                const requiredBackoffMs = (BACKOFF_MINUTES[retries] || 720) * 60 * 1000;
+                if (row.last_retry_at) {
+                    const elapsedMs = Date.now() - new Date(row.last_retry_at).getTime();
+                    if (elapsedMs < requiredBackoffMs) {
+                        continue; // Still within exponential backoff window
+                    }
+                }
+
+                await client.query(
+                    `UPDATE wa.message_groups 
+                     SET status = 'staging', 
+                         retry_count = COALESCE(retry_count, 0) + 1, 
+                         last_retry_at = NOW(), 
+                         updated_at = NOW() 
+                     WHERE group_id = $1`,
+                    [row.group_id]
+                );
                 await this.checkAndEmitGroupEvent(row.group_id);
                 recoveredStuckSent++;
             }
@@ -699,7 +733,7 @@ export class GroupReadinessService {
                    AND c.vendor_id IS NOT NULL`
             );
             for (const row of vendorErrRes.rows) {
-                await client.query(`UPDATE wa.message_groups SET status = 'staging', error_detail = NULL WHERE group_id = $1`, [row.group_id]);
+                await client.query(`UPDATE wa.message_groups SET status = 'staging', error_detail = NULL, retry_count = 0, updated_at = NOW() WHERE group_id = $1`, [row.group_id]);
                 await this.checkAndEmitGroupEvent(row.group_id);
                 recoveredVendorErrors++;
             }
@@ -713,9 +747,9 @@ export class GroupReadinessService {
             );
             recoveredStaleMedia = mediaRes.rowCount || 0;
 
-            // 4. Auto-recover 'media_missing' groups that now have >= 2 valid downloaded media files
+            // 4. Auto-recover 'media_missing' groups that now have >= 2 valid downloaded media files with exponential backoff & max retries
             const mediaMissingRes = await client.query(
-                `SELECT mg.group_id 
+                `SELECT mg.group_id, COALESCE(mg.retry_count, 0) as retry_count, mg.last_retry_at 
                  FROM wa.message_groups mg
                  JOIN wa.chats c ON mg.jid = c.jid
                  WHERE mg.status = 'media_missing'
@@ -732,7 +766,38 @@ export class GroupReadinessService {
                    ) >= 2`
             );
             for (const row of mediaMissingRes.rows) {
-                await client.query(`UPDATE wa.message_groups SET status = 'staging', error_detail = NULL, updated_at = NOW() WHERE group_id = $1`, [row.group_id]);
+                const retries = parseInt(row.retry_count, 10) || 0;
+                if (retries >= MAX_RETRIES) {
+                    await client.query(
+                        `UPDATE wa.message_groups 
+                         SET status = 'error', 
+                             error_detail = 'Max media recovery retries (5) exceeded. MinIO media files missing from storage. Manual review required.', 
+                             updated_at = NOW() 
+                         WHERE group_id = $1`,
+                        [row.group_id]
+                    );
+                    logger.warn({ groupId: row.group_id, retries }, 'Media missing group exceeded max retries; flagged for review');
+                    continue;
+                }
+
+                const requiredBackoffMs = (BACKOFF_MINUTES[retries] || 720) * 60 * 1000;
+                if (row.last_retry_at) {
+                    const elapsedMs = Date.now() - new Date(row.last_retry_at).getTime();
+                    if (elapsedMs < requiredBackoffMs) {
+                        continue; // Still within exponential backoff window
+                    }
+                }
+
+                await client.query(
+                    `UPDATE wa.message_groups 
+                     SET status = 'staging', 
+                         retry_count = COALESCE(retry_count, 0) + 1, 
+                         last_retry_at = NOW(), 
+                         error_detail = NULL, 
+                         updated_at = NOW() 
+                     WHERE group_id = $1`,
+                    [row.group_id]
+                );
                 await this.checkAndEmitGroupEvent(row.group_id);
                 recoveredMediaMissing++;
             }

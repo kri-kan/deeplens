@@ -102,6 +102,7 @@ export class ProductCreatedConsumerService {
                      category = $3,
                      sub_category = $4,
                      status = 'product_created',
+                     retry_count = 0,
                      product_created_at = NOW(),
                      updated_at = NOW()
                  WHERE group_id = $5`,

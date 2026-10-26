@@ -29,7 +29,9 @@ export async function initializeMessageQueue() {
                     logger.info('Re-emitting stuck product create events for groups in product_create_sent...');
                     const stuckGroupsRes = await client.query(
                         `SELECT group_id FROM wa.message_groups 
-                         WHERE status = 'product_create_sent' AND deeplens_product_id IS NULL`
+                         WHERE status = 'product_create_sent' 
+                           AND deeplens_product_id IS NULL
+                           AND (retry_count IS NULL OR retry_count < 5)`
                     );
                     if (stuckGroupsRes.rows.length > 0) {
                         const { groupReadinessService } = await import('./services/group-readiness.service');
@@ -37,7 +39,7 @@ export async function initializeMessageQueue() {
                             try {
                                 logger.info({ groupId: row.group_id }, 'Re-emitting stuck product creation');
                                 await client.query(
-                                    `UPDATE wa.message_groups SET status = 'staging' WHERE group_id = $1`,
+                                    `UPDATE wa.message_groups SET status = 'staging', retry_count = COALESCE(retry_count, 0) + 1, last_retry_at = NOW() WHERE group_id = $1`,
                                     [row.group_id]
                                 );
                                 await groupReadinessService.checkAndEmitGroupEvent(row.group_id);
