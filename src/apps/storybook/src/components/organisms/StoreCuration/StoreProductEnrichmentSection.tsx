@@ -824,9 +824,9 @@ export function StoreProductEnrichmentSection({
                   onPress={onOpenMediaAllocation}
                   style={{
                     backgroundColor: '#D97706',
-                    paddingHorizontal={12}
-                    paddingVertical={6}
-                    borderRadius={6}
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 6,
                   }}
                 >
                   <Text fontSize={11} fontWeight="800" color="#FFFFFF">

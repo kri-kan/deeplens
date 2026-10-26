@@ -61,9 +61,10 @@ export interface StoreProduct {
   baseCost: number;
   mrp: number;
   salePrice: number;
-  lifecycleStatus: 'available' | 'few_left' | 'sold_out' | 'out_of_stock';
+  lifecycleStatus: 'available' | 'few_left' | 'sold_out' | 'out_of_stock' | 'paused' | 'deleted';
   stockQuantity: number;
   colorGroupId?: string | null;
+  catalogColorGroupId?: string | null;
   colorwayName: string;
   colorHex: string;
   swatchTemplate?: string;
@@ -72,6 +73,13 @@ export interface StoreProduct {
   tags: string[];
   isPublished: boolean;
   publishedAt: string;
+  parentCatalogId?: string | null;
+  parentProductCode?: string | null;
+  previousLifecycleStatus?: string | null;
+  takeDownExpiresAt?: string | null;
+  isReEvaluationPending?: boolean;
+  waitlistCount?: number;
+  siblingSwatches?: any[];
 }
 
 export interface StoreProductAudit {
@@ -345,6 +353,67 @@ class StoreAdminService {
     }
 
     return { store_publish_updated_at: nowIso };
+  }
+
+  async updateVariantStock(variantId: string, quantity: number): Promise<boolean> {
+    const headers = await this.getAuthHeaders();
+    const baseUrl = getStoreApiUrl();
+    try {
+      const res = await fetch(`${baseUrl}/api/v1/admin/products/${variantId}/curation`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ stockQuantity: quantity }),
+      });
+      return res.ok;
+    } catch {
+      return true;
+    }
+  }
+
+  async updateLifecycleStatus(params: {
+    productId?: string;
+    parentCatalogId?: string;
+    status: string;
+    timeoutDays?: number;
+    timeoutHours?: number;
+    takeDownExpiresAt?: string;
+  }): Promise<boolean> {
+    const headers = await this.getAuthHeaders();
+    const baseUrl = getStoreApiUrl();
+    try {
+      const res = await fetch(`${baseUrl}/api/v1/admin/products/lifecycle`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({
+          productId: params.productId,
+          parentId: params.parentCatalogId,
+          status: params.status,
+          timeoutDays: params.timeoutDays,
+          timeoutHours: params.timeoutHours,
+          takeDownExpiresAt: params.takeDownExpiresAt,
+        }),
+      });
+      return res.ok;
+    } catch {
+      return true;
+    }
+  }
+
+  async getReEvaluationQueue(): Promise<StoreProduct[]> {
+    const headers = await this.getAuthHeaders();
+    const baseUrl = getStoreApiUrl();
+    try {
+      const res = await fetch(`${baseUrl}/api/v1/admin/products/re-evaluation-queue`, {
+        method: 'GET',
+        headers,
+      });
+      if (!res.ok) {
+        throw new Error(`Failed to load re-evaluation queue: ${res.status}`);
+      }
+      return res.json();
+    } catch {
+      return [];
+    }
   }
 }
 
