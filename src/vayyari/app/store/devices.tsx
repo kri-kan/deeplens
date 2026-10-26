@@ -5,12 +5,14 @@ import {
   storeAdminService,
   DeviceFleetStats,
   StoreDeviceItem,
+  HourlyActivitySummary,
 } from '@/services/storeAdminService';
 
 export default function StoreDevicesScreen() {
   const router = useRouter();
   const [stats, setStats] = useState<DeviceFleetStats | null>(null);
   const [devices, setDevices] = useState<StoreDeviceItem[]>([]);
+  const [hourlyActivity, setHourlyActivity] = useState<HourlyActivitySummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -22,13 +24,15 @@ export default function StoreDevicesScreen() {
         setLoading(true);
       }
 
-      const [statsData, devicesData] = await Promise.all([
+      const [statsData, devicesData, hourlyData] = await Promise.all([
         storeAdminService.getFleetStats(),
         storeAdminService.getRegisteredDevices(),
+        storeAdminService.getHourlyActivity(30).catch(() => null),
       ]);
 
       setStats(statsData);
       setDevices(devicesData);
+      setHourlyActivity(hourlyData);
     } catch (err) {
       console.warn('Failed to load fleet telemetry in Admin App:', err);
     } finally {
@@ -45,6 +49,7 @@ export default function StoreDevicesScreen() {
     <AdminDeviceFleetDashboardPage
       stats={stats}
       devices={devices}
+      hourlyActivity={hourlyActivity}
       loading={loading}
       refreshing={refreshing}
       onRefresh={() => fetchData(true)}

@@ -24,7 +24,7 @@ import {
   LuSlidersHorizontal,
 } from '../icons/lu';
 import { useTheme } from '@/theme';
-import { DeviceFleetStats, StoreDeviceItem } from '@/services/storeAdminService';
+import { DeviceFleetStats, StoreDeviceItem, HourlyActivitySummary } from '@/services/storeAdminService';
 
 function timeAgo(dateString: string): string {
   const now = Date.now();
@@ -58,6 +58,7 @@ function formatIST(dateString: string): string {
 export interface AdminDeviceFleetDashboardPageProps {
   stats: DeviceFleetStats | null;
   devices: StoreDeviceItem[];
+  hourlyActivity?: HourlyActivitySummary | null;
   loading?: boolean;
   refreshing?: boolean;
   onRefresh?: () => void;
@@ -67,6 +68,7 @@ export interface AdminDeviceFleetDashboardPageProps {
 export const AdminDeviceFleetDashboardPage: React.FC<AdminDeviceFleetDashboardPageProps> = ({
   stats,
   devices,
+  hourlyActivity,
   loading = false,
   refreshing = false,
   onRefresh,
@@ -233,6 +235,66 @@ export const AdminDeviceFleetDashboardPage: React.FC<AdminDeviceFleetDashboardPa
               })
             )}
           </View>
+        </View>
+
+        {/* ── Shopper Activity by Time of Day (IST) ── */}
+        <View style={[styles.panel, { marginBottom: 16 }]}>
+          <XStack justifyContent="space-between" alignItems="center" marginBottom="$2" flexWrap="wrap" gap="$2">
+            <YStack>
+              <Text fontSize={15} fontWeight="700" color="#FFFFFF">
+                ⏰ Activity by Time of Day (IST)
+              </Text>
+              <Text fontSize={11} color="#9CA3AF" marginTop="$1">
+                Detailed records for last 30 days &bull; Hourly rollups &gt;30d
+              </Text>
+            </YStack>
+            {hourlyActivity?.peakHourLabel ? (
+              <View style={{ backgroundColor: 'rgba(245, 158, 11, 0.15)', borderColor: 'rgba(245, 158, 11, 0.3)', borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
+                <Text fontSize={11} fontWeight="700" color="#F59E0B">
+                  🔥 Peak: {hourlyActivity.peakHourLabel}
+                </Text>
+              </View>
+            ) : null}
+          </XStack>
+
+          {/* 24-hour horizontal bar chart */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 10, alignItems: 'flex-end', gap: 6, minHeight: 120 }}>
+            {(hourlyActivity?.distribution || []).map((h) => {
+              const maxEvt = Math.max(...(hourlyActivity?.distribution || []).map((d) => d.totalEvents), 1);
+              const heightPct = Math.max(10, Math.round((h.totalEvents / maxEvt) * 80));
+              const isPeak = h.hourIst === hourlyActivity?.peakHourIst && h.totalEvents > 0;
+              const hasTraffic = h.totalEvents > 0;
+
+              return (
+                <YStack key={h.hourIst} alignItems="center" width={28} justifyContent="flex-end" height={100}>
+                  {h.totalEvents > 0 ? (
+                    <Text fontSize={9} fontWeight="600" color={isPeak ? '#F43F5E' : '#9CA3AF'} marginBottom={2}>
+                      {h.totalEvents}
+                    </Text>
+                  ) : null}
+                  <View
+                    style={{
+                      width: 16,
+                      height: `${heightPct}%`,
+                      backgroundColor: isPeak ? '#E11D48' : hasTraffic ? '#06B6D4' : '#1F2937',
+                      borderRadius: 3,
+                    }}
+                  />
+                  <Text fontSize={10} color={isPeak ? '#FFFFFF' : '#6B7280'} fontWeight={isPeak ? '700' : '400'} marginTop={4}>
+                    {h.hourIst}
+                  </Text>
+                </YStack>
+              );
+            })}
+          </ScrollView>
+
+          <XStack justifyContent="space-between" paddingTop="$2" borderTopWidth={1} borderTopColor="#1F2937" marginTop="$1">
+            <Text fontSize={10} color="#6B7280">🌙 00:00</Text>
+            <Text fontSize={10} color="#6B7280">🌅 06:00</Text>
+            <Text fontSize={10} color="#6B7280">☀️ 12:00</Text>
+            <Text fontSize={10} color="#6B7280">🌆 18:00</Text>
+            <Text fontSize={10} color="#6B7280">✨ 23:00</Text>
+          </XStack>
         </View>
 
         {/* ── Search & Platform Filter ── */}

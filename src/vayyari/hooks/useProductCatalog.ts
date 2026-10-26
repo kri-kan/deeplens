@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { productService } from '@/services/productService';
 import { VendorProduct } from '@/types/products';
 import { wrapInSpan } from '@/utils/telemetry';
+import { useToggleProductStarMutation } from '@/store/api/catalogApi';
 
 export interface ProductCatalogFilters {
   categoryId: string;
@@ -127,6 +128,8 @@ export const useProductCatalog = (filters: ProductCatalogFilters) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categoryId, query, sortBy, startDate, endDate, fabricsKey, craftsKey, motifsKey, bordersKey, stitchTypesKey, occasionsKey, blouseTypesKey, vendorNamesKey, minPrice, maxPrice, categoriesKey, includeArchived, status, isStarred]);
 
+  const [toggleProductStarMutation] = useToggleProductStarMutation();
+
   const toggleStar = useCallback(async (productId: string, isStarred: boolean) => {
     // 1. Optimistically update local state immediately for <16ms UI responsiveness
     setProducts(prev => prev.map(p => {
@@ -138,7 +141,7 @@ export const useProductCatalog = (filters: ProductCatalogFilters) => {
 
     try {
       await wrapInSpan('toggleProductStar', async () => {
-        await productService.toggleStar(productId, isStarred);
+        await toggleProductStarMutation({ productId, isStarred }).unwrap();
       });
     } catch (err) {
       console.error('Failed to toggle star:', err);
@@ -151,7 +154,7 @@ export const useProductCatalog = (filters: ProductCatalogFilters) => {
       }));
       throw err;
     }
-  }, []);
+  }, [toggleProductStarMutation]);
 
   return {
     products,

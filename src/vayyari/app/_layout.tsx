@@ -31,6 +31,9 @@ import { ensureInitialPermissions } from '../utils/device-permissions';
 
 console.log('[RootLayout] Global execution started');
 
+import { Provider as ReduxProvider } from 'react-redux';
+import { store } from '../store';
+
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
 
@@ -41,15 +44,17 @@ export const unstable_settings = {
 
 export default function RootLayout() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <PermissionsProvider>
-          <ShareIntentProvider>
-            <InnerRootLayout />
-          </ShareIntentProvider>
-        </PermissionsProvider>
-      </AuthProvider>
-    </ThemeProvider>
+    <ReduxProvider store={store}>
+      <ThemeProvider>
+        <AuthProvider>
+          <PermissionsProvider>
+            <ShareIntentProvider>
+              <InnerRootLayout />
+            </ShareIntentProvider>
+          </PermissionsProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </ReduxProvider>
   );
 }
 

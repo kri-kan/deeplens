@@ -24,6 +24,8 @@ import {
   LuCheck,
 } from '../icons/lu';
 import { useTheme } from '@/theme';
+import { useAppDispatch, useAppSelector } from '@/store';
+import { markStarToggled, clearSessionStars } from '@/store/slices/catalogUiSlice';
 import {
   CatalogCategoryPills,
   CatalogCategory,
@@ -175,18 +177,21 @@ export function AdminProductCatalogPage({
 
   // Retain products whose star state was toggled during this view session
   // so starring an item while an unstarred (or starred) filter is active doesn't cause it to immediately vanish.
-  const [sessionToggledStarIds, setSessionToggledStarIds] = useState<Set<string>>(new Set());
+  const dispatch = useAppDispatch();
+  const sessionToggledStarIdsList = useAppSelector(
+    (state) => state.catalogUi.sessionToggledStarIds
+  );
+  const sessionToggledStarIds = useMemo(
+    () => new Set(sessionToggledStarIdsList),
+    [sessionToggledStarIdsList]
+  );
 
   const handleToggleStar = useCallback(
     async (id: string, nextStarred?: boolean) => {
-      setSessionToggledStarIds((prev) => {
-        const next = new Set(prev);
-        next.add(id);
-        return next;
-      });
+      dispatch(markStarToggled(id));
       return onToggleStar?.(id, nextStarred);
     },
-    [onToggleStar]
+    [dispatch, onToggleStar]
   );
 
   const selectedIds = propSelectedIds !== undefined ? propSelectedIds : internalSelectedIds;
@@ -332,7 +337,7 @@ export function AdminProductCatalogPage({
 
   const handleCategorySelect = (id: string) => {
     setInternalSelectedCat(id);
-    setSessionToggledStarIds(new Set());
+    dispatch(clearSessionStars());
     onSelectCategory?.(id);
   };
 
@@ -423,7 +428,7 @@ export function AdminProductCatalogPage({
 
   const handleApplyFilters = (filters: FilterState) => {
     setActiveFilters(filters);
-    setSessionToggledStarIds(new Set());
+    dispatch(clearSessionStars());
     setFilterDrawerVisible(false);
     onApplyFilters?.(filters);
   };
@@ -432,9 +437,9 @@ export function AdminProductCatalogPage({
   React.useEffect(() => {
     if (propFilters) {
       setActiveFilters(propFilters);
-      setSessionToggledStarIds(new Set());
+      dispatch(clearSessionStars());
     }
-  }, [propFilters]);
+  }, [propFilters, dispatch]);
 
   // Generate dynamic filter chips from state
   const computedFilterChips = useMemo(() => {
@@ -481,7 +486,7 @@ export function AdminProductCatalogPage({
   }, [initialFilterChips, activeFilters]);
 
   const handleRemoveFilterChip = (chipId: string) => {
-    setSessionToggledStarIds(new Set());
+    dispatch(clearSessionStars());
     setActiveFilters((prev) => {
       const next = { ...prev };
       if (chipId === 'f-star' || chipId === 'f-unstar') {
@@ -946,7 +951,7 @@ export function AdminProductCatalogPage({
             <RefreshControl
               refreshing={isRefreshing}
               onRefresh={() => {
-                setSessionToggledStarIds(new Set());
+                dispatch(clearSessionStars());
                 onRefresh();
               }}
               tintColor={tokens.accent}

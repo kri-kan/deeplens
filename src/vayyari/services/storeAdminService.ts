@@ -262,6 +262,34 @@ class StoreAdminService {
     }
     return res.json();
   }
+
+  async getHourlyActivity(days: number = 30): Promise<HourlyActivitySummary> {
+    const headers = await this.getAuthHeaders();
+    const baseUrl = getStoreApiUrl();
+    const res = await fetch(`${baseUrl}/api/v1/admin/telemetry/activity/hourly?days=${days}`, { headers });
+    if (!res.ok) {
+      throw new Error(`Failed to load hourly activity: ${res.status}`);
+    }
+    return res.json();
+  }
+}
+
+export interface HourlyDistributionItem {
+  hourIst: number;
+  hourLabel: string;
+  activeDevices: number;
+  activeUsers: number;
+  totalEvents: number;
+  percentageOfDailyTraffic: number;
+}
+
+export interface HourlyActivitySummary {
+  distribution: HourlyDistributionItem[];
+  peakHourIst: number;
+  peakHourLabel: string;
+  totalEventsLast30Days: number;
+  uniqueDevicesLast30Days: number;
+  historicalHoursRetained: number;
 }
 
 export interface StoreDeviceItem {
