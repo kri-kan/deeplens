@@ -5,8 +5,7 @@
     "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["../../vayyari/*"],
-      "react-native": ["./node_modules/react-native-web"]
+      "@/*": ["../../vayyari/*"]
     }
   }
 }

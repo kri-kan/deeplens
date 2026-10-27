@@ -204,14 +204,17 @@ describe('AdminProductDetailPage: Component Mount & Rendering', () => {
     (globalThis as any).ErrorUtils = { getGlobalHandler: () => () => {}, setGlobalHandler: () => {} };
 
     const Module = require('node:module');
+    const path = require('node:path');
     const origResolve = Module._resolveFilename;
     const rnWebPath = require.resolve('../../../../node_modules/react-native-web');
     const gestureMockPath = require.resolve('../../../../node_modules/react-native-gesture-handler/lib/commonjs/mocks/mocks.js');
+    const vectorIconsMockPath = require.resolve('../../../../tests/mocks/vectorIconsMock.js');
 
     Module._resolveFilename = function (req: string, parent: any, isMain: boolean, options: any) {
       if (req === 'react-native' || req === 'react-native-web' || req.startsWith('react-native/')) return rnWebPath;
       if (req === 'expo-image') return rnWebPath;
       if (req === 'expo-video' || req.startsWith('expo-video')) return rnWebPath;
+      if (req === '@expo/vector-icons' || req.startsWith('@expo/vector-icons')) return vectorIconsMockPath;
       if (req === 'react-native-reanimated') return require.resolve('../../../../node_modules/react-native-reanimated/mock');
       if (req === 'react-native-gesture-handler' || req.startsWith('react-native-gesture-handler')) return gestureMockPath;
       return origResolve.call(this, req, parent, isMain, options);
@@ -221,7 +224,7 @@ describe('AdminProductDetailPage: Component Mount & Rendering', () => {
     rnWeb.TurboModuleRegistry = { get: () => ({}), getEnforcing: () => ({}) };
 
     const safeAreaPath = require.resolve('react-native-safe-area-context', { paths: ['./src/vayyari'] });
-    require.cache[safeAreaPath] = {
+    (require.cache as any)[safeAreaPath] = {
       id: safeAreaPath,
       filename: safeAreaPath,
       loaded: true,
@@ -236,6 +239,7 @@ describe('AdminProductDetailPage: Component Mount & Rendering', () => {
       import('../AdminProductDetailPage'),
       import('../../../../theme/ThemeContext'),
       import('../../../../tamagui.config'),
+      // @ts-ignore
       import('../../../../node_modules/tamagui/dist/cjs/index.cjs'),
     ]);
     const { AdminProductDetailPage } = pageMod;
@@ -299,6 +303,7 @@ describe('AdminProductDetailPage: Component Mount & Rendering', () => {
         radius: { sm: 4, md: 8, full: 9999 },
       },
       campaign: 'luxe',
+      availableCampaigns: ['luxe'] as any,
       colorScheme: 'light',
       setCampaign: () => {},
       setColorScheme: () => {},
@@ -310,7 +315,7 @@ describe('AdminProductDetailPage: Component Mount & Rendering', () => {
       { config: tamaguiConfigMod.default || tamaguiConfigMod },
       React.createElement(
         themeMod.ThemeContext.Provider,
-        { value: mockThemeValue },
+        { value: mockThemeValue as any },
         element
       )
     );

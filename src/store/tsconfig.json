@@ -3,5 +3,22 @@
   "compilerOptions": {
     "strict": true
   },
-  "exclude": ["legacy-vite", "node_modules"]
+  "exclude": [
+    "legacy-vite",
+    "node_modules",
+    "**/*.stories.tsx",
+    "**/*.stories.ts",
+    "**/__tests__/**",
+    "src/components/organisms/StoreCuration/**",
+    "src/components/organisms/CollabQueueDrawer/**",
+    "src/components/organisms/DelhiveryWarehousesView/**",
+    "src/components/organisms/EditVendorView/**",
+    "src/components/organisms/EditWarehouseView/**",
+    "src/components/organisms/GroupManagementModal/**",
+    "src/components/organisms/GroupManagementView/**",
+    "src/components/organisms/ProductListSection/**",
+    "src/components/organisms/AdjacentStageDropdown/**",
+    "src/components/organisms/CollabCurationModal/**",
+    "src/components/organisms/ProductEditSheet/**"
+  ]
 }

@@ -56,9 +56,9 @@ function renderWithTamagui(element: any) {
 }
 
 let computeUmbrellaRollup: any;
-let StoreUmbrellaProductCard: any;
-let StoreReEvaluationQueueTab: any;
-let StoreVariantRowDrawer: any;
+let StoreUmbrellaProductCard: React.ComponentType<any>;
+let StoreReEvaluationQueueTab: React.ComponentType<any>;
+let StoreVariantRowDrawer: React.ComponentType<any>;
 let storeAdminService: any;
 
 type StoreProductVariant = import('../StoreUmbrellaProductCard').StoreProductVariant;
@@ -250,9 +250,9 @@ describe('StoreUmbrellaProductCard: Expansion & Quick Cascade Actions', () => {
     let cascadedStatus = '';
     let cascadedTimeoutDays: number | undefined;
 
-    const el = React.createElement(StoreUmbrellaProductCard, {
+    const el: any = React.createElement(StoreUmbrellaProductCard, {
       product: sampleUmbrella,
-      onCascadeLifecycle: (parentId, status, timeoutDays) => {
+      onCascadeLifecycle: (parentId: string, status: string, timeoutDays?: number) => {
         cascadedParentId = parentId;
         cascadedStatus = status;
         cascadedTimeoutDays = timeoutDays;
@@ -271,9 +271,9 @@ describe('StoreUmbrellaProductCard: Expansion & Quick Cascade Actions', () => {
     let cascadedParentId = '';
     let cascadedStatus = '';
 
-    const el = React.createElement(StoreUmbrellaProductCard, {
+    const el: any = React.createElement(StoreUmbrellaProductCard, {
       product: sampleUmbrella,
-      onCascadeLifecycle: (parentId, status) => {
+      onCascadeLifecycle: (parentId: string, status: string) => {
         cascadedParentId = parentId;
         cascadedStatus = status;
       },
@@ -288,9 +288,9 @@ describe('StoreUmbrellaProductCard: Expansion & Quick Cascade Actions', () => {
     let cascadedParentId = '';
     let cascadedStatus = '';
 
-    const el = React.createElement(StoreUmbrellaProductCard, {
+    const el: any = React.createElement(StoreUmbrellaProductCard, {
       product: sampleUmbrella,
-      onCascadeLifecycle: (parentId, status) => {
+      onCascadeLifecycle: (parentId: string, status: string) => {
         cascadedParentId = parentId;
         cascadedStatus = status;
       },
@@ -359,10 +359,10 @@ describe('StoreVariantRowDrawer: Color Variant Rows, Editing & Links', () => {
     let updatedVariantId = '';
     let updatedQty = -1;
 
-    const el = React.createElement(StoreVariantRowDrawer, {
+    const el: any = React.createElement(StoreVariantRowDrawer, {
       variants,
       parentCatalogId: 'cat-parent-101',
-      onUpdateStock: (variantId, qty) => {
+      onUpdateStock: (variantId: string, qty: number) => {
         updatedVariantId = variantId;
         updatedQty = qty;
       },
@@ -377,10 +377,10 @@ describe('StoreVariantRowDrawer: Color Variant Rows, Editing & Links', () => {
     let updatedVariantId = '';
     let updatedStatus = '';
 
-    const el = React.createElement(StoreVariantRowDrawer, {
+    const el: any = React.createElement(StoreVariantRowDrawer, {
       variants,
       parentCatalogId: 'cat-parent-101',
-      onUpdateStatus: (variantId, status) => {
+      onUpdateStatus: (variantId: string, status: string) => {
         updatedVariantId = variantId;
         updatedStatus = status;
       },
@@ -395,10 +395,10 @@ describe('StoreVariantRowDrawer: Color Variant Rows, Editing & Links', () => {
     let passedParentId = '';
     let passedGroupId = '';
 
-    const el = React.createElement(StoreVariantRowDrawer, {
+    const el: any = React.createElement(StoreVariantRowDrawer, {
       variants,
       parentCatalogId: 'cat-parent-101',
-      onViewCatalogSource: (parentId, groupId) => {
+      onViewCatalogSource: (parentId: string, groupId?: string) => {
         passedParentId = parentId;
         passedGroupId = groupId || '';
       },

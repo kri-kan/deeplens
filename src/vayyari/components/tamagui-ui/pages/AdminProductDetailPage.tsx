@@ -479,7 +479,7 @@ export function AdminProductDetailPage({
           </TouchableOpacity>
 
           <TouchableOpacity
-            nativeID="tab-publish-updates"
+            testID="tab-publish-updates"
             accessibilityRole="tab"
             accessibilityLabel="Publish Updates Queue Tab"
             onPress={() => setQueueTab('publish_updates')}
