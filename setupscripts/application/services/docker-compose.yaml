@@ -3,6 +3,11 @@ services:
     image: mcr.microsoft.com/dotnet/aspnet:9.0
     container_name: deeplens-api
     restart: unless-stopped
+    mem_limit: 3500m
+    deploy:
+      resources:
+        limits:
+          memory: 3500M
     ports:
       - "${SEARCH_API_PORT:-5000}:5000"
     volumes:
@@ -12,6 +17,8 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - Services__ReasoningApiUrl=http://reasoning-api:8002
       - ConnectionStrings__Qdrant=http://qdrant:6333
+      - DOTNET_GCHeapHardLimitPercent=75
+      - DOTNET_GCHighMemPercent=65
     working_dir: /app
     command: dotnet DeepLens.SearchApi.dll
     networks:
@@ -21,6 +28,11 @@ services:
     image: mcr.microsoft.com/dotnet/aspnet:9.0
     container_name: deeplens-worker
     restart: unless-stopped
+    mem_limit: 4000m
+    deploy:
+      resources:
+        limits:
+          memory: 4000M
     volumes:
       - ${WORKER_SERVICE_HOSTING_PATH}:/app
       - /home/krikan/.local/bin/ffmpeg:/usr/local/bin/ffmpeg:ro
@@ -29,6 +41,7 @@ services:
       - Services__ReasoningApiUrl=http://reasoning-api:8002
       - ConnectionStrings__Qdrant=http://qdrant:6333
       - ConnectionStrings__Kafka=kafka-prod:29093
+      - DOTNET_GCHeapHardLimitPercent=75
     working_dir: /app
     command: dotnet DeepLens.WorkerService.dll
     networks:
@@ -38,6 +51,11 @@ services:
     image: mcr.microsoft.com/dotnet/aspnet:9.0
     container_name: nextgen-identity
     restart: unless-stopped
+    mem_limit: 1500m
+    deploy:
+      resources:
+        limits:
+          memory: 1500M
     ports:
       - "${IDENTITY_API_PORT:-5198}:5198"
     volumes:
@@ -45,6 +63,7 @@ services:
     environment:
       - ASPNETCORE_URLS=http://+:5198
       - ASPNETCORE_ENVIRONMENT=Development
+      - DOTNET_GCHeapHardLimitPercent=75
     working_dir: /app
     command: dotnet NextGen.Identity.Api.dll
     networks:
@@ -54,6 +73,11 @@ services:
     image: mcr.microsoft.com/dotnet/aspnet:9.0
     container_name: deeplens-store-api
     restart: unless-stopped
+    mem_limit: 2500m
+    deploy:
+      resources:
+        limits:
+          memory: 2500M
     ports:
       - "${STORE_API_PORT:-5200}:5200"
     volumes:
@@ -69,6 +93,7 @@ services:
       - Minio__SecretKey=Krikank1$
       - Minio__BucketName=store-assets
       - Minio__PublicBaseUrl=http://media.vayyarifashions.com/store-assets
+      - DOTNET_GCHeapHardLimitPercent=75
     working_dir: /app
     command: dotnet Store.Api.dll
     networks:

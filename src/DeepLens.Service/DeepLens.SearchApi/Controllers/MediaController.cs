@@ -16,6 +16,7 @@ namespace DeepLens.SearchApi.Controllers;
 [Route("api/v1/catalog/media")]
 public class MediaController : ControllerBase
 {
+    private static readonly SemaphoreSlim _thumbnailGenerationThrottle = new(4, 4);
     private readonly IMetadataService _metadataService;
     private readonly IStorageService _storageService;
     private readonly IDistributedCache _cache;
@@ -151,11 +152,31 @@ public class MediaController : ControllerBase
                 }
                 else
                 {
+                    bool isVideo = item.MediaType == 2 
+                        || item.StoragePath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) 
+                        || item.StoragePath.EndsWith(".mov", StringComparison.OrdinalIgnoreCase);
+
+                    if (isVideo)
+                    {
+                        await TriggerOnDemandVideoThumbnailGenerationAsync(item, spec);
+                        Response.Headers.Append("Cache-Control", "public,max-age=5");
+                        return File(VideoPlaceholderSvg, "image/svg+xml");
+                    }
+
                     throw;
                 }
             }
 
+            bool throttleAcquired = false;
             try {
+                // Throttle concurrent on-demand image decodes to protect memory
+                throttleAcquired = await _thumbnailGenerationThrottle.WaitAsync(TimeSpan.FromSeconds(15));
+                if (!throttleAcquired)
+                {
+                    _logger.LogWarning("Thumbnail generation queue full for {Path}; falling back to original source directly.", item.StoragePath);
+                    return await ServeOriginalFallbackAsync(sourcePath, spec);
+                }
+
                 using (rawStream)
                 using (var imageObj = await Image.LoadAsync(rawStream))
                 {
@@ -182,25 +203,35 @@ public class MediaController : ControllerBase
                 }
             } catch (Exception genEx) {
                 _logger.LogError(genEx, "Failed to generate thumbnail on-demand for {Path} from source {SourcePath}", item.StoragePath, sourcePath);
-                
-                // Final fallback: serve the original content if generation failed but file exists
-                try {
-                    Stream originalStream;
-                    try
-                    {
-                        originalStream = await _storageService.GetFileAsync(sourcePath);
-                    }
-                    catch (Exception finalFallbackEx) when (sourcePath.StartsWith("instagram/", StringComparison.OrdinalIgnoreCase))
-                    {
-                        string legacyPath = "product/" + sourcePath.Substring("instagram/".Length);
-                        originalStream = await _storageService.GetFileAsync(legacyPath);
-                    }
-                    return File(originalStream, "image/jpeg");
-                } catch (Exception originalEx) {
-                    _logger.LogError(originalEx, "Final fallback failed for {Path}", sourcePath);
-                    return NotFound($"Thumbnail for spec '{spec}' missing and cannot be generated on-demand.");
+                return await ServeOriginalFallbackAsync(sourcePath, spec);
+            }
+            finally
+            {
+                if (throttleAcquired)
+                {
+                    _thumbnailGenerationThrottle.Release();
                 }
             }
+        }
+    }
+
+    private async Task<IActionResult> ServeOriginalFallbackAsync(string sourcePath, string spec)
+    {
+        try {
+            Stream originalStream;
+            try
+            {
+                originalStream = await _storageService.GetFileAsync(sourcePath);
+            }
+            catch (Exception finalFallbackEx) when (sourcePath.StartsWith("instagram/", StringComparison.OrdinalIgnoreCase))
+            {
+                string legacyPath = "product/" + sourcePath.Substring("instagram/".Length);
+                originalStream = await _storageService.GetFileAsync(legacyPath);
+            }
+            return File(originalStream, "image/jpeg");
+        } catch (Exception originalEx) {
+            _logger.LogError(originalEx, "Final fallback failed for {Path}", sourcePath);
+            return NotFound($"Thumbnail for spec '{spec}' missing and cannot be generated on-demand.");
         }
     }
 
@@ -366,6 +397,72 @@ public class MediaController : ControllerBase
         {
             _logger.LogError(ex, "Error deleting media {MediaId}", mediaId);
             return StatusCode(500);
+        }
+    }
+
+    private static readonly byte[] VideoPlaceholderSvg = System.Text.Encoding.UTF8.GetBytes(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 300 300\" width=\"100%\" height=\"100%\">" +
+        "<rect width=\"300\" height=\"300\" fill=\"#0f172a\"/>" +
+        "<circle cx=\"150\" cy=\"150\" r=\"45\" fill=\"#1e293b\" stroke=\"#475569\" stroke-width=\"2\"/>" +
+        "<polygon points=\"140,130 170,150 140,170\" fill=\"#e2e8f0\"/>" +
+        "<text x=\"150\" y=\"225\" font-family=\"sans-serif\" font-size=\"14\" fill=\"#94a3b8\" text-anchor=\"middle\">Generating Thumbnail...</text>" +
+        "</svg>");
+
+    private async Task TriggerOnDemandVideoThumbnailGenerationAsync(MediaDto item, string spec)
+    {
+        try
+        {
+            var cacheKey = $"video_thumb_gen:{item.Id}";
+            var alreadyQueued = await _cache.GetStringAsync(cacheKey);
+            if (!string.IsNullOrEmpty(alreadyQueued)) return;
+
+            var evt = new VideoUploadedEvent
+            {
+                EventId = Guid.NewGuid(),
+                EventType = "video.uploaded",
+                EventVersion = "1.0",
+                Timestamp = DateTime.UtcNow,
+                TenantId = "SINGLE_TENANT",
+                Data = new VideoUploadedData
+                {
+                    VideoId = item.Id != Guid.Empty ? item.Id : Guid.NewGuid(),
+                    FileName = Path.GetFileName(item.StoragePath),
+                    FilePath = item.StoragePath,
+                    FileSize = 0,
+                    ContentType = item.MimeType ?? "video/mp4",
+                    Category = "general",
+                    SubCategory = "general",
+                    UploadedBy = "on-demand-thumbnail-request"
+                },
+                ProcessingOptions = new ProcessingOptions
+                {
+                    TargetThumbnailSizes = new[] { "icon", "medium", "large" },
+                    ThumbnailFormat = "webp",
+                    ThumbnailQuality = 80,
+                    Retention = "days180"
+                }
+            };
+
+            var producer = HttpContext.RequestServices.GetService<IProducer<string, string>>();
+            if (producer != null)
+            {
+                await producer.ProduceAsync(KafkaTopics.VideoUploaded, new Message<string, string>
+                {
+                    Key = evt.Data.VideoId.ToString(),
+                    Value = JsonSerializer.Serialize(evt)
+                });
+
+                _logger.LogInformation("Dispatched on-demand VideoUploadedEvent to Kafka for video {VideoId} ({Path})", evt.Data.VideoId, item.StoragePath);
+
+                await _cache.SetStringAsync(cacheKey, "queued", new DistributedCacheEntryOptions
+                {
+                    AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5)
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to publish on-demand VideoUploadedEvent for {Path}", item.StoragePath);
         }
     }
 }
