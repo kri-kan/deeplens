@@ -124,3 +124,129 @@ Sidecars are lightweight, synchronous services that extend the platform's capabi
     - `GET /profile/{username}/posts`: Recent posts (shortcode, caption, media URLs).
 - **Rate Limiting**: Implementation relies on `instaloader` internal sleep mechanisms. Public endpoint usage only.
 
+---
+
+## 🌐 DeepLens Platform & Store.Api Endpoint Specifications
+
+### 1. Instagram WhatsApp Share Tracking (`DeepLens.SearchApi`)
+Tracks and audits shared Instagram competitor media posts across WhatsApp target groups (reseller vs customer cohorts).
+
+- **`POST /api/v1/insta/wa-updates/share`**
+  - **Auth**: Bearer token (`SearchPolicy`)
+  - **Request Body**:
+    ```json
+    {
+      "postId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "target": "reseller", // or "customer"
+      "groupName": "South India Resellers Hub",
+      "notes": "Shared price update"
+    }
+    ```
+  - **Response (`200 OK`)**:
+    ```json
+    {
+      "success": true,
+      "postId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "target": "reseller",
+      "groupName": "South India Resellers Hub",
+      "sharedAt": "2026-10-30T10:00:00Z"
+    }
+    ```
+
+- **`POST /api/v1/insta/wa-updates/unshare`**
+  - **Auth**: Bearer token (`SearchPolicy`)
+  - **Request Body**:
+    ```json
+    {
+      "postId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "target": "reseller"
+    }
+    ```
+  - **Response (`200 OK`)**:
+    ```json
+    {
+      "success": true,
+      "postId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "target": "reseller"
+    }
+    ```
+
+### 2. Catalog Product Media Review Required Flag (`DeepLens.SearchApi`)
+Enables editorial triaging by flagging catalog products needing image or video inspection.
+
+- **`PATCH /api/v1/catalog/products/{id}/media-review-required`**
+  - **Auth**: Bearer token (`SearchPolicy`)
+  - **Request Body**:
+    ```json
+    {
+      "isMediaReviewRequired": true
+    }
+    ```
+  - **Response (`200 OK`)**:
+    ```json
+    {
+      "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "isMediaReviewRequired": true
+    }
+    ```
+
+### 3. Store Device Growth & Acquisition Telemetry (`Store.Api`)
+Surfaces anonymous device growth metrics, DAU/WAU trends, and acquisition attribution.
+
+- **`GET /api/v1/admin/telemetry/growth/daily?days=30&granularity=daily`**
+  - **Query Parameters**:
+    - `days` / `range` (int, default `30`): Observation window.
+    - `granularity` (string, `daily` | `weekly` | `monthly`).
+  - **Response (`200 OK`)**:
+    ```json
+    [
+      {
+        "date": "2026-10-29",
+        "activeDevices": 142,
+        "newDevices": 18,
+        "totalSessions": 412
+      }
+    ]
+    ```
+
+- **`GET /api/v1/admin/telemetry/growth/acquisitions?range=30&granularity=daily`**
+  - **Response (`200 OK`)**:
+    ```json
+    {
+      "cohorts": [
+        {
+          "period": "2026-10-29",
+          "totalFirstSeen": 18,
+          "channels": { "direct": 10, "whatsapp_share": 6, "instagram": 2 },
+          "platforms": { "android": 14, "ios": 3, "web": 1 }
+        }
+      ]
+    }
+    ```
+
+### 4. Fuzzy Trigram Search & Store Catalog Discovery (`Store.Api`)
+High-performance customer storefront product search and filtering.
+
+- **`GET /api/v1/products?search={term}&category={slug}`**
+  - **Indexing Strategy**: Powered by PostgreSQL `pg_trgm` GIN indexes on title, color, fabric, and search keywords (`041_add_pg_trgm_fuzzy_search_indexes.sql`, `042_add_store_fuzzy_search_indexes.sql`, and `043_optimize_store_partial_gin_indexes.sql`).
+  - **Caching**: Multi-tier Redis caching with 15-minute sliding TTL under key `store:search:{category}:{search}`.
+  - **Response (`200 OK`)**:
+    ```json
+    [
+      {
+        "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+        "productCode": "VF-101",
+        "title": "Kanchipuram Pure Silk Saree",
+        "category": "Sarees",
+        "fabric": "Pure Silk",
+        "color": "Crimson Red",
+        "price": 8500.0,
+        "originalPrice": 12000.0,
+        "discountPercentage": 29,
+        "inStock": true,
+        "primaryImageUrl": "http://192.168.0.170:9000/..."
+      }
+    ]
+    ```
+
+

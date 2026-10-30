@@ -2,8 +2,8 @@
 
 **Comprehensive architecture reference for the DeepLens mobile applications: Vayyari Admin App and Vayyari Store App, standalone APK builds, and release distribution pipelines.**
 
-Last Updated: September 18, 2026  
-Related ADO Stories: #336, #340, #537, #542, #546, #552, #558, #563
+Last Updated: October 29, 2026  
+Related ADO Stories: #336, #340, #537, #542, #546, #552, #558, #563, #1337, #1341, #1342, #1343, #1344, #1346
 
 ---
 
@@ -85,6 +85,25 @@ graph TD
 - **Vayyari Admin App**: Connects to `NextGen.Identity` (port 5198), `DeepLens.SearchApi` (port 5000), and `Store.Api` (port 5200).
 - **Vayyari Store App**: Connects to `Store.Api` (port 5200) for catalog discovery, product curation details, swatches, and cart operations.
 - **Cleartext & LAN Configuration**: Both apps configure `android:usesCleartextTraffic="true"` and network security configs allowing access to `192.168.0.170`, localhost, and Tailscale domain `krikanserver.taild227d9.ts.net`.
+
+### 4. State Management & RTK Query Architecture
+- **Central Redux Store**: `src/vayyari/store/index.ts` unifies `catalogApi`, `customerAuthApi`, and `telemetryApi`.
+- **Cache Tags & Optimistic Updates**: Instant catalog star mutations with rollback safety (`catalogStarRules.ts`), session filter retention, and zero-flash refetching.
+- **Auth Separation**: Admin identity resides in `AuthContext` (JWT with automatic 401 refresh/logout), while end-customer storefront sessions are handled via `customerAuthApi` and `customerAuthSlice`.
+
+### 5. Visual Lens Similarity Engine
+- **In-Memory Ephemeral Matching**: Triggers vector similarity computations across the catalog without persisting unlinked media.
+- **Decoupled Scrolling**: Visual search mode disables FlatList pagination (`hasMore: false`) to prevent endless background paging loops and row flashing.
+- **Zoning Badges**: Media count >30 activates high-media zoning badge indicators.
+
+### 6. Store Curation Suite & Variant Architecture
+- **Umbrella Card & Variant Drawer (ADO #1342)**: Separates master saree styles from colorway variants with slide-over drawers.
+- **In-App Mobile PDP Live Preview**: `StorePdpLivePreviewModal` previews customer-facing PDP layout prior to publishing.
+- **Publish Updates Queue & Media Delta Allocation (ADO #1341)**: `publishDeltaRules.ts` computes diffs between staged and live media sets, preventing redundant uploads.
+
+### 7. Device Fleet Dashboard & Telemetry
+- **Fleet Analytics**: Real-time admin monitoring of connected device profiles, platform distribution, app versions, and shopper session frequency (`AdminDeviceFleetDashboardPage`).
+- **Data Visualizations**: Native `DailyAcquisitionsGraph` and `ShopperActivityBarChart` anchored to responsive layout grids.
 
 ---
 

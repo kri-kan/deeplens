@@ -314,8 +314,9 @@ curl -s http://localhost/admin-updates/manifest.json | jq .
 curl -s http://localhost/store-updates/manifest.json | jq .
 
 # Test bundle HTTP download headers
-curl -I -s http://localhost/admin-updates/bundles/1.0.0.181-dirty/bundle.js | head -n 5
+curl -I -s http://localhost/admin-updates/bundles/1.0.3.316-dirty.20261029212355/bundle.js | head -n 5
 curl -I -s http://localhost/store-updates/bundles/1.0.0.11-dirty/bundle.js | head -n 5
+
 ```
 
 ### 4.4 Inspecting MinIO Storage

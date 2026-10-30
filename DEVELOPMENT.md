@@ -55,7 +55,7 @@ For more details on managing the container, see `setupscripts/core/ollama/docker
 
 ## Vayyari Mobile App Development
 
-The Vayyari mobile app is built using **React Native / Expo Bare Workflow** (SDK 54, Expo Router v3, Material Design 3 via `react-native-paper`, Emerald theme, and native Android Gradle configuration under `src/vayyari/android`).
+The Vayyari mobile app is built using **React Native 0.86.3 / Expo Bare Workflow** (SDK 57, Expo Router v3/v4, Tamagui 2.7+ tokens & atomic design, `react-native-paper` Material Design 3, Redux Toolkit & RTK Query centralized state, Emerald / Emerald Nocturne themes, and native Android Gradle configuration under `src/vayyari/android`).
 
 ### Live Development Bundler
 The Vayyari Expo packager (`npx expo start --android`) runs continuously in the background on system boot. It is managed by a systemd user service (`vayyari-expo.service`) and runs inside a **`tmux`** session to allow interactive access.
@@ -105,7 +105,7 @@ Vayyari Admin supports self-hosted JS bundle & asset publishing using MinIO obje
 
 ```bash
 # Via Makefile
-make push-vayyari-ota
+make push-admin-ota
 
 # Or directly with release notes
 cd src/vayyari
@@ -116,7 +116,7 @@ cd src/vayyari
 2. **MinIO Upload**: Mirrors bundles and assets to `local/admin-updates/bundles/<subversion>/` and updates `local/admin-updates/manifest.json`.
 3. **Gateway Exposure**: Nginx proxies requests on `/admin-updates/` to MinIO port 9000, making manifests accessible at:
    `http://krikanserver.taild227d9.ts.net/admin-updates/manifest.json`
-4. **Bundle Retention**: `push-update.sh` keeps the newest 5 bundle snapshots in MinIO and cleans up older releases.
+4. **Bundle Retention**: `push-update.sh` keeps the newest 2 bundle snapshots in MinIO and cleans up older releases.
 5. **Runtime Loading**: `MainApplication.kt` detects `ota/active/bundle.js` and dynamically loads the update on boot. Client checks for updates via `selfHostedOTA.ts` on launch.
 
 ---
