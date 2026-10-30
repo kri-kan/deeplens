@@ -48,13 +48,20 @@ public class CatalogMergeSmokeTest
             if (_createdProductIds.Count > 0)
             {
                 await conn.ExecuteAsync(@"
+                    DELETE FROM product_merges WHERE source_id = ANY(@Ids) OR target_id = ANY(@Ids);
+                    DELETE FROM media_links WHERE entity_id = ANY(@Ids) OR entity_id IN (SELECT id FROM product_variants WHERE product_id = ANY(@Ids));
                     DELETE FROM product_variants WHERE product_id = ANY(@Ids);
                     DELETE FROM products WHERE id = ANY(@Ids);
                 ", new { Ids = _createdProductIds.ToArray() });
             }
 
             // Safety net: ensure any test-generated MERGE products are wiped
-            await conn.ExecuteAsync("DELETE FROM products WHERE base_sku LIKE 'MERGE-%'");
+            await conn.ExecuteAsync(@"
+                DELETE FROM product_merges WHERE source_id IN (SELECT id FROM products WHERE base_sku LIKE 'MERGE-%') OR target_id IN (SELECT id FROM products WHERE base_sku LIKE 'MERGE-%');
+                DELETE FROM media_links WHERE entity_id IN (SELECT id FROM products WHERE base_sku LIKE 'MERGE-%') OR entity_id IN (SELECT id FROM product_variants WHERE product_id IN (SELECT id FROM products WHERE base_sku LIKE 'MERGE-%'));
+                DELETE FROM product_variants WHERE product_id IN (SELECT id FROM products WHERE base_sku LIKE 'MERGE-%');
+                DELETE FROM products WHERE base_sku LIKE 'MERGE-%';
+            ");
         }
         catch (Exception ex)
         {
@@ -98,12 +105,21 @@ public class CatalogMergeSmokeTest
 
             CREATE TABLE IF NOT EXISTS media (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                variant_id UUID NOT NULL,
                 storage_path VARCHAR(500) NOT NULL,
                 phash VARCHAR(64),
                 quality_score NUMERIC,
                 status SMALLINT DEFAULT 0,
                 uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            );
+
+            CREATE TABLE IF NOT EXISTS media_links (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                media_id UUID NOT NULL,
+                entity_id UUID NOT NULL,
+                entity_type VARCHAR(50) NOT NULL,
+                display_order INT DEFAULT 0,
+                is_primary BOOLEAN DEFAULT false,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
             );
 
             CREATE TABLE IF NOT EXISTS media_deletion_queue (
@@ -145,14 +161,22 @@ public class CatalogMergeSmokeTest
         var img1 = Guid.NewGuid();
         var img2 = Guid.NewGuid();
         await conn.ExecuteAsync(@"
-            INSERT INTO media (id, variant_id, storage_path, phash, quality_score, status) 
-            VALUES (@Id, @VarId, @Path, @Hash, @Quality, 0)",
-            new { Id = img1, VarId = targetVarId, Path = "media/raw/img1.jpg", Hash = phash, Quality = 0.9m });
+            INSERT INTO media (id, storage_path, phash, quality_score, status) 
+            VALUES (@Id, @Path, @Hash, @Quality, 0)",
+            new { Id = img1, Path = "media/raw/img1_" + Guid.NewGuid() + ".jpg", Hash = phash, Quality = 0.9m });
+        await conn.ExecuteAsync(@"
+            INSERT INTO media_links (media_id, entity_id, entity_type) 
+            VALUES (@MediaId, @EntityId, 'variant')",
+            new { MediaId = img1, EntityId = targetVarId });
         
         await conn.ExecuteAsync(@"
-            INSERT INTO media (id, variant_id, storage_path, phash, quality_score, status) 
-            VALUES (@Id, @VarId, @Path, @Hash, @Quality, 0)",
-            new { Id = img2, VarId = sourceVarId, Path = "media/raw/img2.jpg", Hash = phash, Quality = 0.5m });
+            INSERT INTO media (id, storage_path, phash, quality_score, status) 
+            VALUES (@Id, @Path, @Hash, @Quality, 0)",
+            new { Id = img2, Path = "media/raw/img2_" + Guid.NewGuid() + ".jpg", Hash = phash, Quality = 0.5m });
+        await conn.ExecuteAsync(@"
+            INSERT INTO media_links (media_id, entity_id, entity_type) 
+            VALUES (@MediaId, @EntityId, 'variant')",
+            new { MediaId = img2, EntityId = sourceVarId });
 
         // 2. Perform Merge
         await _service.MergeProductsAsync(targetSku, sourceSku, deleteSource: true);

@@ -137,14 +137,17 @@ public class MetadataService : IMetadataService
 
         try
         {
-            var target = await db.QuerySingleOrDefaultAsync<(Guid Id, string[] Tags, string UnifiedAttributes)>(
-                "SELECT id, tags, unified_attributes FROM products WHERE base_sku = @Sku", new { Sku = targetSku }, trans);
+            var target = await db.QuerySingleOrDefaultAsync<(Guid Id, string[] Tags, string UnifiedAttributes, bool IsDeleted, bool IsArchived)>(
+                "SELECT id, tags, unified_attributes, COALESCE(is_deleted, false) as IsDeleted, COALESCE(is_archived, false) as IsArchived FROM products WHERE base_sku = @Sku", new { Sku = targetSku }, trans);
             
-            var source = await db.QuerySingleOrDefaultAsync<(Guid Id, string[] Tags, string UnifiedAttributes)>(
-                "SELECT id, tags, unified_attributes FROM products WHERE base_sku = @Sku", new { Sku = sourceSku }, trans);
+            var source = await db.QuerySingleOrDefaultAsync<(Guid Id, string[] Tags, string UnifiedAttributes, bool IsDeleted, bool IsArchived)>(
+                "SELECT id, tags, unified_attributes, COALESCE(is_deleted, false) as IsDeleted, COALESCE(is_archived, false) as IsArchived FROM products WHERE base_sku = @Sku", new { Sku = sourceSku }, trans);
 
             if (target.Id == default || source.Id == default)
                 throw new InvalidOperationException("SKU not found");
+
+            if (target.IsDeleted || target.IsArchived || source.IsDeleted || source.IsArchived)
+                throw new InvalidOperationException("Cannot merge with soft-deleted or archived products.");
 
             var consolidatedTags = (target.Tags ?? Array.Empty<string>())
                 .Union(source.Tags ?? Array.Empty<string>())
@@ -158,8 +161,8 @@ public class MetadataService : IMetadataService
             // Record the merge history for redirection/audit
             await db.ExecuteAsync(@"
                 INSERT INTO product_merges (source_id, target_id, metadata)
-                VALUES (@SourceId, @TargetId, @Metadata)
-                ON CONFLICT (source_id) DO UPDATE SET target_id = EXCLUDED.target_id",
+                VALUES (@SourceId, @TargetId, @Metadata::jsonb)
+                ON CONFLICT (source_id) DO UPDATE SET target_id = EXCLUDED.target_id, metadata = EXCLUDED.metadata",
                 new { 
                     SourceId = source.Id, 
                     TargetId = target.Id, 
@@ -182,9 +185,46 @@ public class MetadataService : IMetadataService
             await db.ExecuteAsync("UPDATE media_links SET entity_id = @TargetId WHERE entity_id = @SourceId AND entity_type = 'product'",
                 new { TargetId = target.Id, SourceId = source.Id }, trans);
 
-            // Re-link individual media to the new product (Source of truth in media table if we added product_id there)
-            await db.ExecuteAsync("UPDATE media SET product_id = @TargetId WHERE product_id = @SourceId",
-                new { TargetId = target.Id, SourceId = source.Id }, trans);
+            // Consolidate variants from source product to target product
+            var sourceVariants = await db.QueryAsync<dynamic>(
+                "SELECT id, color, fabric FROM product_variants WHERE product_id = @SourceId",
+                new { SourceId = source.Id }, trans);
+
+            foreach (var sv in sourceVariants)
+            {
+                var matchingTargetVarId = await db.QuerySingleOrDefaultAsync<Guid?>(@"
+                    SELECT id FROM product_variants 
+                    WHERE product_id = @TargetId 
+                    AND (color = @Color OR (color IS NULL AND @Color IS NULL))
+                    AND (fabric = @Fabric OR (fabric IS NULL AND @Fabric IS NULL))",
+                    new { 
+                        TargetId = target.Id, 
+                        Color = (string?)sv.color, 
+                        Fabric = (string?)sv.fabric 
+                    }, trans);
+
+                if (matchingTargetVarId.HasValue)
+                {
+                    // Merge listings from source variant to matching target variant
+                    await MergeListings(db, (Guid)sv.id, matchingTargetVarId.Value, trans);
+
+                    // Move media links from source variant to matching target variant
+                    await db.ExecuteAsync(@"
+                        UPDATE media_links 
+                        SET entity_id = @TargetVarId 
+                        WHERE entity_id = @SourceVarId AND entity_type = 'variant'",
+                        new { TargetVarId = matchingTargetVarId.Value, SourceVarId = (Guid)sv.id }, trans);
+
+                    // Delete the consolidated source variant
+                    await db.ExecuteAsync("DELETE FROM product_variants WHERE id = @Id", new { Id = (Guid)sv.id }, trans);
+                }
+                else
+                {
+                    // No matching variant, simply reassign variant to target product
+                    await db.ExecuteAsync("UPDATE product_variants SET product_id = @TargetId WHERE id = @Id",
+                        new { TargetId = target.Id, Id = (Guid)sv.id }, trans);
+                }
+            }
 
             await DeduplicateImages(db, target.Id, trans);
 
@@ -232,17 +272,22 @@ public class MetadataService : IMetadataService
     {
         var duplicates = await db.QueryAsync<(Guid Id, string Path)>(@"
             WITH RankedImages AS (
-                SELECT id, storage_path, 
-                       row_number() OVER(PARTITION BY variant_id, phash ORDER BY quality_score DESC NULLS LAST, uploaded_at ASC) as rank
-                FROM media 
-                WHERE variant_id IN (SELECT id FROM product_variants WHERE product_id = @Id)
-                AND phash IS NOT NULL
+                SELECT m.id, m.storage_path, 
+                       row_number() OVER(PARTITION BY ml.entity_id, m.phash ORDER BY m.quality_score DESC NULLS LAST, m.uploaded_at ASC) as rank
+                FROM media m
+                INNER JOIN media_links ml ON ml.media_id = m.id
+                WHERE (
+                    (ml.entity_type = 'product' AND ml.entity_id = @Id)
+                    OR (ml.entity_type = 'variant' AND ml.entity_id IN (SELECT id FROM product_variants WHERE product_id = @Id))
+                )
+                AND m.phash IS NOT NULL
             )
             SELECT id, storage_path FROM RankedImages WHERE rank > 1", new { Id = productId }, trans);
 
         foreach (var dup in duplicates)
         {
             await db.ExecuteAsync("UPDATE media SET status = 98 WHERE id = @Id", new { Id = dup.Id }, trans);
+            await db.ExecuteAsync("DELETE FROM media_links WHERE media_id = @Id", new { Id = dup.Id }, trans);
             await db.ExecuteAsync(@"
                 INSERT INTO media_deletion_queue (media_id, storage_path) 
                 VALUES (@Id, @Path)", new { Id = dup.Id, Path = dup.Path }, trans);
@@ -305,7 +350,7 @@ public class MetadataService : IMetadataService
         }
         else
         {
-            var nextVal = await db.QuerySingleAsync<long>("SELECT nextval('\"productId_id_seq\"')", null, trans);
+            var nextVal = await db.QuerySingleAsync<long>("SELECT nextval('productid_id_seq')", null, trans);
             sku = $"VF{nextVal:X3}";
             request.SequenceId = (int)nextVal;
         }
@@ -502,6 +547,7 @@ public class MetadataService : IMetadataService
             UPDATE media 
             SET duration_seconds = @Duration, 
                 thumbnail_path = @ThumbPath, 
+                thumbnail_m = @ThumbPath,
                 preview_path = @PreviewPath,
                 status = 1 
             WHERE id = @Id";
