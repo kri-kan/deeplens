@@ -51,6 +51,8 @@ const VideoItemComponent: React.FC<VideoItemProps> = ({
     rawItem?.multiplier !== undefined ||
     (item as any)?.multiplier !== undefined;
 
+  const isDeleted = Boolean(item?.deletedOnInstagram ?? rawItem?.deletedOnInstagram ?? rawItem?.deleted_on_instagram);
+
   const primaryUri = getMediaUri(item, 'medium');
   const fallbackUri = getMediaFallbackUri(item);
   const [imageUri, setImageUri] = React.useState<string>(primaryUri || fallbackUri);
@@ -106,7 +108,7 @@ const VideoItemComponent: React.FC<VideoItemProps> = ({
     >
       <Image 
         source={{ uri: imageUri }} 
-        style={[styles.thumbnail, isSelected && { opacity: 0.7 }]}
+        style={[styles.thumbnail, (isSelected || isDeleted) && { opacity: 0.75 }]}
         contentFit="cover"
         transition={200}
         onError={() => {
@@ -115,6 +117,14 @@ const VideoItemComponent: React.FC<VideoItemProps> = ({
           }
         }}
       />
+
+      {/* Deleted on Instagram badge overlay on top of tile */}
+      {isDeleted && (
+        <View style={styles.deletedBadge}>
+          <Icon source="delete-alert" size={11} color="#ffffff" />
+          <Text style={styles.deletedBadgeText}>DELETED</Text>
+        </View>
+      )}
       
       {selectionMode && (
         <View style={[styles.selectionIndicator, { backgroundColor: 'rgba(255,255,255,0.7)', borderRadius: 12, padding: 0 }]}>
@@ -226,6 +236,7 @@ const VideoItemComponent: React.FC<VideoItemProps> = ({
 export const VideoItem = React.memo(VideoItemComponent, (prevProps, nextProps) => {
   return (
     prevProps.item?.id === nextProps.item?.id &&
+    prevProps.item?.deletedOnInstagram === nextProps.item?.deletedOnInstagram &&
     prevProps.isSelected === nextProps.isSelected &&
     prevProps.selectionMode === nextProps.selectionMode &&
     prevProps.isCompetitor === nextProps.isCompetitor
@@ -358,5 +369,24 @@ const styles = StyleSheet.create({
   },
   miniSparklineWrapper: {
     marginTop: 1,
+  },
+  deletedBadge: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(211, 47, 47, 0.92)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 2,
+    gap: 3,
+    zIndex: 25,
+  },
+  deletedBadgeText: {
+    color: '#ffffff',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.8,
   },
 });

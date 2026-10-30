@@ -183,16 +183,33 @@ export const shareMedia = async (
  * Converts a local (file://, content://) or remote URI into a standard Blob.
  * 
  * In modern Expo (SDK 52+), fetch's FormData implementation is WinterCG-compliant
- * and rejects legacy React Native { uri, name, type } objects with:
- * "Unsupported FormDataPart implementation".
+ * and converts Blobs / file objects via `entry.bytes()` or `entry.arrayBuffer()`.
+ * React Native's native Blob constructor throws when passed ArrayBuffer / ArrayBufferView.
  * 
- * This helper produces a real Blob that FormData accepts across all platforms.
+ * This helper produces a real Blob-compatible object that FormData accepts across all platforms
+ * while avoiding React Native's 14-byte fake "File not found" fetch fallback.
  */
 export const uriToBlob = async (uri: string, mimeType?: string): Promise<Blob> => {
+  const resolvedMime = mimeType || 'image/jpeg';
+
   // On native platforms (or local file/content URIs), fetch(file://) in React Native
   // returns an empty 14-byte fake response ("File not found") instead of the real file data.
-  // Use expo-file-system directly to read the true file bytes into a Blob.
+  // We first try reading with expo-file-system to get the true bytes.
   if (Platform.OS !== 'web' || uri.startsWith('file://') || uri.startsWith('content://')) {
+    // Attempt 1: Modern expo-file-system File instance if available
+    try {
+      const { File } = await import('expo-file-system');
+      if (File) {
+        const file = new File(uri);
+        if (typeof (file as any).bytes === 'function') {
+          return file as unknown as Blob;
+        }
+      }
+    } catch {
+      // Fall through to Base64 reader
+    }
+
+    // Attempt 2: Read base64 using expo-file-system/legacy
     try {
       const { readAsStringAsync, EncodingType } = await import('expo-file-system/legacy');
       const base64 = await readAsStringAsync(uri, { encoding: EncodingType.Base64 });
@@ -202,17 +219,59 @@ export const uriToBlob = async (uri: string, mimeType?: string): Promise<Blob> =
       for (let i = 0; i < len; i++) {
         bytes[i] = binaryString.charCodeAt(i);
       }
-      return new Blob([bytes], { type: mimeType || 'image/jpeg' });
+
+      // In browser/web environment, standard Blob constructor handles TypedArrays:
+      if (Platform.OS === 'web' && typeof Blob !== 'undefined') {
+        try {
+          return new Blob([bytes], { type: resolvedMime });
+        } catch {
+          // Fall through
+        }
+      }
+
+      // In React Native Hermes / WinterCG environment:
+      // React Native's BlobManager rejects Uint8Array with:
+      // "Creating blobs from 'ArrayBuffer' and 'ArrayBufferView' are not supported".
+      // Meanwhile, Expo's convertFormDataAsync checks:
+      // 1. entry instanceof Blob (calls blobToArrayBufferAsync -> entry.arrayBuffer())
+      // 2. 'bytes' in entry (calls await entry.bytes())
+      // We construct a fully compatible Blob object that satisfies both interfaces:
+      const blobObj: any = {
+        size: len,
+        type: resolvedMime,
+        bytes: async () => bytes,
+        arrayBuffer: async () => bytes.buffer as ArrayBuffer,
+        text: async () => binaryString,
+        slice: (start?: number, end?: number) => bytes.subarray(start, end),
+      };
+
+      if (typeof Blob !== 'undefined') {
+        Object.setPrototypeOf(blobObj, Blob.prototype);
+      }
+
+      return blobObj as unknown as Blob;
     } catch (fsErr) {
       console.warn('[uriToBlob] expo-file-system read failed, falling back to fetch:', fsErr);
     }
   }
 
+  // Attempt 3: Standard fetch(uri) for remote HTTP/HTTPS or browser object URLs
   try {
     const res = await fetch(uri);
     const blob = await res.blob();
-    if (mimeType && (!blob.type || blob.type === 'application/octet-stream')) {
-      return new Blob([blob], { type: mimeType });
+    // Guard against fake React Native 14-byte "File not found" response on local file:// URIs
+    if (blob.size === 14) {
+      const text = await blob.text().catch(() => '');
+      if (text.includes('File not found')) {
+        throw new Error('fetch(uri) returned fake "File not found" response for local URI');
+      }
+    }
+    if (resolvedMime && (!blob.type || blob.type === 'application/octet-stream')) {
+      if (typeof Blob !== 'undefined') {
+        try {
+          return new Blob([blob], { type: resolvedMime });
+        } catch {}
+      }
     }
     return blob;
   } catch (err) {

@@ -8,11 +8,12 @@
 
 - **Framework**: React Native 0.86+ / Expo SDK 57 (**Bare Workflow**).
 - **Native Project**: Direct Android Gradle configuration under `android/`.
-- **Navigation**: `expo-router` v3 (file-system routing in `app/`).
-- **UI Engine**: `react-native-paper` (Material Design 3) with dynamic Emerald / Emerald Nocturne themes.
-- **State & Auth**: `context/AuthContext.tsx` with `AsyncStorage` session persistence and automatic 401 interception.
-- **Media Engine**: Singleton `expo-video` player with HTTP 206 partial content streaming.
-- **Telemetry**: Lazy-loaded OpenTelemetry tracing via `@opentelemetry/api`.
+- **Navigation**: `expo-router` v3/v4 (file-system routing in `app/`).
+- **UI Engine**: `react-native-paper` (Material Design 3) & `tamagui` (Tokens, atoms, molecules, organisms) with Emerald / Emerald Nocturne themes.
+- **State Management**: Centralized **Redux Toolkit & RTK Query** (`store/`) with automated cache invalidation for catalog, customer auth, and device telemetry, alongside `context/AuthContext.tsx` for admin identity.
+- **Media Engine**: Singleton `expo-video` player with HTTP 206 partial content streaming & multi-touch `MediaCanvasEngine`.
+- **Visual Intelligence**: Ephemeral in-memory **Visual Lens** similarity search & vector matching.
+- **Telemetry & Fleet**: Lazy-loaded OpenTelemetry tracing via `@opentelemetry/api` & real-time Admin Device Fleet dashboard.
 
 ---
 
@@ -70,6 +71,30 @@ make admin-apk-both
 
 ---
 
+## 🌟 Key Feature Modules
+
+1. **Visual Lens Similarity Engine**:
+   - One-tap visual similarity search (`VisualLensButton`, `useVisualSearchNavigation`).
+   - Ephemeral in-memory vector matching against the DeepLens catalog with high-media zoning badge (>30 media) and decoupled scroll pagination.
+   - Deep-linked from WhatsApp chat media and PDP image viewers.
+2. **Instagram Media Focus & WhatsApp Feed**:
+   - `wa-updates.tsx`: Diligent WhatsApp updates feed with unshared/shared filtering, channel filtering, caption search, and 1-tap WhatsApp sharing.
+   - `InstagramMediaFocusModal.tsx`: Minimalist focus mode for media curation, swatch linking, and multi-touch zoom/pan.
+   - `InstagramBoostedInsightsGraph.tsx`: Native chart analytics for competitor and internal video performance.
+3. **Store Product Curation & Variant Architecture**:
+   - Umbrella product cards and expandable variant drawers (ADO #1342).
+   - PDP Live Preview Modal (`StorePdpLivePreviewModal`) for verifying mobile customer layout before publishing.
+   - Media Canvas Engine (`MediaCanvasEngine`) for multi-touch swatch alignment and cropping.
+   - Delta publishing queue (`publishDeltaRules.ts`, ADO #1341) avoiding redundant media uploads.
+4. **Device Fleet & Telemetry Analytics**:
+   - `AdminDeviceFleetDashboardPage` (`/store/devices`): Centralized device monitoring.
+   - `DailyAcquisitionsGraph` & `ShopperActivityBarChart`: Active shopper tracking, platform telemetry, and app version distribution.
+5. **Inventory Search & Three-Tier Fuzzy Matching**:
+   - `StoreInventoryFilterDrawer`: Filter by category, fabric, price range, stock, and curation status.
+   - Trigram and token-based fuzzy search for instantaneous filtering across large catalogs.
+
+---
+
 ## 🔄 Self-Hosted OTA Updates (MinIO + Nginx)
 
 The app features a 100% self-hosted Over-The-Air update system:
@@ -82,12 +107,13 @@ make push-admin-ota
 ```
 
 1. **Expo Export**: Compiles Hermes bytecode (`.hbc`) and hashed assets into `dist/`.
-2. **Monotonic Subversioning**: Automatically calculates `<baseVersion>.<commitCount>[-dirty]` from git (e.g., `1.0.0.181`).
+2. **Monotonic Subversioning**: Automatically calculates `<baseVersion>.<commitCount>[-dirty]` from git (e.g., `1.0.3.316-dirty.20261029212355`).
 3. **MinIO Upload**: Uploads bundle and assets to `local/admin-updates/bundles/<subversion>/`.
 4. **Manifest**: Uploads `manifest.json` with SHA-256 and MD5 checksums, bundle size, and release notes.
 5. **Gateway Routing**: Proxied publicly via `http://<HOST>/admin-updates/manifest.json`.
 6. **Automatic Git Hook**: Non-native changes committed under `src/vayyari/` automatically push an OTA bundle in the background (bypass with `SKIP_OTA=1 git commit`).
 7. **Runtime Loading**: `MainApplication.kt` detects `ota/active/bundle.js` and dynamically loads the update on boot. Client checks for updates via `useOTAUpdate()` in `app/_layout.tsx`.
+
 
 ---
 

@@ -63,7 +63,7 @@ function ThemedStoryContainer({ Story, context }: { Story: any; context: any }) 
   }
 
   return (
-    <TamaguiTheme name={activeTamaguiTheme}>
+    <TamaguiTheme name={activeTamaguiTheme as any}>
       {shouldWrapWithShell ? (
         <FormFactorShell
           title={context?.name || context?.story}

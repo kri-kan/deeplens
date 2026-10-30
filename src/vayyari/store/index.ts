@@ -5,6 +5,8 @@ import { catalogUiReducer } from './slices/catalogUiSlice';
 import { catalogSelectionReducer } from './slices/catalogSelectionSlice';
 import { telemetryApi } from './api/telemetryApi';
 import { telemetryUiReducer } from './slices/telemetryUiSlice';
+import { customerAuthApi } from './api/customerAuthApi';
+import { customerAuthReducer } from './slices/customerAuthSlice';
 
 export const store = configureStore({
   reducer: {
@@ -13,6 +15,8 @@ export const store = configureStore({
     catalogSelection: catalogSelectionReducer,
     [telemetryApi.reducerPath]: telemetryApi.reducer,
     telemetryUi: telemetryUiReducer,
+    [customerAuthApi.reducerPath]: customerAuthApi.reducer,
+    customerAuth: customerAuthReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
@@ -20,7 +24,7 @@ export const store = configureStore({
         // Ignore RTK Query internal non-serializable arguments if any
         ignoredActions: ['catalogApi/executeMutation/pending'],
       },
-    }).concat(catalogApi.middleware, telemetryApi.middleware),
+    }).concat(catalogApi.middleware, telemetryApi.middleware, customerAuthApi.middleware),
 });
 
 export type RootState = ReturnType<typeof store.getState>;

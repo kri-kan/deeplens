@@ -346,5 +346,258 @@ export function createPipelineFailuresRoutes(): Router {
         }
     });
 
+    /**
+     * GET /api/admin/pipeline-events
+     * Provides a consolidated live view of all queued operations, recent events, 
+     * gauge metrics, and the platform event architecture catalog.
+     */
+    router.get('/pipeline-events', async (req: Request, res: Response) => {
+        const client = getWhatsAppDbClient();
+        if (!client) {
+            return res.status(500).json({ success: false, message: 'Database client not available' });
+        }
+
+        const filter = (req.query.filter as string) || 'all';
+        const limit = Math.min(200, Math.max(10, parseInt(req.query.limit as string) || 50));
+        const offset = Math.max(0, parseInt(req.query.offset as string) || 0);
+
+        try {
+            // 1. Metric Gauges
+            const metricsRes = await client.query(`
+                SELECT 
+                    COUNT(*) FILTER (WHERE status = 'staging') as "stagingCount",
+                    COUNT(*) FILTER (WHERE status = 'product_create_sent' AND deeplens_product_id IS NULL) as "awaitingCreationCount",
+                    COUNT(*) FILTER (WHERE has_pending_media = true) as "pendingMediaSyncCount",
+                    COUNT(*) FILTER (WHERE status IN ('error', 'enrichment_failed', 'media_missing')) as "errorCount"
+                FROM wa.message_groups
+            `);
+
+            const reprocess24hRes = await client.query(`
+                SELECT COUNT(*) as "reprocessCount24h"
+                FROM wa.group_audit_log
+                WHERE event IN ('split', 'merged', 'reprocess_triggered', 'split_reprocess')
+                  AND occurred_at >= NOW() - INTERVAL '24 hours'
+            `);
+
+            const metrics = {
+                stagingCount: parseInt(metricsRes.rows[0]?.stagingCount || '0', 10),
+                awaitingCreationCount: parseInt(metricsRes.rows[0]?.awaitingCreationCount || '0', 10),
+                pendingMediaSyncCount: parseInt(metricsRes.rows[0]?.pendingMediaSyncCount || '0', 10),
+                errorCount: parseInt(metricsRes.rows[0]?.errorCount || '0', 10),
+                reprocessCount24h: parseInt(reprocess24hRes.rows[0]?.reprocessCount24h || '0', 10),
+            };
+
+            // 2. Event Architecture Catalog (What each queue is for)
+            const catalog = [
+                {
+                    topic: 'WhatsApp.group.reprocess',
+                    name: 'Group Split / Merge Reprocess',
+                    direction: 'WhatsApp Processor ➔ .NET Worker Service',
+                    consumer: 'WhatsAppGroupWorker',
+                    purpose: 'Unlinks split-off media from products during group splits, or transfers and deduplicates media links and vendor listings during group merges.',
+                    trigger: 'User executes "Split Group" or "Merge Above" in WhatsApp message browser.',
+                    priority: 'High (Immediate)'
+                },
+                {
+                    topic: 'WhatsApp.group.media.added',
+                    name: 'Late-Arrival Media Synchronization',
+                    direction: 'WhatsApp Processor ➔ .NET Worker Service',
+                    consumer: 'WhatsAppGroupWorker',
+                    purpose: 'Imports newly arrived photos or video documents into MinIO and links them to already published catalog products.',
+                    trigger: 'Vendor posts additional media items into an existing product zone.',
+                    priority: 'Normal'
+                },
+                {
+                    topic: 'WhatsApp.group.product.create',
+                    name: 'Product Auto-Promotion Queue',
+                    direction: 'WhatsApp Processor ➔ .NET Worker Service',
+                    consumer: 'WhatsAppGroupWorker',
+                    purpose: 'Promotes qualified WhatsApp message groups (≥2 photos, valid caption text, vendor assigned) into DeepLens products and vendor listings.',
+                    trigger: 'Automated 45-second staging buffer expiry or manual "Publish" button press.',
+                    priority: 'Normal'
+                },
+                {
+                    topic: 'WhatsApp.group.product.created',
+                    name: 'Worker Write-Back Confirmation',
+                    direction: '.NET Worker Service ➔ WhatsApp Processor',
+                    consumer: 'ProductCreatedConsumer',
+                    purpose: 'Confirms product ID and vendor listing ID generated in PostgreSQL, transitioning the group status to "product_created".',
+                    trigger: 'Successful product insertion in DeepLens PostgreSQL.',
+                    priority: 'Immediate'
+                },
+                {
+                    topic: 'WhatsApp.group.product.enrich',
+                    name: 'Product Attribute Extraction (LLM)',
+                    direction: '.NET Worker Service ➔ Enrichment Worker',
+                    consumer: 'ProductEnrichmentWorker',
+                    purpose: 'Extracts taxonomy attributes (fabric, craft, border, price, colors) from raw vendor message descriptions using AI models.',
+                    trigger: 'Product promotion completion.',
+                    priority: 'Background'
+                },
+                {
+                    topic: 'deeplens.videos.uploaded',
+                    name: 'Video Transcoding & Frame Extraction',
+                    direction: 'SearchAPI / WhatsApp ➔ Worker Service',
+                    consumer: 'VideoProcessingWorker',
+                    purpose: 'Extracts representative video keyframes and generates optimized WebP thumbnail previews.',
+                    trigger: 'Video upload or document .mov/.mp4 detection.',
+                    priority: 'Background'
+                },
+                {
+                    topic: 'deeplens.features.extraction',
+                    name: 'Visual Embedding Extraction',
+                    direction: 'Worker Service ➔ Python ML Service',
+                    consumer: 'DeepLens.ReasoningService',
+                    purpose: 'Extracts 512-dimensional visual vector embeddings via ResNet/CLIP for visual lens similarity search.',
+                    trigger: 'Image ingestion completion in WorkerService.',
+                    priority: 'Background'
+                }
+            ];
+
+            // 3. Filtered Audit Events
+            let eventFilterSql = '';
+            const filterParams: any[] = [limit, offset];
+            if (filter === 'reprocess') {
+                eventFilterSql = `AND gal.event IN ('split', 'merged', 'reprocess_triggered', 'split_reprocess')`;
+            } else if (filter === 'product_create') {
+                eventFilterSql = `AND gal.event IN ('product_create_sent', 'product_created', 'group_staged', 'force_published')`;
+            } else if (filter === 'media_sync') {
+                eventFilterSql = `AND gal.event IN ('media_added', 'media_missing', 'redownload_requested', 'media_downloaded')`;
+            } else if (filter === 'errors') {
+                eventFilterSql = `AND (gal.event LIKE '%fail%' OR gal.event LIKE '%error%' OR mg.status IN ('error', 'enrichment_failed', 'media_missing'))`;
+            }
+
+            const eventsQuery = `
+                SELECT 
+                    gal.id,
+                    gal.group_id as "groupId",
+                    gal.event,
+                    gal.actor,
+                    gal.old_value as "oldValue",
+                    gal.new_value as "newValue",
+                    gal.occurred_at as "occurredAt",
+                    mg.jid,
+                    mg.status as "groupStatus",
+                    mg.media_count as "mediaCount",
+                    mg.text_count as "textCount",
+                    mg.has_pending_media as "hasPendingMedia",
+                    mg.error_detail as "errorDetail",
+                    mg.deeplens_product_id as "productId",
+                    p.base_sku as "productCode",
+                    p.title as "productTitle",
+                    c.name as "chatName",
+                    c.vendor_name as "vendorName"
+                FROM wa.group_audit_log gal
+                LEFT JOIN wa.message_groups mg ON gal.group_id = mg.group_id
+                LEFT JOIN wa.chats c ON mg.jid = c.jid
+                LEFT JOIN public.products p ON mg.deeplens_product_id = p.id
+                WHERE 1=1 ${eventFilterSql}
+                ORDER BY gal.id DESC
+                LIMIT $1 OFFSET $2
+            `;
+
+            const eventsRes = await client.query(eventsQuery, filterParams);
+
+            const formatEventItem = (row: any) => {
+                let category: 'reprocess' | 'product_create' | 'media_sync' | 'error' | 'lifecycle' = 'lifecycle';
+                let purposeDescription = '';
+                const evt = row.event;
+                const pCode = row.productCode ? `[${row.productCode}]` : (row.productId ? `[Prod ${row.productId.substring(0, 8)}]` : '');
+
+                if (['split', 'split_reprocess'].includes(evt)) {
+                    category = 'reprocess';
+                    const target = row.newValue?.targetGroupId ? `into Zone ${row.newValue.targetGroupId.substring(0, 8)}` : '';
+                    purposeDescription = `Split Zone: Subtracted media from ${pCode || 'Zone'} ${target} • Media unlinked from original product`;
+                } else if (evt === 'merged') {
+                    category = 'reprocess';
+                    const target = row.newValue?.mergedInto ? `into Zone ${row.newValue.mergedInto.substring(0, 8)}` : (row.newValue?.absorbedGroup ? `absorbed Zone ${row.newValue.absorbedGroup.substring(0, 8)}` : '');
+                    purposeDescription = `Merged Zone: Transferred media ${target} • Product media links unified`;
+                } else if (evt === 'reprocess_triggered') {
+                    category = 'reprocess';
+                    purposeDescription = `Reprocess Queued: Dispatched WhatsApp.group.reprocess event to Kafka`;
+                } else if (evt === 'product_created') {
+                    category = 'product_create';
+                    purposeDescription = `Product Created: Successfully generated product ${pCode} in catalog`;
+                } else if (evt === 'product_create_sent') {
+                    category = 'product_create';
+                    purposeDescription = `Promotion Queued: Dispatched WhatsApp.group.product.create to worker`;
+                } else if (evt === 'group_staged') {
+                    category = 'lifecycle';
+                    purposeDescription = `Zone Staged: New product zone detected with ${row.mediaCount ?? 0} media and ${row.textCount ?? 0} texts`;
+                } else if (evt === 'media_added') {
+                    category = 'media_sync';
+                    purposeDescription = `Media Sync: Added late-arriving media to ${pCode || 'product'}`;
+                } else if (evt.includes('error') || evt.includes('fail')) {
+                    category = 'error';
+                    purposeDescription = `Pipeline Alert: ${row.newValue?.error || row.errorDetail || 'Operation encountered an issue'}`;
+                } else {
+                    purposeDescription = `Event: ${evt} on ${row.groupId?.substring(0, 8) || 'zone'}`;
+                }
+
+                return {
+                    id: row.id,
+                    groupId: row.groupId,
+                    event: row.event,
+                    category,
+                    actor: row.actor || 'system',
+                    occurredAt: row.occurredAt,
+                    purposeDescription,
+                    productCode: row.productCode,
+                    productId: row.productId,
+                    chatName: row.chatName,
+                    vendorName: row.vendorName,
+                    jid: row.jid,
+                    mediaCount: row.mediaCount,
+                    textCount: row.textCount,
+                    hasPendingMedia: row.hasPendingMedia,
+                    groupStatus: row.groupStatus,
+                    errorDetail: row.errorDetail,
+                    details: row.newValue || row.oldValue || null,
+                };
+            };
+
+            const recentEvents = eventsRes.rows.map(formatEventItem);
+
+            // 4. Active In-Flight Queue (Staging, Sent, or Pending Media)
+            const activeQueueRes = await client.query(`
+                SELECT 
+                    mg.group_id as "groupId",
+                    mg.jid,
+                    mg.status,
+                    mg.has_pending_media as "hasPendingMedia",
+                    mg.media_count as "mediaCount",
+                    mg.text_count as "textCount",
+                    mg.description,
+                    mg.error_detail as "errorDetail",
+                    mg.last_message_at as "lastMessageAt",
+                    mg.updated_at as "updatedAt",
+                    c.name as "chatName",
+                    c.vendor_name as "vendorName",
+                    p.base_sku as "productCode",
+                    mg.deeplens_product_id as "productId"
+                FROM wa.message_groups mg
+                LEFT JOIN wa.chats c ON mg.jid = c.jid
+                LEFT JOIN public.products p ON mg.deeplens_product_id = p.id
+                WHERE mg.status IN ('staging', 'product_create_sent') 
+                   OR mg.has_pending_media = true
+                   OR mg.status IN ('error', 'enrichment_failed')
+                ORDER BY mg.updated_at DESC
+                LIMIT 50
+            `);
+
+            res.json({
+                success: true,
+                metrics,
+                catalog,
+                recentEvents,
+                activeQueue: activeQueueRes.rows,
+                totalEvents: recentEvents.length,
+            });
+        } catch (err: any) {
+            logger.error({ err: err.message }, 'Failed to fetch pipeline events');
+            res.status(500).json({ success: false, message: err.message });
+        }
+    });
+
     return router;
 }

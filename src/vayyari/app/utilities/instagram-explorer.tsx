@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { View, FlatList, TouchableOpacity, BackHandler, RefreshControl, Alert } from 'react-native';
-import { Text, IconButton, Surface, ActivityIndicator, Appbar, Menu, Button, List, useTheme } from 'react-native-paper';
+import { Text, IconButton, Surface, ActivityIndicator, Appbar, Menu, Button, List, TextInput, useTheme } from 'react-native-paper';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
@@ -10,6 +10,7 @@ import { ProfileHeader } from '@/components/utility/instagram/ProfileHeader';
 import { useInstagramExplorer } from '@/hooks/useInstagramExplorer';
 import { instagramService } from '@/services/instagram.service';
 import { getInstagramPostUrl } from '@/utils/instagram-helpers';
+import { fuzzyFilter } from '@/utils/fuzzySearch';
 import { ProfileAvatar } from '@/components/utility/instagram/ProfileAvatar';
 import { CompetitorBanner } from '@/components/utility/instagram/CompetitorBanner';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -41,6 +42,7 @@ export default function InstagramExplorer() {
     selectedProfile,
     setSelectedProfile,
     profileData,
+    setProfileData,
     loading,
     quota,
     bioExpanded,
@@ -81,12 +83,30 @@ export default function InstagramExplorer() {
   const [menuAnchor, setMenuAnchor] = useState<{ x: number, y: number }>({ x: 0, y: 0 });
   const [selectionMenuVisible, setSelectionMenuVisible] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
+  const [searchQuery, setSearchQuery] = useState('');
   const isNavigating = useRef(false);
 
   const selectionMode = selectedPosts.size > 0;
 
   const isCompetitorProfile = (profileData?.profile?.profileCategory || '').toLowerCase() === 'competitors' || 
     (profileData?.profile?.profileCategory || '').toLowerCase() === 'competitor';
+
+  const filteredVideos = React.useMemo(() => {
+    const list = profileData?.videos || [];
+    if (!searchQuery.trim()) return list;
+    return fuzzyFilter(
+      list,
+      searchQuery,
+      (item: any) => [
+        item.caption,
+        item.description,
+        item.title,
+        item.productCode,
+        item.ownerUsername,
+      ],
+      0.5
+    );
+  }, [profileData?.videos, searchQuery]);
 
   const renderVideoItem = useCallback(({ item }: { item: any }) => {
     const postItem = {
@@ -136,6 +156,7 @@ export default function InstagramExplorer() {
       router.setParams({ profile: undefined, selectedProfile: undefined, from: undefined });
       processedProfileParamRef.current = null;
       setSelectedProfile(null);
+      setSearchQuery('');
 
       if (from === 'competitors') {
         if (router.canGoBack()) {
@@ -170,6 +191,25 @@ export default function InstagramExplorer() {
 
   useFocusEffect(
     React.useCallback(() => {
+      // Sync cached posts if any status changed while in post-detail (e.g. marked deleted)
+      const cached = instagramService.getLastFetchedPosts();
+      if (cached && cached.length > 0) {
+        setProfileData(prev => {
+          if (!prev?.videos) return prev;
+          const cachedMap = new Map(cached.map(p => [p.id, p]));
+          let changed = false;
+          const updatedVideos = prev.videos.map(v => {
+            const match = cachedMap.get(v.id);
+            if (match && match.deletedOnInstagram !== v.deletedOnInstagram) {
+              changed = true;
+              return { ...v, deletedOnInstagram: match.deletedOnInstagram };
+            }
+            return v;
+          });
+          return changed ? { ...prev, videos: updatedVideos } : prev;
+        });
+      }
+
       const backAction = () => {
         if (selectionMode) {
           setSelectedPosts(new Map());
@@ -184,7 +224,7 @@ export default function InstagramExplorer() {
 
       const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
       return () => backHandler.remove();
-    }, [selectionMode, selectedProfile, handleBack])
+    }, [selectionMode, selectedProfile, handleBack, setProfileData])
   );
 
   const toggleSelection = (post: any) => {
@@ -290,7 +330,7 @@ export default function InstagramExplorer() {
         </Appbar.Header>
 
         <FlatList
-          data={profileData.videos}
+          data={filteredVideos}
           renderItem={renderVideoItem}
           keyExtractor={(item) => item.id}
           numColumns={3}
@@ -324,8 +364,39 @@ export default function InstagramExplorer() {
                 } as any)}
                 bioExpanded={bioExpanded}
                 onToggleBio={() => setBioExpanded(!bioExpanded)}
-                onBack={handleBack}
               />
+
+              {!selectionMode && (
+                <View style={styles.searchBarContainer}>
+                  <TextInput
+                    mode="outlined"
+                    placeholder="Search posts by description..."
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    style={styles.searchInput}
+                    dense
+                    left={<TextInput.Icon icon="magnify" size={18} />}
+                    right={
+                      searchQuery ? (
+                        <TextInput.Icon icon="close" size={16} onPress={() => setSearchQuery('')} />
+                      ) : undefined
+                    }
+                    outlineStyle={styles.searchOutline}
+                  />
+                  {searchQuery.trim().length > 0 && (
+                    <View style={styles.searchCountRow}>
+                      <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                        Showing {filteredVideos.length} of {profileData.videos?.length || 0} posts
+                      </Text>
+                      <TouchableOpacity onPress={() => setSearchQuery('')}>
+                        <Text variant="labelSmall" style={{ color: theme.colors.primary, fontWeight: '700' }}>
+                          Clear
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              )}
 
               {!selectionMode && (
                 <View style={styles.filterBar}>
@@ -416,7 +487,14 @@ export default function InstagramExplorer() {
           ListEmptyComponent={
             !profileData.profile?.isDataDeleted ? (
               <View style={styles.empty}>
-                <Text variant="bodyLarge">No posts found</Text>
+                <Text variant="bodyLarge">
+                  {searchQuery.trim() ? `No posts matching "${searchQuery.trim()}"` : 'No posts found'}
+                </Text>
+                {searchQuery.trim() ? (
+                  <Button mode="text" compact onPress={() => setSearchQuery('')} style={{ marginTop: 8 }}>
+                    Clear search
+                  </Button>
+                ) : null}
               </View>
             ) : null
           }
@@ -573,7 +651,7 @@ export default function InstagramExplorer() {
             onPress={() => router.push('/utilities/instagram/post-curation' as any)}
             activeOpacity={0.7}
             style={{ 
-              width: 82, 
+              flex: 1, 
               aspectRatio: 0.95,
               backgroundColor: theme.colors.surface, 
               borderRadius: 14, 
@@ -603,7 +681,7 @@ export default function InstagramExplorer() {
             onPress={() => router.push('/utilities/instagram/post-planner' as any)}
             activeOpacity={0.7}
             style={{ 
-              width: 82, 
+              flex: 1, 
               aspectRatio: 0.95,
               backgroundColor: theme.colors.surface, 
               borderRadius: 14, 
@@ -624,7 +702,7 @@ export default function InstagramExplorer() {
               <MaterialCommunityIcons name="grid-large" size={22} color="#7E22CE" />
             </View>
             <Text variant="labelSmall" style={{ fontWeight: '700', textAlign: 'center', color: theme.colors.onSurface, fontSize: 10 }} numberOfLines={1}>
-              Post Planner
+              Planner
             </Text>
           </TouchableOpacity>
 
@@ -633,7 +711,7 @@ export default function InstagramExplorer() {
             onPress={() => router.push('/utilities/instagram/collab-planner' as any)}
             activeOpacity={0.7}
             style={{ 
-              width: 82, 
+              flex: 1, 
               aspectRatio: 0.95,
               backgroundColor: theme.colors.surface, 
               borderRadius: 14, 
@@ -655,6 +733,36 @@ export default function InstagramExplorer() {
             </View>
             <Text variant="labelSmall" style={{ fontWeight: '700', textAlign: 'center', color: theme.colors.onSurface, fontSize: 10 }} numberOfLines={1}>
               Collab
+            </Text>
+          </TouchableOpacity>
+
+          {/* Tile 4: WA Updates */}
+          <TouchableOpacity 
+            onPress={() => router.push('/utilities/instagram/wa-updates' as any)}
+            activeOpacity={0.7}
+            style={{ 
+              flex: 1, 
+              aspectRatio: 0.95,
+              backgroundColor: theme.colors.surface, 
+              borderRadius: 14, 
+              borderWidth: 1,
+              borderColor: theme.colors.outlineVariant || 'rgba(0,0,0,0.08)',
+              paddingVertical: 10, 
+              paddingHorizontal: 4,
+              alignItems: 'center',
+              justifyContent: 'center',
+              elevation: 1,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.04,
+              shadowRadius: 4,
+            }}
+          >
+            <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(37, 211, 102, 0.1)', alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}>
+              <MaterialCommunityIcons name="whatsapp" size={22} color="#25D366" />
+            </View>
+            <Text variant="labelSmall" style={{ fontWeight: '700', textAlign: 'center', color: theme.colors.onSurface, fontSize: 10 }} numberOfLines={1}>
+              WA Updates
             </Text>
           </TouchableOpacity>
         </View>

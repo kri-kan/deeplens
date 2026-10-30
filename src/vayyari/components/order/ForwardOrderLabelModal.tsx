@@ -161,7 +161,7 @@ export function ForwardOrderLabelModal({
       : `Apparel - (${itemsCount || 1} items)`
   );
   const [totalAmount, setTotalAmount] = useState<string>(
-    ((parseFloat(groupTotal as any) || 0) * 4).toString()
+    ((parseFloat(groupTotal as any) || 0) * 3).toString()
   );
   const [paymentMode, setPaymentMode] = useState<'COD' | 'Prepaid'>(
     isCod ? 'COD' : 'Prepaid'
@@ -282,7 +282,7 @@ export function ForwardOrderLabelModal({
             ? `${vendorName} - (${itemsCount || 1} items)`
             : `Apparel - (${itemsCount || 1} items)`
         );
-        setTotalAmount(((parseFloat(groupTotal as any) || 0) * 4).toString());
+        setTotalAmount(((parseFloat(groupTotal as any) || 0) * 3).toString());
         setPaymentMode(isCod ? 'COD' : 'Prepaid');
         setWeightGrams((Math.max(1, itemsCount) * 400).toString());
         setCodAmount(isCod ? (groupTotal || 0).toString() : '0');
@@ -564,7 +564,7 @@ export function ForwardOrderLabelModal({
         orderType: modalOrderType === 'reseller' ? 'Reseller' : 'Customer',
         resellerName: modalOrderType === 'reseller' ? (modalResellerName.trim() || undefined) : undefined,
         sellerName: sellerName.trim(),
-        sellerAddress: '', // Sent as "" empty string behind the scenes so Delhivery does not print physical warehouse street address
+        sellerAddress: 'Hyderabad',
       };
 
       const res: any = await searchApiClient.post(
@@ -610,7 +610,7 @@ export function ForwardOrderLabelModal({
           paymentMode: paymentMode === 'COD' ? 'COD' : 'Prepaid',
           collectibleAmount: paymentMode === 'COD' ? (parseFloat(codAmount) || 0) : 0,
           sellerName: sellerName.trim(),
-          sellerAddress: '',
+          sellerAddress: 'Hyderabad',
         };
 
         setGeneratedAwb(awb);
@@ -1143,7 +1143,7 @@ export function ForwardOrderLabelModal({
                   />
                 </YStack>
 
-                {/* Quantity & Total Amount (4x declared liability value) */}
+                {/* Quantity & Total Amount (3x declared liability value) */}
                 <XStack gap={10}>
                   <YStack flex={1} gap={4}>
                     <Text fontSize={10} fontWeight="700" color={tokens.textSecondary}>
@@ -1180,7 +1180,7 @@ export function ForwardOrderLabelModal({
                         borderRadius={3}
                       >
                         <Text fontSize={9} fontWeight="800" color={tokens.accent}>
-                          4× Transit Cover
+                          3× Transit Cover
                         </Text>
                       </XStack>
                     </XStack>

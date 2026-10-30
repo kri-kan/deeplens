@@ -48,7 +48,31 @@ export interface CampaignThemeDefinition {
   dark: CampaignColorTokens;
 }
 
+export type FormFactor = 'desktop' | 'tablet' | 'mobile';
+
+export interface ResponsiveToken<T> {
+  mobile: T;
+  tablet: T;
+  desktop: T;
+}
+
+export interface LayoutTokens {
+  /** Responsive container max width ('100%' on mobile, 768 on tablet, 1240 on desktop) */
+  containerMaxWidth: ResponsiveToken<number | string>;
+  /** Responsive horizontal page margin/padding (12px on mobile, 20px on tablet, 28px on desktop) */
+  pagePaddingHorizontal: ResponsiveToken<number>;
+  /** Responsive vertical page padding (12px on mobile, 16px on tablet, 24px on desktop) */
+  pagePaddingVertical: ResponsiveToken<number>;
+  /** Responsive card internal padding (12px on mobile, 16px on tablet, 20px on desktop) */
+  cardPadding: ResponsiveToken<number>;
+  /** Responsive gutter between grid tiles (8px on mobile, 12px on tablet, 16px on desktop) */
+  gridGutter: ResponsiveToken<number>;
+  /** Responsive modal and dialog sheet maximum width ('100%' on mobile, 640 on tablet, 720 on desktop) */
+  modalMaxWidth: ResponsiveToken<number | string>;
+}
+
 export interface SharedTokens {
+  layout: LayoutTokens;
   spacing: {
     xs: number;
     sm: number;
@@ -147,6 +171,7 @@ export interface ControlSizeTokens {
 export interface FullThemeTokens extends CampaignColorTokens, StatusColorTokens {
   campaign: CampaignName;
   colorScheme: ColorScheme;
+  layout: SharedTokens['layout'];
   spacing: SharedTokens['spacing'];
   radius: SharedTokens['radius'];
   typography: SharedTokens['typography'];

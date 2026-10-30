@@ -13,11 +13,11 @@ description: >
 Vayyari Admin is a **React Native / Expo** mobile and web application that serves as the administrative client for DeepLens and Vayyari Fashions operations. It features product browsing, WhatsApp-integrated media management, AI features, and visual search.
 
 - **Framework**: Expo SDK 57 (Expo Router — file-system routing)
-- **UI Library**: `react-native-paper` (Material Design 3) + custom Emerald theme
-- **State**: React Context API (no Redux/Zustand)
+- **UI Library**: `tamagui` (Tokens, atomic components, layouts) + `react-native-paper` (Material Design 3) + custom Emerald theme
+- **State**: Redux Toolkit & RTK Query (`src/vayyari/store/`) for catalog, customer auth, and device telemetry; React Context for admin authentication
 - **Navigation**: Expo Router (file-system based, Slot/Stack/Tabs)
 - **Identity**: JWT via DeepLens Identity API at port `5198`
-- **Telemetry**: OpenTelemetry (lazy-loaded at startup via `utils/telemetry.ts`)
+- **Telemetry**: OpenTelemetry (lazy-loaded at startup via `utils/telemetry.ts`) & Device Fleet monitoring
 
 ---
 
@@ -149,6 +149,76 @@ export const productService = {
 
 ---
 
+## State Management: Redux Toolkit & RTK Query
+
+Vayyari uses **Redux Toolkit (RTK)** and **RTK Query** for server state caching, pagination, optimistic updates, and background refetching under `store/`.
+
+```typescript
+// store/index.ts
+import { catalogApi } from './api/catalogApi';
+import { customerAuthApi } from './api/customerAuthApi';
+import { telemetryApi } from './api/telemetryApi';
+import customerAuthReducer from './slices/customerAuthSlice';
+
+export const store = configureStore({
+  reducer: {
+    [catalogApi.reducerPath]: catalogApi.reducer,
+    [customerAuthApi.reducerPath]: customerAuthApi.reducer,
+    [telemetryApi.reducerPath]: telemetryApi.reducer,
+    customerAuth: customerAuthReducer,
+  },
+  middleware: (getDefaultMiddleware) =>
+    getDefaultMiddleware().concat(
+      catalogApi.middleware,
+      customerAuthApi.middleware,
+      telemetryApi.middleware
+    ),
+});
+```
+
+### RTK Query Hooks Usage
+- **Catalog**: `useGetProductsQuery`, `useToggleStarMutation` (with optimistic updates and zero-delay UI feedback via `catalogStarRules.ts`).
+- **Telemetry**: `useGetDeviceFleetMetricsQuery`, `useGetShopperActivityQuery` for real-time fleet analytics.
+- **Customer Auth**: `useCustomerLoginMutation`, `useSendOtpMutation` for customer storefront sessions.
+
+---
+
+## Visual Lens & Ephemeral Visual Similarity Search
+
+Visual similarity search is strictly an **ephemeral in-memory** vector operation without persisting orphan media.
+
+```typescript
+import { useVisualSearchNavigation } from '@/hooks/useVisualSearchNavigation';
+import { VisualLensButton } from '@/components/tamagui-ui/atoms/VisualLensButton';
+
+const { navigateToVisualSearch } = useVisualSearchNavigation();
+
+// Launches similarity query from any media thumbnail or full screen viewer:
+navigateToVisualSearch({
+  imageUrl: targetImageUrl,
+  sourceContext: 'whatsapp-chat',
+  productId: currentProduct?.id,
+});
+```
+- **High-Media Zoning**: When `mediaCount > 30`, visual similarity tiles activate the high-media badge.
+- **Scroll Decoupling**: Pull-to-refresh re-runs the similarity query instead of wiping catalog state; pagination is explicitly disabled (`hasMore: false`) to prevent endless background fetches.
+
+---
+
+## Responsive Layout Foundation
+
+Standardized responsive tokens and viewport hooks are located in `theme/layout.ts` and `theme/useResponsiveLayout.ts`:
+
+```typescript
+import { useResponsiveLayout } from '@/theme/useResponsiveLayout';
+
+const { isMobile, isTablet, isDesktop, columns, containerWidth } = useResponsiveLayout();
+```
+- **Breakpoints**: Mobile (<768px), Tablet (768–1024px), Desktop (>1024px).
+- **Grids**: Dynamically allocates 1, 2, 3, or 4 grid columns for catalog tiles and device fleet dashboards.
+
+---
+
 ## OpenTelemetry in Vayyari
 
 OpenTelemetry is **lazy-loaded** to avoid slowing startup. Already initialized in `_layout.tsx`.
@@ -217,7 +287,7 @@ cd src/vayyari/android
   -x lintVitalAnalyzeRelease \
   -Pandroid.enablePngCrunchInReleaseBuilds=false
 
-# Push OTA bundle to MinIO local/vayyari-updates
+# Push OTA bundle to MinIO local/admin-updates
 cd src/vayyari
 ./push-update.sh --notes "Release summary"
 ```
@@ -233,7 +303,8 @@ cd src/vayyari
 5. **OpenTelemetry lazy load**: OTel is imported dynamically after `EXPO_PUBLIC_OTEL_LAZY_LOAD_DELAY_MS` ms — never import from `@opentelemetry/*` at the top level in screen files
 6. **GestureHandlerRootView**: Must be at the root — already in `_layout.tsx`. Don't add another one inside screens.
 7. **AAPT2 PNG Crunching**: Always pass `-Pandroid.enablePngCrunchInReleaseBuilds=false` during release builds because courier logo assets contain JPEG headers under `.png` extensions.
-8. **Expo Updates Protocol Deferral**: Runtime OTA auto-polling is deferred (`expo-updates` disabled in `app.json`). Updates are delivered via APK reinstallation from `publish/admin-app/vayyari-admin-latest.apk`.
+8. **Self-Hosted OTA Updates**: The ecosystem runs 100% self-hosted OTA updates using MinIO bucket `admin-updates` and Nginx `/admin-updates/manifest.json`. `MainApplication.kt` hooks into React Host loading to dynamically load `ota/active/bundle.js` when an update is active.
+
 
 ---
 

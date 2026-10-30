@@ -2,6 +2,7 @@ import React from 'react';
 import { ArrowRight } from 'lucide-react';
 import { InstagramIcon, WhatsAppIcon, FacebookIcon, YouTubeIcon } from './Icons';
 import { sounds } from '../utils/audio';
+import { telemetry } from '../services/telemetry';
 
 const CHANNELS = [
   {
@@ -106,7 +107,10 @@ export const SocialSection: React.FC = () => {
                 href={ch.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={() => sounds.playTick()}
+                onClick={() => {
+                  sounds.playTick();
+                  telemetry.trackSocialClick(ch.id, ch.url);
+                }}
                 style={{
                   background: '#0a0305',
                   border: '1px solid rgba(212, 175, 55, 0.22)',

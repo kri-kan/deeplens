@@ -7,5 +7,14 @@
     "paths": {
       "@/*": ["../../vayyari/*"]
     }
-  }
+  },
+  "include": [
+    "src/**/*",
+    "index.ts",
+    ".storybook/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "../../scratch"
+  ]
 }

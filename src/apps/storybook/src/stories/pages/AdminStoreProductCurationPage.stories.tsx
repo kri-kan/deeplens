@@ -270,3 +270,41 @@ export const Stage5LiveStorefrontPreview: Story = {
     initialShowPreview: true,
   },
 };
+
+/**
+ * 6. Store Curation: Main Hub with Manage SKUs Tile:
+ * Shows the Hub screen with Tile 3 ("Manage SKUs") below Tile 2 ("Metadata") for products already in store.
+ */
+export const StoreCurationHubWithManageSkusTile: Story = {
+  name: '6. Store Curation: Main Hub with Manage SKUs Tile',
+  args: {
+    initialScreen: 'hub',
+    isAlreadyInStore: true,
+    initialShowPreview: false,
+  },
+  parameters: {
+    formFactorShell: {
+      defaultFactor: 'mobile',
+    },
+  },
+};
+
+/**
+ * 7. Manage SKUs Screen:
+ * Complete interactive item-level variations screen allowing price overrides, stock stepper & presets,
+ * join waitlist toggle for restockable skus, and custom highlighted PDP tag messages.
+ */
+export const ManageSkusScreen: Story = {
+  name: '7. Manage SKUs: Item Pricing, Stock Stepper, Restock Waitlist & Highlighted Tags',
+  args: {
+    initialScreen: 'manage_skus',
+    isAlreadyInStore: true,
+    initialShowPreview: false,
+  },
+  parameters: {
+    formFactorShell: {
+      defaultFactor: 'mobile',
+    },
+  },
+};
+

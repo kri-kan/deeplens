@@ -77,6 +77,8 @@ export default function CollabQueueRoute() {
           targetCollabAccounts: p.targetCollabAccounts || [],
           channelPhases: p.channelPhases || [],
           curationStatus: 'queued',
+          isBoosted: p.isBoosted || false,
+          boostedMetrics: p.boostedMetrics || null,
         };
       });
 

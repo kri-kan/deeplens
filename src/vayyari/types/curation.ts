@@ -28,6 +28,9 @@ export interface StoreCurationMediaItem {
   activeDisplaySource?: 'original' | 'modified';
   hasModified?: boolean;
   transformRecipe?: any;
+  sourcePlatform?: 'instagram' | 'catalog' | 'whatsapp';
+  sourceUrl?: string;
+  sourcePostId?: string;
 }
 
 export interface StoreColorGroup {
@@ -42,6 +45,27 @@ export interface StoreColorGroup {
   colors?: string[];
   colorCount?: number;
   isAvailable?: boolean;
+  price?: number | null;
+  mrp?: number | null;
+  stockQuantity?: number;
+  allowWaitlist?: boolean;
+  customMessage?: string;
+}
+
+export interface StoreSkuItem {
+  id: string;
+  skuCode: string;
+  colorwayName: string;
+  colorHex: string;
+  secondaryHex?: string;
+  colorGroupId?: string;
+  price?: number | null;
+  mrp?: number | null;
+  isPriceInherited: boolean;
+  stockQuantity: number;
+  allowWaitlist: boolean;
+  customMessage?: string;
+  thumbnailUrl?: string;
 }
 
 export interface StoreAuditLogEntry {

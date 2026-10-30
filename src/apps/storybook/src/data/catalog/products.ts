@@ -55,8 +55,8 @@ export const DIVERSE_CATALOG_PRODUCTS: CatalogTestProduct[] = [
         colors: ['#E91E63', '#7A2E8C'],
         colorCount: 2,
         images: [
-          { id: '1', label: 'Drape & Zari Border', url: 'http://media.vayyarifashions.com/store-assets/products/vf2b56/1_6bfadfd5.jpg' },
-          { id: '4', label: 'Pleats & Body Weave', url: 'http://media.vayyarifashions.com/store-assets/products/vf2b56/4_0690ec5f.jpg' },
+          { id: '1', label: 'Drape & Zari Border', url: 'http://adminapi.vayyarifashions.com/store-assets/products/vf2b56/1_6bfadfd5.jpg' },
+          { id: '4', label: 'Pleats & Body Weave', url: 'http://adminapi.vayyarifashions.com/store-assets/products/vf2b56/4_0690ec5f.jpg' },
         ],
       },
       navy_powder: {
@@ -68,8 +68,8 @@ export const DIVERSE_CATALOG_PRODUCTS: CatalogTestProduct[] = [
         colors: ['#1A2875', '#B8D4E8'],
         colorCount: 2,
         images: [
-          { id: '3', label: 'Full Ensemble View', url: 'http://media.vayyarifashions.com/store-assets/products/vf2b56/3_8333ce64.jpg' },
-          { id: '5', label: 'Tested Zari Pallu Detail', url: 'http://media.vayyarifashions.com/store-assets/products/vf2b56/5_23c84a50.jpg' },
+          { id: '3', label: 'Full Ensemble View', url: 'http://adminapi.vayyarifashions.com/store-assets/products/vf2b56/3_8333ce64.jpg' },
+          { id: '5', label: 'Tested Zari Pallu Detail', url: 'http://adminapi.vayyarifashions.com/store-assets/products/vf2b56/5_23c84a50.jpg' },
         ],
       },
       tangerine_magenta: {
@@ -81,8 +81,8 @@ export const DIVERSE_CATALOG_PRODUCTS: CatalogTestProduct[] = [
         colors: ['#E8832A', '#CC2D72'],
         colorCount: 2,
         images: [
-          { id: '2', label: 'Border Contrast Detail', url: 'http://media.vayyarifashions.com/store-assets/products/vf2b56/2_94c26917.jpg' },
-          { id: '10', label: 'Fabric Texture Close-up', url: 'http://media.vayyarifashions.com/store-assets/products/vf2b56/10_c1cd4dbd.jpg' },
+          { id: '2', label: 'Border Contrast Detail', url: 'http://adminapi.vayyarifashions.com/store-assets/products/vf2b56/2_94c26917.jpg' },
+          { id: '10', label: 'Fabric Texture Close-up', url: 'http://adminapi.vayyarifashions.com/store-assets/products/vf2b56/10_c1cd4dbd.jpg' },
         ],
       },
       tangerine_ruby: {
@@ -94,8 +94,8 @@ export const DIVERSE_CATALOG_PRODUCTS: CatalogTestProduct[] = [
         colors: ['#E8832A', '#C0392B'],
         colorCount: 2,
         images: [
-          { id: '6', label: 'Grand Pallu Weave', url: 'http://media.vayyarifashions.com/store-assets/products/vf2b56/6_6034e2b4.jpg' },
-          { id: '7', label: 'Draped Look on Mannequin', url: 'http://media.vayyarifashions.com/store-assets/products/vf2b56/7_4f5e5b1e.jpg' },
+          { id: '6', label: 'Grand Pallu Weave', url: 'http://adminapi.vayyarifashions.com/store-assets/products/vf2b56/6_6034e2b4.jpg' },
+          { id: '7', label: 'Draped Look on Mannequin', url: 'http://adminapi.vayyarifashions.com/store-assets/products/vf2b56/7_4f5e5b1e.jpg' },
         ],
       },
       pine_powder: {
@@ -107,17 +107,17 @@ export const DIVERSE_CATALOG_PRODUCTS: CatalogTestProduct[] = [
         colors: ['#1B4D3E', '#B8D4E8'],
         colorCount: 2,
         images: [
-          { id: '8', label: 'Forest Green Saree Body', url: 'http://media.vayyarifashions.com/store-assets/products/vf2b56/8_73cb3005.jpg' },
-          { id: '9', label: 'Sky Blue Zari Border', url: 'http://media.vayyarifashions.com/store-assets/products/vf2b56/9_06defc48.jpg' },
+          { id: '8', label: 'Forest Green Saree Body', url: 'http://adminapi.vayyarifashions.com/store-assets/products/vf2b56/8_73cb3005.jpg' },
+          { id: '9', label: 'Sky Blue Zari Border', url: 'http://adminapi.vayyarifashions.com/store-assets/products/vf2b56/9_06defc48.jpg' },
         ],
       },
     },
     selectedColorDefault: 'violet_plum',
     mediaGallery: [
-      'http://media.vayyarifashions.com/store-assets/products/vf2b56/1_6bfadfd5.jpg',
-      'http://media.vayyarifashions.com/store-assets/products/vf2b56/2_94c26917.jpg',
-      'http://media.vayyarifashions.com/store-assets/products/vf2b56/3_8333ce64.jpg',
-      'http://media.vayyarifashions.com/store-assets/products/vf2b56/4_0690ec5f.jpg',
+      'http://adminapi.vayyarifashions.com/store-assets/products/vf2b56/1_6bfadfd5.jpg',
+      'http://adminapi.vayyarifashions.com/store-assets/products/vf2b56/2_94c26917.jpg',
+      'http://adminapi.vayyarifashions.com/store-assets/products/vf2b56/3_8333ce64.jpg',
+      'http://adminapi.vayyarifashions.com/store-assets/products/vf2b56/4_0690ec5f.jpg',
     ],
   },
 
@@ -197,7 +197,7 @@ export const DIVERSE_CATALOG_PRODUCTS: CatalogTestProduct[] = [
     },
     selectedColorDefault: 'rani_gold',
     mediaGallery: [
-      'http://media.vayyarifashions.com/store-assets/products/vf2b56/1_6bfadfd5.jpg',
+      'http://adminapi.vayyarifashions.com/store-assets/products/vf2b56/1_6bfadfd5.jpg',
     ],
   },
 
@@ -246,9 +246,9 @@ export const DIVERSE_CATALOG_PRODUCTS: CatalogTestProduct[] = [
         colors: ['#880E4F', '#4A148C'],
         colorCount: 2,
         images: [
-          { id: 'd1', label: 'Full 4M Flare View', url: 'http://media.vayyarifashions.com/store-assets/products/vf2f4a/1789207340367_1789207338.jpg' },
-          { id: 'd2', label: 'Yoke Zari Embroidery', url: 'http://media.vayyarifashions.com/store-assets/products/vf2f4a/1789207341253_1789207339.jpg' },
-          { id: 'd3', label: 'Organza Dupatta Drape', url: 'http://media.vayyarifashions.com/store-assets/products/vf2f4a/1789207341699_1789207339.jpg' },
+          { id: 'd1', label: 'Full 4M Flare View', url: 'http://adminapi.vayyarifashions.com/store-assets/products/vf2f4a/1789207340367_1789207338.jpg' },
+          { id: 'd2', label: 'Yoke Zari Embroidery', url: 'http://adminapi.vayyarifashions.com/store-assets/products/vf2f4a/1789207341253_1789207339.jpg' },
+          { id: 'd3', label: 'Organza Dupatta Drape', url: 'http://adminapi.vayyarifashions.com/store-assets/products/vf2f4a/1789207341699_1789207339.jpg' },
         ],
       },
       teal_peacock: {
@@ -260,15 +260,15 @@ export const DIVERSE_CATALOG_PRODUCTS: CatalogTestProduct[] = [
         colors: ['#00695C', '#01579B'],
         colorCount: 2,
         images: [
-          { id: 'd4', label: 'Teal Anarkali Flare', url: 'http://media.vayyarifashions.com/store-assets/products/vf2f4a/1789207340367_1789207338.jpg' },
+          { id: 'd4', label: 'Teal Anarkali Flare', url: 'http://adminapi.vayyarifashions.com/store-assets/products/vf2f4a/1789207340367_1789207338.jpg' },
         ],
       },
     },
     selectedColorDefault: 'crimson_wine',
     mediaGallery: [
-      'http://media.vayyarifashions.com/store-assets/products/vf2f4a/1789207340367_1789207338.jpg',
-      'http://media.vayyarifashions.com/store-assets/products/vf2f4a/1789207341253_1789207339.jpg',
-      'http://media.vayyarifashions.com/store-assets/products/vf2f4a/1789207341699_1789207339.jpg',
+      'http://adminapi.vayyarifashions.com/store-assets/products/vf2f4a/1789207340367_1789207338.jpg',
+      'http://adminapi.vayyarifashions.com/store-assets/products/vf2f4a/1789207341253_1789207339.jpg',
+      'http://adminapi.vayyarifashions.com/store-assets/products/vf2f4a/1789207341699_1789207339.jpg',
     ],
   },
 
@@ -317,8 +317,8 @@ export const DIVERSE_CATALOG_PRODUCTS: CatalogTestProduct[] = [
         colors: ['#E91E63', '#FFD600'],
         colorCount: 2,
         images: [
-          { id: 'k1', label: 'Lehenga Choli Set View', url: 'http://media.vayyarifashions.com/store-assets/products/vf46d/1782041799714_1782041799.jpg' },
-          { id: 'k2', label: 'Choli Neck & Latkan Details', url: 'http://media.vayyarifashions.com/store-assets/products/vf46d/1782041801162_1782041800.jpg' },
+          { id: 'k1', label: 'Lehenga Choli Set View', url: 'http://adminapi.vayyarifashions.com/store-assets/products/vf46d/1782041799714_1782041799.jpg' },
+          { id: 'k2', label: 'Choli Neck & Latkan Details', url: 'http://adminapi.vayyarifashions.com/store-assets/products/vf46d/1782041801162_1782041800.jpg' },
         ],
       },
       peacock_orange: {
@@ -330,14 +330,14 @@ export const DIVERSE_CATALOG_PRODUCTS: CatalogTestProduct[] = [
         colors: ['#0288D1', '#FF6D00'],
         colorCount: 2,
         images: [
-          { id: 'k3', label: 'Boy & Girl Matching Set', url: 'http://media.vayyarifashions.com/store-assets/products/vf46d/1782041799714_1782041799.jpg' },
+          { id: 'k3', label: 'Boy & Girl Matching Set', url: 'http://adminapi.vayyarifashions.com/store-assets/products/vf46d/1782041799714_1782041799.jpg' },
         ],
       },
     },
     selectedColorDefault: 'rani_yellow',
     mediaGallery: [
-      'http://media.vayyarifashions.com/store-assets/products/vf46d/1782041799714_1782041799.jpg',
-      'http://media.vayyarifashions.com/store-assets/products/vf46d/1782041801162_1782041800.jpg',
+      'http://adminapi.vayyarifashions.com/store-assets/products/vf46d/1782041799714_1782041799.jpg',
+      'http://adminapi.vayyarifashions.com/store-assets/products/vf46d/1782041801162_1782041800.jpg',
     ],
   },
 
@@ -394,8 +394,8 @@ export const DIVERSE_CATALOG_PRODUCTS: CatalogTestProduct[] = [
         colors: ['#4A148C'],
         colorCount: 2,
         images: [
-          { id: 'l1', label: 'Full 3.5M Can-Can Flare', url: 'http://media.vayyarifashions.com/store-assets/products/vf2f4f/1789631678570_1789631676.jpg' },
-          { id: 'l2', label: 'Yoke & Waistband Sequin Embroidery', url: 'http://media.vayyarifashions.com/store-assets/products/vf2f4f/1789631678737_1789631676.jpg' },
+          { id: 'l1', label: 'Full 3.5M Can-Can Flare', url: 'http://adminapi.vayyarifashions.com/store-assets/products/vf2f4f/1789631678570_1789631676.jpg' },
+          { id: 'l2', label: 'Yoke & Waistband Sequin Embroidery', url: 'http://adminapi.vayyarifashions.com/store-assets/products/vf2f4f/1789631678737_1789631676.jpg' },
         ],
       },
       ruby_crimson: {
@@ -407,14 +407,14 @@ export const DIVERSE_CATALOG_PRODUCTS: CatalogTestProduct[] = [
         colors: ['#B71C1C'],
         colorCount: 2,
         images: [
-          { id: 'l3', label: 'Bridal Crimson Flare', url: 'http://media.vayyarifashions.com/store-assets/products/vf2f4f/1789631678570_1789631676.jpg' },
+          { id: 'l3', label: 'Bridal Crimson Flare', url: 'http://adminapi.vayyarifashions.com/store-assets/products/vf2f4f/1789631678570_1789631676.jpg' },
         ],
       },
     },
     selectedColorDefault: 'plum_purple',
     mediaGallery: [
-      'http://media.vayyarifashions.com/store-assets/products/vf2f4f/1789631678570_1789631676.jpg',
-      'http://media.vayyarifashions.com/store-assets/products/vf2f4f/1789631678737_1789631676.jpg',
+      'http://adminapi.vayyarifashions.com/store-assets/products/vf2f4f/1789631678570_1789631676.jpg',
+      'http://adminapi.vayyarifashions.com/store-assets/products/vf2f4f/1789631678737_1789631676.jpg',
     ],
   },
 ];

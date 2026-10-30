@@ -12,7 +12,7 @@ import {
   LuShare2,
   LuHeart,
 } from 'react-icons/lu';
-import { useTheme } from '../../../theme';
+import { useTheme, useResponsiveLayout } from '../../../theme';
 import { CustomSwatchDot } from '../../atoms/SwatchDot/CustomSwatchDot';
 import { CarouselDot } from '../../atoms/CarouselDot/CarouselDot';
 import { StoreColorGroup, StoreCurationMediaItem } from './types';
@@ -45,6 +45,7 @@ export function StorePdpLivePreviewModal({
   isStandalone = true,
 }: StorePdpLivePreviewModalProps) {
   const { tokens } = useTheme();
+  const { containerMaxWidth, pagePaddingHorizontal } = useResponsiveLayout();
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
   const [isPlayingVideo, setIsPlayingVideo] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
@@ -292,7 +293,7 @@ export function StorePdpLivePreviewModal({
   return (
     <YStack
       width="100%"
-      maxWidth={390}
+      maxWidth={containerMaxWidth}
       height={isStandalone ? 640 : undefined}
       backgroundColor="#FFFFFF"
       borderRadius={tokens.radius.lg}
@@ -309,7 +310,7 @@ export function StorePdpLivePreviewModal({
         backgroundColor="#FFFFFF"
         borderBottomWidth={1}
         borderBottomColor="#E2E8F0"
-        paddingHorizontal={12}
+        paddingHorizontal={pagePaddingHorizontal}
         paddingVertical={10}
         alignItems="center"
         justifyContent="space-between"

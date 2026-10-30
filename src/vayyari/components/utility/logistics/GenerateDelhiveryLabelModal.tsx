@@ -45,7 +45,7 @@ export function GenerateDelhiveryLabelModal({
   const [warehousePickerVisible, setWarehousePickerVisible] = useState(false);
 
   const actualTotal = groupTotal;
-  const declaredTotal = actualTotal * 4;
+  const declaredTotal = actualTotal * 3;
 
   useEffect(() => {
     if (visible) {
@@ -322,7 +322,7 @@ export function GenerateDelhiveryLabelModal({
             </View>
           )}
 
-          {/* Declared Consignment Value (4x Rule) & Aggregate Package Summary */}
+          {/* Declared Consignment Value (3x Rule) & Aggregate Package Summary */}
           <Surface style={styles.paymentInfoCard} elevation={0}>
             <View style={styles.paymentRow}>
               <Text variant="bodySmall" style={{ color: '#475569' }}>Total Items (Quantity):</Text>
@@ -341,7 +341,7 @@ export function GenerateDelhiveryLabelModal({
             <View style={styles.paymentRow}>
               <View>
                 <Text variant="bodySmall" style={{ fontWeight: '700', color: '#0F172A' }}>
-                  Declared Value (4×):
+                  Declared Value (3×):
                 </Text>
                 <Text style={{ fontSize: 10, color: '#64748B' }}>
                   Courier liability / insurance value

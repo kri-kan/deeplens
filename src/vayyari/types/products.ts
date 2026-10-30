@@ -64,6 +64,11 @@ export interface VendorProduct {
   isStarred?: boolean;
   /** Whether this product has been archived */
   isArchived?: boolean;
+  /** Whether this product requires human media/zoning review due to high media count */
+  isMediaReviewRequired?: boolean;
+  isPublished?: boolean;
+  mediaUpdatedAt?: string;
+  storePublishUpdatedAt?: string;
   unifiedAttributes?: Record<string, any>;
   craft?: string;
   motif?: string;
@@ -158,4 +163,35 @@ export interface InstagramAccountOption {
   fullName?: string;
   profilePictureUrl?: string;
   isPrimary: boolean;
+}
+
+export interface VisualSimilarityMatch {
+  productId: string;
+  sku: string;
+  title: string;
+  vendorPrice: number;
+  similarityPercentage: number;
+  distance: number;
+  storagePath?: string;
+  category?: string;
+  mediaCount?: number;
+  isLinked: boolean;
+  existingLinkType?: string | null;
+}
+
+export interface VisualSimilaritySearchRequest {
+  postId?: string;
+  mediaId?: string;
+  storagePath?: string;
+  imageUrl?: string;
+  phash?: string;
+  imageBase64?: string;
+  take?: number;
+  minSimilarity?: number;
+}
+
+export interface VisualSimilaritySearchResponse {
+  sourcePhash: string;
+  totalCandidates: number;
+  matches: VisualSimilarityMatch[];
 }

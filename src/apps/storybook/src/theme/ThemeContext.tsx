@@ -142,6 +142,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
       status,
       surfaces: surface,
       sizes,
+      layout: sharedTokens.layout,
       spacing: sharedTokens.spacing,
       radius: sharedTokens.radius,
       typography: sharedTokens.typography,

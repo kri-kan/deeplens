@@ -6,6 +6,8 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
+  Platform,
+  View,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { YStack, XStack, Text } from 'tamagui';
@@ -22,6 +24,7 @@ import {
   LuLayoutGrid,
   LuEllipsisVertical,
   LuCheck,
+  LuViewfinderLens,
 } from '../icons/lu';
 import { useTheme } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -106,6 +109,14 @@ export interface AdminProductCatalogPageProps {
   stitchTypeOptions?: string[];
   occasionOptions?: string[];
   vendorOptions?: string[];
+  onCameraPress?: () => void;
+  visualSearchState?: {
+    imageUri?: string;
+    totalMatches?: number;
+    isSearching?: boolean;
+    postId?: string;
+  } | null;
+  onClearVisualSearch?: () => void;
 }
 
 export function AdminProductCatalogPage({
@@ -115,6 +126,9 @@ export function AdminProductCatalogPage({
   onSelectCategory,
   searchQuery = '',
   onSearchChange,
+  onCameraPress,
+  visualSearchState,
+  onClearVisualSearch,
   activeFilterCount = 0,
   filterChips: initialFilterChips = [],
   onRemoveFilterChip,
@@ -178,20 +192,14 @@ export function AdminProductCatalogPage({
   // Retain products whose star state was toggled during this view session
   // so starring an item while an unstarred (or starred) filter is active doesn't cause it to immediately vanish.
   const dispatch = useAppDispatch();
-  const sessionToggledStarIdsList = useAppSelector(
-    (state) => state.catalogUi.sessionToggledStarIds
-  );
-  const sessionToggledStarIds = useMemo(
-    () => new Set(sessionToggledStarIdsList),
-    [sessionToggledStarIdsList]
-  );
+  const sessionToggledStarIdsRef = useRef<Set<string>>(new Set());
 
   const handleToggleStar = useCallback(
     async (id: string, nextStarred?: boolean) => {
-      dispatch(markStarToggled(id));
+      sessionToggledStarIdsRef.current.add(id);
       return onToggleStar?.(id, nextStarred);
     },
-    [dispatch, onToggleStar]
+    [onToggleStar]
   );
 
   const selectedIds = propSelectedIds !== undefined ? propSelectedIds : internalSelectedIds;
@@ -208,7 +216,7 @@ export function AdminProductCatalogPage({
       // Starred filter
       // Retain items modified in the current view session so that starring/unstarring does not
       // immediately remove them from view under the user's interaction (improves UX stability).
-      if (!sessionToggledStarIds.has(p.id)) {
+      if (!sessionToggledStarIdsRef.current.has(p.id)) {
         if (activeFilters.isStarred === true && !p.isStarred) return false;
         if (activeFilters.isStarred === false && p.isStarred) return false;
       }
@@ -310,11 +318,14 @@ export function AdminProductCatalogPage({
         const craftMatch = p.craft?.toLowerCase().includes(q) || p.unifiedAttributes?.craft_technique?.toLowerCase().includes(q);
         const fabricMatch = p.fabric?.toLowerCase().includes(q) || p.unifiedAttributes?.fabric_base?.toLowerCase().includes(q);
         const motifMatch = p.motif?.toLowerCase().includes(q) || p.unifiedAttributes?.motif_pattern?.toLowerCase().includes(q);
-        if (!codeMatch && !titleMatch && !catMatch && !craftMatch && !fabricMatch && !motifMatch) return false;
+        const tagMatch =
+          (Array.isArray(p.tags) && p.tags.some((t) => t?.toLowerCase().includes(q))) ||
+          (Array.isArray(p.unifiedAttributes?.tags) && p.unifiedAttributes.tags.some((t: any) => String(t).toLowerCase().includes(q)));
+        if (!codeMatch && !titleMatch && !catMatch && !craftMatch && !fabricMatch && !motifMatch && !tagMatch) return false;
       }
       return true;
     });
-  }, [products, internalSelectedCat, internalQuery, activeFilters, sessionToggledStarIds]);
+  }, [products, internalSelectedCat, internalQuery, activeFilters]);
 
   // AI enrichment count across the catalog
   const aiEnrichedCount = useMemo(() => {
@@ -337,6 +348,7 @@ export function AdminProductCatalogPage({
 
   const handleCategorySelect = (id: string) => {
     setInternalSelectedCat(id);
+    sessionToggledStarIdsRef.current.clear();
     dispatch(clearSessionStars());
     onSelectCategory?.(id);
   };
@@ -353,7 +365,7 @@ export function AdminProductCatalogPage({
     }
   };
 
-  const toggleSelection = (id: string) => {
+  const toggleSelection = useCallback((id: string) => {
     lastAnchorIdRef.current = id;
     if (onToggleSelect) {
       onToggleSelect(id);
@@ -365,9 +377,9 @@ export function AdminProductCatalogPage({
         return next;
       });
     }
-  };
+  }, [onToggleSelect]);
 
-  const selectRange = (targetId: string) => {
+  const selectRange = useCallback((targetId: string) => {
     if (onSelectRange) {
       onSelectRange(targetId);
       return;
@@ -392,7 +404,7 @@ export function AdminProductCatalogPage({
       return next;
     });
     lastAnchorIdRef.current = targetId;
-  };
+  }, [onSelectRange, products, toggleSelection]);
 
   const handleToggleSelectAll = () => {
     if (onToggleSelectAll) {
@@ -440,6 +452,18 @@ export function AdminProductCatalogPage({
       dispatch(clearSessionStars());
     }
   }, [propFilters, dispatch]);
+
+  React.useEffect(() => {
+    if (searchQuery !== undefined) {
+      setInternalQuery(searchQuery);
+    }
+  }, [searchQuery]);
+
+  React.useEffect(() => {
+    if (activeCategoryId !== undefined) {
+      setInternalSelectedCat(activeCategoryId);
+    }
+  }, [activeCategoryId]);
 
   // Generate dynamic filter chips from state
   const computedFilterChips = useMemo(() => {
@@ -528,6 +552,57 @@ export function AdminProductCatalogPage({
   const totalFilterCount = activeFilterCount > 0 ? activeFilterCount : computedFilterChips.length;
   const displayedCount = totalCount !== undefined ? totalCount : filteredProducts.length;
   const cellWidthPercent = columns === 3 ? '33.333333%' : `${100 / columns}%`;
+
+  const handleTilePress = useCallback(
+    (id: string) => {
+      if (selectionMode) {
+        toggleSelection(id);
+      } else {
+        onProductPress?.(id);
+      }
+    },
+    [selectionMode, toggleSelection, onProductPress]
+  );
+
+  const handleTileLongPress = useCallback(
+    (id: string) => {
+      if (selectionMode) {
+        selectRange(id);
+      } else {
+        toggleSelection(id);
+      }
+    },
+    [selectionMode, selectRange, toggleSelection]
+  );
+
+  const handleTileQuickEdit = useCallback((p: ProductGridTileData) => {
+    setEditingProduct(p);
+  }, []);
+
+  const renderProductItem = useCallback(
+    ({ item }: { item: ProductGridTileData }) => (
+      <View style={{ width: cellWidthPercent as any, padding: 1.5 }}>
+        <ProductGridTile
+          item={item}
+          selected={selectedIds.has(item.id)}
+          selectionMode={selectionMode}
+          onPress={handleTilePress}
+          onLongPress={handleTileLongPress}
+          onToggleStar={handleToggleStar}
+          onQuickEdit={handleTileQuickEdit}
+        />
+      </View>
+    ),
+    [
+      cellWidthPercent,
+      selectedIds,
+      selectionMode,
+      handleTilePress,
+      handleTileLongPress,
+      handleToggleStar,
+      handleTileQuickEdit,
+    ]
+  );
 
   return (
     <YStack flex={1} backgroundColor={tokens.background}>
@@ -698,6 +773,31 @@ export function AdminProductCatalogPage({
               color: tokens.text,
             }}
           />
+          {/* Visual Camera Search Trigger */}
+          {onCameraPress && (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Search catalog visually with an image"
+              activeOpacity={0.7}
+              onPress={onCameraPress}
+            >
+              <XStack
+                padding={4}
+                borderRadius={tokens.radius.full}
+                backgroundColor={visualSearchState?.imageUri ? `${tokens.accent}20` : 'transparent'}
+                borderWidth={visualSearchState?.imageUri ? 1 : 0}
+                borderColor={tokens.accent}
+                alignItems="center"
+                justifyContent="center"
+              >
+                <LuViewfinderLens
+                  size={16}
+                  color={visualSearchState?.imageUri ? tokens.accent : tokens.textMuted}
+                />
+              </XStack>
+            </TouchableOpacity>
+          )}
+
           {internalQuery.trim().length > 0 && (
             <TouchableOpacity
               accessibilityRole="button"
@@ -716,6 +816,68 @@ export function AdminProductCatalogPage({
           )}
         </XStack>
       </XStack>
+
+      {/* Active Visual Search Reference Bar */}
+      {visualSearchState?.imageUri && (
+        <XStack
+          alignItems="center"
+          justifyContent="space-between"
+          paddingHorizontal={12}
+          paddingVertical={6}
+          backgroundColor="rgba(14, 165, 233, 0.08)"
+          borderBottomWidth={1}
+          borderBottomColor="rgba(14, 165, 233, 0.25)"
+        >
+          <XStack alignItems="center" gap={8} flex={1}>
+            <Image
+              source={{ uri: visualSearchState.imageUri }}
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 6,
+                borderWidth: 1,
+                borderColor: '#0284C7',
+              }}
+              contentFit="cover"
+            />
+            <YStack flex={1}>
+              <Text fontSize={11} fontWeight="800" color="#0284C7">
+                Visual Similarity Search
+              </Text>
+              <Text fontSize={10} color={tokens.textMuted} numberOfLines={1}>
+                {visualSearchState.isSearching
+                  ? 'Scanning 76,000+ catalog candidates...'
+                  : `${visualSearchState.totalMatches ?? filteredProducts.length} similar products found`}
+              </Text>
+            </YStack>
+          </XStack>
+
+          {onClearVisualSearch && (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Clear visual similarity search"
+              activeOpacity={0.7}
+              onPress={onClearVisualSearch}
+            >
+              <XStack
+                paddingHorizontal={8}
+                paddingVertical={3}
+                borderRadius={tokens.radius.full}
+                backgroundColor="rgba(14, 165, 233, 0.15)"
+                borderWidth={0.5}
+                borderColor="#0284C7"
+                alignItems="center"
+                gap={4}
+              >
+                <Text fontSize={10} fontWeight="700" color="#0284C7">
+                  Clear
+                </Text>
+                <LuX size={10} color="#0284C7" />
+              </XStack>
+            </TouchableOpacity>
+          )}
+        </XStack>
+      )}
 
       {/* Active Filter Chips Bar (Compact 34px height row) */}
       {computedFilterChips.length > 0 && (
@@ -946,6 +1108,10 @@ export function AdminProductCatalogPage({
           paddingBottom: Math.max(32, bottomInset + 64),
         }}
         showsVerticalScrollIndicator={false}
+        initialNumToRender={24}
+        maxToRenderPerBatch={24}
+        windowSize={9}
+        removeClippedSubviews={Platform.OS !== 'web'}
         refreshControl={
           onRefresh ? (
             <RefreshControl
@@ -959,33 +1125,9 @@ export function AdminProductCatalogPage({
             />
           ) : undefined
         }
-        onEndReached={onEndReached}
+        onEndReached={hasMore ? onEndReached : undefined}
         onEndReachedThreshold={0.5}
-        renderItem={({ item }) => (
-          <YStack width={cellWidthPercent as any} padding={1.5}>
-            <ProductGridTile
-              item={item}
-              selected={selectedIds.has(item.id)}
-              selectionMode={selectionMode}
-              onPress={(id) => {
-                if (selectionMode) {
-                  toggleSelection(id);
-                } else {
-                  onProductPress?.(id);
-                }
-              }}
-              onLongPress={(id) => {
-                if (selectionMode) {
-                  selectRange(id);
-                } else {
-                  toggleSelection(id);
-                }
-              }}
-              onToggleStar={handleToggleStar}
-              onQuickEdit={(p) => setEditingProduct(p)}
-            />
-          </YStack>
-        )}
+        renderItem={renderProductItem}
         ListEmptyComponent={
           !isLoading ? (
             <YStack
@@ -1046,7 +1188,7 @@ export function AdminProductCatalogPage({
           )
         }
         ListFooterComponent={
-          isLoading && !isRefreshing && products.length > 0 ? (
+          hasMore && isLoading && !isRefreshing && products.length > 0 ? (
             <XStack justifyContent="center" alignItems="center" paddingVertical={16}>
               <ActivityIndicator size="small" color={tokens.accent} />
             </XStack>

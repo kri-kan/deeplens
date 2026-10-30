@@ -336,6 +336,35 @@ export default function FullMessageBrowser() {
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [loadingAudit, setLoadingAudit] = useState(false);
   
+  // Live action feedback banner (for instantaneous split/merge and queue updates)
+  const [actionFeedback, setActionFeedback] = useState<{
+    type: 'split' | 'merge' | 'info' | 'error';
+    text: string;
+    productCode?: string | null;
+    mediaDelta?: number;
+    inQueue?: boolean;
+    timestamp: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!actionFeedback || actionFeedback.inQueue) return;
+    const timer = setTimeout(() => {
+      setActionFeedback(null);
+    }, 7000);
+    return () => clearTimeout(timer);
+  }, [actionFeedback]);
+
+  const targetProductGroup = useMemo(() => {
+    if (!productId) return null;
+    return (
+      groups.find(
+        (g) =>
+          g.deeplensProductId === productId ||
+          (g.deeplensProductId && g.deeplensProductId.toLowerCase() === productId.toLowerCase())
+      ) || null
+    );
+  }, [groups, productId]);
+
   const flatListRef = useRef<FlatList>(null);
   const initialLandingCompletedRef = useRef(false);
   const userInteractedRef = useRef(false);
@@ -549,31 +578,102 @@ export default function FullMessageBrowser() {
     if (!groupId) return;
     
     const group = groupsMap.get(groupId);
-    const groupStatus = group?.status;
+    const linkedProductCode = group?.productCode || (group?.deeplensProductId ? `Product ${group.deeplensProductId.substring(0, 8)}` : null);
 
-    const triggerSplit = async () => {
-      try {
-        setRefreshing(true);
-        await waProcessorService.splitGroupZone(groupId, msgId);
-        Alert.alert('Success', 'Group split successfully');
-        await onRefresh();
-      } catch (err: any) {
-        Alert.alert('Error', err?.message ?? 'Failed to split group');
-        setRefreshing(false);
+    const targetMsg = messages.find((m) => m.messageId === msgId);
+    const targetTs = targetMsg ? targetMsg.timestamp : 0;
+
+    const splitMessages = messages.filter((m) => m.groupId === groupId && m.timestamp >= targetTs);
+    const splitMediaCount = splitMessages.filter(isPhotoOrVideoMsg).length;
+    const splitTextCount = splitMessages.filter((m) => !isPhotoOrVideoMsg(m) && cleanMessageText(m)?.trim()).length;
+
+    const previousMessages = [...messages];
+    const previousGroups = [...groups];
+
+    const tempNewGroupId = `product_${Date.now()}`;
+
+    // 1. Optimistic Update: Immediately split in memory without blocking
+    setMessages((prev) =>
+      prev.map((m) => (m.groupId === groupId && m.timestamp >= targetTs ? { ...m, groupId: tempNewGroupId } : m))
+    );
+
+    setGroups((prev) => {
+      const updated = prev.map((g) => {
+        if (g.groupId === groupId) {
+          return {
+            ...g,
+            mediaCount: Math.max(0, (g.mediaCount || 0) - splitMediaCount),
+            textCount: Math.max(0, (g.textCount || 0) - splitTextCount),
+            hasPendingMedia: true,
+            messages: (g.messages || []).filter((m: any) => m.timestamp < targetTs),
+          };
+        }
+        return g;
+      });
+
+      const newGroupEntry = {
+        groupId: tempNewGroupId,
+        jid: group?.jid || (jid ? decodeURIComponent(jid) : ''),
+        status: 'staging',
+        processAsProduct: group?.processAsProduct ?? false,
+        description: 'Split zone (processing...)',
+        mediaCount: splitMediaCount,
+        textCount: splitTextCount,
+        hasPendingMedia: true,
+        lastMessageAt: Date.now(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        messages: splitMessages.map((m) => ({ ...m, groupId: tempNewGroupId })),
+      };
+
+      const oldIndex = updated.findIndex((g) => g.groupId === groupId);
+      if (oldIndex !== -1) {
+        updated.splice(oldIndex, 0, newGroupEntry);
+      } else {
+        updated.unshift(newGroupEntry);
       }
-    };
+      return updated;
+    });
 
-    if (groupStatus === 'product_created') {
-      Alert.alert(
-        'Reprocess Confirmation',
-        'This group already has a product in DeepLens. Splitting will update the existing product and create a new one. Continue?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Yes, Split & Reprocess', style: 'destructive', onPress: triggerSplit }
-        ]
+    // 2. Immediate non-blocking status feedback
+    const feedbackText = linkedProductCode
+      ? `🔻 Subtracted ${splitMediaCount} media from ${linkedProductCode} • Processing in queue...`
+      : `Split zone: ${splitMediaCount} media moved to new zone • Processing in queue...`;
+
+    setActionFeedback({
+      type: 'split',
+      text: feedbackText,
+      productCode: linkedProductCode,
+      mediaDelta: -splitMediaCount,
+      inQueue: true,
+      timestamp: Date.now(),
+    });
+
+    // 3. Fire API in background
+    try {
+      const res = await waProcessorService.splitGroupZone(groupId, msgId);
+      const actualNewGroupId = res?.newGroupId;
+      if (actualNewGroupId && actualNewGroupId !== tempNewGroupId) {
+        setMessages((prev) =>
+          prev.map((m) => (m.groupId === tempNewGroupId ? { ...m, groupId: actualNewGroupId } : m))
+        );
+        setGroups((prev) =>
+          prev.map((g) => (g.groupId === tempNewGroupId ? { ...g, groupId: actualNewGroupId, hasPendingMedia: false } : g))
+        );
+      }
+      await fetchMeta(false);
+      setActionFeedback((prev) =>
+        prev ? { ...prev, inQueue: false, text: prev.text.replace('Processing in queue...', 'Synced ✓') } : null
       );
-    } else {
-      await triggerSplit();
+    } catch (err: any) {
+      setMessages(previousMessages);
+      setGroups(previousGroups);
+      setActionFeedback({
+        type: 'error',
+        text: `Failed to split group: ${err?.message || 'Server error'}`,
+        inQueue: false,
+        timestamp: Date.now(),
+      });
     }
   };
 
@@ -598,7 +698,6 @@ export default function FullMessageBrowser() {
     try {
       setRefreshing(true);
       await waProcessorService.reassignGroupMessage(groupId, msgId, targetGroupId);
-      Alert.alert('Success', 'Message reassigned successfully');
       await onRefresh();
     } catch (err: any) {
       Alert.alert('Error', err?.message ?? 'Failed to move message');
@@ -642,63 +741,78 @@ export default function FullMessageBrowser() {
   }, [jid, onRefresh]);
 
   const handleMergeGroups = async (groupId: string) => {
-    const groupIndex = groups.findIndex(g => g.groupId === groupId);
+    const groupIndex = groups.findIndex((g) => g.groupId === groupId);
     if (groupIndex === -1 || groupIndex === groups.length - 1) return;
     const prevGroup = groups[groupIndex + 1];
+    const targetGroupId = prevGroup.groupId;
+    const sourceGroup = groups.find((g) => g.groupId === groupId);
 
-    const triggerMerge = async () => {
-      // 1. Snapshot previous state for rollback on error
-      const previousMessages = [...messages];
-      const previousGroups = [...groups];
+    const sourceMediaCount = sourceGroup?.mediaCount || 0;
+    const targetProductCode =
+      prevGroup.productCode || (prevGroup.deeplensProductId ? `Product ${prevGroup.deeplensProductId.substring(0, 8)}` : null);
+    const sourceProductCode =
+      sourceGroup?.productCode ||
+      (sourceGroup?.deeplensProductId ? `Product ${sourceGroup.deeplensProductId.substring(0, 8)}` : null);
 
-      // 2. Optimistic Update: Immediately update in-memory React state
-      const targetGroupId = prevGroup.groupId;
-      updateMessageGroup(groupId, targetGroupId);
+    const previousMessages = [...messages];
+    const previousGroups = [...groups];
 
-      const sourceGroup = groups.find(g => g.groupId === groupId);
-      setGroups(prev =>
-        prev
-          .filter(g => g.groupId !== groupId)
-          .map(g => {
-            if (g.groupId === targetGroupId) {
-              return {
-                ...g,
-                mediaCount: (g.mediaCount || 0) + (sourceGroup?.mediaCount || 0),
-                textCount: (g.textCount || 0) + (sourceGroup?.textCount || 0),
-                messages: [
-                  ...(g.messages || []),
-                  ...(sourceGroup?.messages || []).map((m: any) => ({ ...m, groupId: targetGroupId }))
-                ]
-              };
-            }
-            return g;
-          })
+    // 1. Optimistic Update: Immediately update in-memory React state
+    updateMessageGroup(groupId, targetGroupId);
+
+    setGroups((prev) =>
+      prev
+        .filter((g) => g.groupId !== groupId)
+        .map((g) => {
+          if (g.groupId === targetGroupId) {
+            return {
+              ...g,
+              mediaCount: (g.mediaCount || 0) + sourceMediaCount,
+              textCount: (g.textCount || 0) + (sourceGroup?.textCount || 0),
+              hasPendingMedia: true,
+              messages: [
+                ...(g.messages || []),
+                ...(sourceGroup?.messages || []).map((m: any) => ({ ...m, groupId: targetGroupId })),
+              ],
+            };
+          }
+          return g;
+        })
+    );
+
+    // 2. Immediate feedback banner
+    const feedbackText = targetProductCode
+      ? `🔺 Added ${sourceMediaCount} media to ${targetProductCode} • Processing in queue...`
+      : sourceProductCode
+      ? `Merged ${sourceProductCode} into Zone above • Processing in queue...`
+      : `Merged ${sourceMediaCount} media into Zone above • Processing in queue...`;
+
+    setActionFeedback({
+      type: 'merge',
+      text: feedbackText,
+      productCode: targetProductCode || sourceProductCode,
+      mediaDelta: sourceMediaCount,
+      inQueue: true,
+      timestamp: Date.now(),
+    });
+
+    // 3. Fire API in background without blocking screen
+    try {
+      await waProcessorService.mergeGroupZones(groupId, targetGroupId);
+      await fetchMeta(false);
+      setActionFeedback((prev) =>
+        prev ? { ...prev, inQueue: false, text: prev.text.replace('Processing in queue...', 'Synced ✓') } : null
       );
-
-      // 3. Fire API in background without blocking network round-trip or screen refresh
-      try {
-        await waProcessorService.mergeGroupZones(groupId, targetGroupId);
-        // Silently sync server metadata in background without full UI reload
-        fetchMeta(false);
-      } catch (err: any) {
-        // Rollback state on error
-        setMessages(previousMessages);
-        setGroups(previousGroups);
-        Alert.alert('Error', err?.message ?? 'Failed to merge groups');
-      }
-    };
-
-    if (groupsMap.get(groupId)?.status === 'product_created' || prevGroup.status === 'product_created') {
-      Alert.alert(
-        'Reprocess Confirmation',
-        'One of these groups already has a product in DeepLens. Merging will update the existing product and deactivate the merged group. Continue?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Yes, Merge & Reprocess', style: 'destructive', onPress: triggerMerge }
-        ]
-      );
-    } else {
-      await triggerMerge();
+    } catch (err: any) {
+      // Rollback state on error
+      setMessages(previousMessages);
+      setGroups(previousGroups);
+      setActionFeedback({
+        type: 'error',
+        text: `Failed to merge groups: ${err?.message || 'Server error'}`,
+        inQueue: false,
+        timestamp: Date.now(),
+      });
     }
   };
 
@@ -966,6 +1080,16 @@ export default function FullMessageBrowser() {
             >
               {statusConfig.label}
             </Chip>
+            {group.productCode && (
+              <Chip 
+                style={{ backgroundColor: '#1E293B', height: 24, justifyContent: 'center' }} 
+                textStyle={{ color: '#F8FAFC', fontSize: 10, fontWeight: '700' }}
+                compact
+                icon="tag"
+              >
+                {group.productCode}
+              </Chip>
+            )}
             {isHighlighted && (
               <Chip 
                 style={{ backgroundColor: '#F59E0B', height: 24, justifyContent: 'center' }} 
@@ -1002,25 +1126,42 @@ export default function FullMessageBrowser() {
           </View>
         </View>
 
-        {(group.category || formattedPrice || group.errorDetail) && (
-          <View style={styles.zoneCardDetails}>
-            {group.category && (
-              <Text style={styles.zoneCardAttrText}>
-                🏷️ {group.category} {group.subCategory ? `› ${group.subCategory}` : ''}
-              </Text>
-            )}
-            {formattedPrice && (
-              <Text style={styles.zoneCardAttrText}>
-                💰 {formattedPrice} {formattedShipping}
-              </Text>
-            )}
-            {group.errorDetail && (
-              <View style={styles.cardErrorContainer}>
-                <Text style={styles.cardErrorText}>⚠️ {group.errorDetail}</Text>
+        <View style={styles.zoneCardDetails}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+            <Text style={styles.zoneCardAttrText}>
+              📷 {group.mediaCount ?? 0} media • 💬 {group.textCount ?? 0} texts
+            </Text>
+            {group.hasPendingMedia && (
+              <View style={styles.queuePillSmall}>
+                <ActivityIndicator size={10} color="#D97706" style={{ marginRight: 3 }} />
+                <Text style={styles.queuePillSmallText}>Syncing in queue</Text>
               </View>
             )}
           </View>
-        )}
+          {group.category && (
+            <Text style={styles.zoneCardAttrText}>
+              🏷️ {group.category} {group.subCategory ? `› ${group.subCategory}` : ''}
+            </Text>
+          )}
+          {formattedPrice && (
+            <Text style={styles.zoneCardAttrText}>
+              💰 {formattedPrice} {formattedShipping}
+            </Text>
+          )}
+          {group.errorDetail && (
+            <View style={styles.cardErrorContainer}>
+              <Text style={styles.cardErrorText}>⚠️ {group.errorDetail}</Text>
+              <Button 
+                mode="text" 
+                compact 
+                labelStyle={{ fontSize: 10, color: theme.colors.error }}
+                onPress={() => handleRetryGroup(group)}
+              >
+                Retry
+              </Button>
+            </View>
+          )}
+        </View>
 
         <View style={styles.zoneCardActionRow}>
           {hasProduct && group.deeplensProductId && (
@@ -1524,6 +1665,82 @@ export default function FullMessageBrowser() {
           <ActivityIndicator style={{ flex: 1 }} color="#25D366" />
         ) : (
           <View style={{ flex: 1 }}>
+            {/* Product Context & Queue Sync Banner */}
+            {(productId || actionFeedback) && (
+              <Surface style={styles.productSyncBanner} elevation={2}>
+                <View style={styles.productSyncRow}>
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    {targetProductGroup?.productCode ? (
+                      <Chip icon="tag" style={styles.productChip} textStyle={styles.productChipText} compact>
+                        {targetProductGroup.productCode}
+                      </Chip>
+                    ) : productId ? (
+                      <Chip icon="tag" style={styles.productChip} textStyle={styles.productChipText} compact>
+                        Product {productId.substring(0, 8)}
+                      </Chip>
+                    ) : null}
+
+                    {targetProductGroup && (
+                      <View style={styles.mediaCountBadge}>
+                        <Text style={styles.mediaCountText}>
+                          📷 {targetProductGroup.mediaCount ?? 0} media
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Queue / Sync status (tap to open Global Pipeline & Queued Events monitor) */}
+                    {actionFeedback?.inQueue || targetProductGroup?.hasPendingMedia || targetProductGroup?.status === 'staging' ? (
+                      <TouchableOpacity 
+                        style={styles.queuePill}
+                        onPress={() => router.push('/utilities/whatsapp/events')}
+                        activeOpacity={0.7}
+                      >
+                        <ActivityIndicator size={12} color="#D97706" style={{ marginRight: 4 }} />
+                        <Text style={styles.queuePillText}>In Queue (Syncing) ↗</Text>
+                      </TouchableOpacity>
+                    ) : targetProductGroup?.status === 'error' ? (
+                      <TouchableOpacity 
+                        style={[styles.queuePill, { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' }]}
+                        onPress={() => router.push('/utilities/whatsapp/events')}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.queuePillText, { color: '#DC2626' }]}>Sync Error ↗</Text>
+                      </TouchableOpacity>
+                    ) : targetProductGroup?.status === 'product_created' ? (
+                      <TouchableOpacity 
+                        style={[styles.queuePill, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}
+                        onPress={() => router.push('/utilities/whatsapp/events')}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.queuePillText, { color: '#059669' }]}>✓ Synced ↗</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                </View>
+
+                {/* Live Action Feedback (Split / Merge details) */}
+                {actionFeedback && (
+                  <View style={[
+                    styles.actionFeedbackRow,
+                    actionFeedback.type === 'error' ? styles.actionFeedbackError : styles.actionFeedbackSuccess
+                  ]}>
+                    <Text style={[
+                      styles.actionFeedbackText,
+                      actionFeedback.type === 'error' ? { color: '#DC2626' } : { color: '#065F46' }
+                    ]}>
+                      {actionFeedback.text}
+                    </Text>
+                    <IconButton
+                      icon="close"
+                      size={14}
+                      style={{ margin: 0, padding: 0 }}
+                      onPress={() => setActionFeedback(null)}
+                    />
+                  </View>
+                )}
+              </Surface>
+            )}
+
             <FlatList
               ref={flatListRef}
               data={groupedMessages}
@@ -2030,5 +2247,96 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
     marginRight: 6,
+  },
+  productSyncBanner: {
+    backgroundColor: '#F8FAFC',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    zIndex: 10,
+  },
+  productSyncRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  productChip: {
+    backgroundColor: '#0F172A',
+    height: 24,
+    justifyContent: 'center',
+  },
+  productChipText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  mediaCountBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  mediaCountText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  queuePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  queuePillText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#92400E',
+  },
+  queuePillSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  queuePillSmallText: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: '#92400E',
+  },
+  actionFeedbackRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  actionFeedbackSuccess: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  actionFeedbackError: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  actionFeedbackText: {
+    fontSize: 11,
+    fontWeight: '600',
+    flex: 1,
   },
 });

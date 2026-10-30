@@ -9,7 +9,7 @@ import {
   StoreCurationMediaItem,
   StoreColorGroup,
 } from '@/types/curation';
-import { storeAdminService, StoreProductCuration, StoreMediaItem } from '@/services/storeAdminService';
+import { storeAdminService, StoreProductCuration, StoreMediaItem, normalizeMediaUrl } from '@/services/storeAdminService';
 import { useTheme } from '@/theme';
 
 export default function StoreCurationScreen() {
@@ -74,10 +74,11 @@ export default function StoreCurationScreen() {
         colorGroups: colorGroupsPayload,
         mediaOrder: mediaOrderPayload,
         tags: payload.tags,
+        skus: payload.skus,
       });
 
       await fetchCuration();
-      Alert.alert('Saved', 'Curated swatches and groups saved successfully.');
+      Alert.alert('Saved', 'Curated swatches, SKUs, and groups saved successfully.');
     } catch (err) {
       console.error('Failed to save curation to Store.Api:', err);
       Alert.alert('Error', 'Failed to save changes to Store.Api.');
@@ -105,6 +106,11 @@ export default function StoreCurationScreen() {
         colors: g.colors || [g.slotA || product.colorHex || '#1B4D3E', g.slotB || '#D4AF37'].filter(Boolean),
         colorCount: g.colorCount || (g.colors?.length) || 2,
         isAvailable: g.isAvailable !== false,
+        price: g.price ?? null,
+        mrp: g.mrp ?? null,
+        stockQuantity: g.stockQuantity,
+        allowWaitlist: g.allowWaitlist,
+        customMessage: g.customMessage,
       }));
     }
 
@@ -133,27 +139,58 @@ export default function StoreCurationScreen() {
     if (!product?.mediaOrder || product.mediaOrder.length === 0) {
       return [];
     }
-    return product.mediaOrder.map((m, idx) => ({
-      id: m.id || `m-${idx}`,
-      uri: m.url,
-      thumbnailUri: m.url,
-      mediaType: m.mediaType === 2 ? 'video' : 'image',
-      durationSeconds: m.mediaType === 2 ? 15 : undefined,
-      sortOrder: m.order || idx + 1,
-      isHero: m.isCover || idx === 0,
-      isQualified: m.isQualified !== false,
-      isCommon: !!m.isCommon,
-      originalUri: m.originalUrl || m.url,
-      modifiedUri: m.modifiedUrl || null,
-      activeDisplaySource: m.activeDisplaySource || (m.hasModified ? 'modified' : 'original'),
-      hasModified: !!m.hasModified,
-      transformRecipe: m.transformRecipe ? (typeof m.transformRecipe === 'string' ? JSON.parse(m.transformRecipe) : m.transformRecipe) : null,
-      // If colorGroupId is assigned, preserve it!
-      colorGroupId: m.colorGroupId || (m.isCommon ? undefined : (product.colorGroups && product.colorGroups.length > 0 ? product.colorGroups[0].id : defaultGroupId)),
-      dwellTimeSeconds: m.dwellSeconds || 0,
-      title: m.title || `${product.title} - View ${idx + 1}`,
-    }));
+    return product.mediaOrder.map((m, idx) => {
+      const activeUri =
+        m.activeDisplaySource === 'modified' && m.modifiedUrl
+          ? normalizeMediaUrl(m.modifiedUrl)
+          : normalizeMediaUrl(m.url);
+      const originalUri = normalizeMediaUrl(m.originalUrl || m.url);
+      const modifiedUri = m.modifiedUrl ? normalizeMediaUrl(m.modifiedUrl) : null;
+
+      return {
+        id: m.id || `m-${idx}`,
+        uri: activeUri,
+        thumbnailUri: activeUri,
+        mediaType: (m.mediaType === 2 ? 'video' : 'image') as 'video' | 'image',
+        durationSeconds: m.mediaType === 2 ? 15 : undefined,
+        sortOrder: m.order || idx + 1,
+        isHero: m.isCover || idx === 0,
+        isQualified: m.isQualified !== false,
+        isCommon: !!m.isCommon,
+        originalUri,
+        modifiedUri,
+        activeDisplaySource: m.activeDisplaySource || (m.hasModified ? 'modified' : 'original'),
+        hasModified: !!m.hasModified,
+        transformRecipe: m.transformRecipe ? (typeof m.transformRecipe === 'string' ? JSON.parse(m.transformRecipe) : m.transformRecipe) : null,
+        // If colorGroupId is assigned, preserve it!
+        colorGroupId: m.colorGroupId || (m.isCommon ? undefined : (product.colorGroups && product.colorGroups.length > 0 ? product.colorGroups[0].id : defaultGroupId)),
+        dwellTimeSeconds: m.dwellSeconds || 0,
+        title: m.title || `${product.title} - View ${idx + 1}`,
+      };
+    });
   }, [product, defaultGroupId]);
+
+  const dynamicSkus = useMemo(() => {
+    if (!product) return undefined;
+    if (product.skus && product.skus.length > 0) {
+      return product.skus.map((s: any) => ({
+        id: s.id,
+        skuCode: s.skuCode,
+        colorwayName: s.colorwayName,
+        colorHex: s.colorHex,
+        secondaryHex: s.secondaryHex,
+        colorGroupId: s.colorGroupId,
+        price: s.price ?? null,
+        mrp: s.mrp ?? null,
+        isPriceInherited: s.isPriceInherited ?? (s.price == null),
+        stockQuantity: s.stockQuantity ?? 10,
+        allowWaitlist: s.allowWaitlist !== false,
+        customMessage: s.customMessage,
+        thumbnailUrl: s.thumbnailUrl,
+      }));
+    }
+    return undefined;
+  }, [product]);
 
   if (loading) {
     return (
@@ -211,6 +248,8 @@ export default function StoreCurationScreen() {
       initialScreen="hub"
       initialMedia={mediaList}
       initialColorGroups={dynamicColorGroups}
+      isAlreadyInStore={true}
+      initialSkus={dynamicSkus}
       onBack={() => router.back()}
       onSave={handleSave}
     />

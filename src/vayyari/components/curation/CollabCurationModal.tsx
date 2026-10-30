@@ -10,12 +10,14 @@ import {
   LuCalendar,
   LuHeart,
   LuMessageCircle,
+  LuZap,
 } from '@/components/tamagui-ui/icons/lu';
 import { useTheme } from '@/theme';
 import {
   TargetCollabAccountPicker,
   TargetCollabAccount,
 } from '@/components/tamagui-ui/molecules/TargetCollabAccountPicker';
+import { InstagramBoostedInsightsGraph } from '@/components/tamagui-ui/molecules/InstagramBoostedInsightsGraph';
 
 export interface CollabChannelPhaseInfo {
   username: string;
@@ -41,6 +43,8 @@ export interface CollabPostItem {
   channelPhases?: CollabChannelPhaseInfo[];
   curationStatus?: 'pending' | 'curated' | 'queued' | 'completed';
   isStarred?: boolean;
+  isBoosted?: boolean;
+  boostedMetrics?: import('@/services/instagram.service').InstagramBoostedMetrics | null;
 }
 
 export interface CollabCurationModalProps {
@@ -157,7 +161,15 @@ export function CollabCurationModal({
               </YStack>
             </XStack>
 
-            <XStack alignItems="center" gap={8}>
+            <XStack alignItems="center" gap={6}>
+              {post.isBoosted && (
+                <View style={styles.boostedHeaderBadge}>
+                  <LuZap size={11} color="#FFFFFF" />
+                  <Text fontSize={10} fontWeight="800" color="#FFFFFF">
+                    BOOSTED
+                  </Text>
+                </View>
+              )}
               <View style={[styles.statusBadge, { backgroundColor: statusBadge.bg }]}>
                 <Text fontSize={10} fontWeight="800" color={statusBadge.text}>
                   {currentStatus.toUpperCase()}
@@ -264,6 +276,15 @@ export function CollabCurationModal({
                 )}
               </YStack>
             </XStack>
+
+            {/* Boosted Instagram Ad Performance Insights Graph */}
+            {post.isBoosted && (
+              <InstagramBoostedInsightsGraph
+                metrics={post.boostedMetrics}
+                postLikes={post.likes}
+                postComments={post.comments}
+              />
+            )}
 
             <View style={styles.divider} />
 
@@ -399,6 +420,15 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  boostedHeaderBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#8B5CF6',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,

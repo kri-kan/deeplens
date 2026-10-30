@@ -22,7 +22,7 @@ import {
   LuSliders,
   LuLayers,
 } from '../../icons/lu';
-import { useTheme } from '@/theme';
+import { useTheme, useResponsiveLayout } from '@/theme';
 import {
   TransformRecipe,
   DEFAULT_RECIPE,
@@ -51,6 +51,7 @@ export function MediaEditorModal({
   onSave,
 }: MediaEditorModalProps) {
   const { tokens } = useTheme();
+  const { modalMaxWidth, pagePaddingHorizontal } = useResponsiveLayout();
 
   // Recipe state
   const [recipe, setRecipe] = useState<TransformRecipe>(DEFAULT_RECIPE);
@@ -181,13 +182,13 @@ export function MediaEditorModal({
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.modalBackdrop}>
-        <View style={[styles.modalSheet, { backgroundColor: tokens.surface }]}>
+        <View style={[styles.modalSheet, { backgroundColor: tokens.surface, maxWidth: modalMaxWidth as any }]}>
           {/* Header */}
           <XStack
             alignItems="center"
             justifyContent="space-between"
-            paddingHorizontal={20}
-            paddingVertical={16}
+            paddingHorizontal={pagePaddingHorizontal}
+            paddingVertical={14}
             borderBottomWidth={1}
             borderBottomColor={tokens.border}
           >
@@ -661,8 +662,8 @@ export function MediaEditorModal({
 
           {/* Footer Save & Apply */}
           <XStack
-            paddingHorizontal={20}
-            paddingVertical={14}
+            paddingHorizontal={pagePaddingHorizontal}
+            paddingVertical={12}
             borderTopWidth={1}
             borderTopColor={tokens.border}
             alignItems="center"
@@ -711,7 +712,7 @@ const styles = StyleSheet.create({
   },
   modalSheet: {
     width: '100%',
-    maxWidth: 720,
+    alignSelf: 'center',
     maxHeight: '92%',
     borderRadius: 16,
     overflow: 'hidden',

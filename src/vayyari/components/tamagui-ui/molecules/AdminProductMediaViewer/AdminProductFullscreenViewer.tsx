@@ -16,6 +16,7 @@ import { Image } from 'expo-image';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { LuX, LuDownload, LuStar, LuPlay, LuImage } from '../../icons/lu';
 import { ZoomableImage } from '@/components/ui/ZoomableImage';
+import { VisualLensButton } from '@/components/tamagui-ui/atoms/VisualLensButton';
 import { MediaSlideItem } from '../AdminProductMediaCarousel';
 import { useTheme } from '@/theme';
 import { getIndicatorType } from '@/utils/zoomMath';
@@ -222,8 +223,14 @@ export function AdminProductFullscreenViewer({
             </Text>
           </XStack>
 
-          {/* Placeholder spacer for balanced header */}
-          <YStack width={38} height={38} />
+          {/* Top-Right: Visual Similarity Lens Search */}
+          <VisualLensButton
+            imageUri={mediaList[activeMediaIndex]?.url}
+            onBeforeNavigate={onClose}
+            size={38}
+            iconSize={18}
+            variant="neon"
+          />
         </XStack>
 
         {/* Center Main Carousel with Pan & Zoom */}

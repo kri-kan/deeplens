@@ -18,6 +18,7 @@ export interface VayyariStarredProductItem {
   title: string;
   category: string;
   fabric: string;
+  price?: number;
   color?: string;
   mediaCount: number;
   primaryImageUri: string;
@@ -26,6 +27,9 @@ export interface VayyariStarredProductItem {
   isStarred: boolean;
   isPublishedToStore?: boolean;
   publishedAt?: string;
+  swatchesCount?: number;
+  siblingSwatches?: any[];
+  parentProductCode?: string;
 }
 
 export interface AdminVayyariStorePublishPageProps {

@@ -1,6 +1,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, Dimensions, TouchableOpacity, Linking, FlatList, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { View, StyleSheet, Dimensions, TouchableOpacity, Linking, FlatList, ScrollView, ActivityIndicator, Alert, useWindowDimensions, Modal } from 'react-native';
 import { Text, IconButton, useTheme, Button, Portal, Dialog, List, Divider, Switch, Icon } from 'react-native-paper';
+import { YStack, XStack, Text as TamaguiText } from 'tamagui';
+import { useTheme as useAppTheme } from '@/theme';
+import {
+    LuEllipsisVertical,
+    LuViewfinderLens,
+    LuRefreshCw,
+    LuMessageCircle,
+    LuDownload,
+    LuShare2,
+    LuYoutube,
+    LuExternalLink,
+    LuTrash2,
+} from '@/components/tamagui-ui/icons/lu';
 import { Image } from 'expo-image';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -17,8 +30,9 @@ import { InstagramLink, normalizeData, isVideo, getMediaUri, getBaseId, getInsta
 import { downloadMedia, shareMedia } from '@/utils/media-helpers';
 import { InstagramCommentsModal } from './InstagramCommentsModal';
 import { CompetitorSparkline } from './CompetitorSparkline';
+import { InstagramMediaFocusModal } from './InstagramMediaFocusModal';
 
-const { width, height } = Dimensions.get('window');
+const { width: defaultWidth, height: defaultHeight } = Dimensions.get('window');
 
 interface PostDetailItemProps {
     item: InstagramPost;
@@ -30,6 +44,8 @@ interface PostDetailItemProps {
     setIsPlaying: (playing: boolean) => void;
     isActive: boolean;
     insets: EdgeInsets;
+    itemHeight?: number;
+    itemWidth?: number;
     onDraggingStateChange?: (dragging: boolean) => void;
     onPostUpdated?: (updatedPost: InstagramPost) => void;
 }
@@ -114,11 +130,18 @@ export const InstagramPostDetailItem = ({
     setIsPlaying, 
     isActive,
     insets,
+    itemHeight: propItemHeight,
+    itemWidth: propItemWidth,
     onDraggingStateChange,
     onPostUpdated
 }: PostDetailItemProps) => {
     const theme = useTheme();
+    const { tokens } = useAppTheme();
     const router = useRouter();
+    const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+    const currentWidth = propItemWidth || windowWidth || defaultWidth;
+    const currentHeight = propItemHeight || windowHeight || defaultHeight;
+
     const [mediaLinks, setMediaLinks] = useState<InstagramPost[]>([]);
     const [activeMediaIndex, setActiveMediaIndex] = useState(0);
     const [mediaAspectRatios, setMediaAspectRatios] = useState<{[key: string]: number}>({});
@@ -132,12 +155,15 @@ export const InstagramPostDetailItem = ({
     const [isExpanded, setIsExpanded] = useState(false);
     const [existingLinks, setExistingLinks] = useState<InstagramLink[]>([]);
     const [isMenuVisible, setIsMenuVisible] = useState(false);
+    const [isFocusModalVisible, setIsFocusModalVisible] = useState(false);
     const [isRefreshingMedia, setIsRefreshingMedia] = useState(false);
     const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
     const [shareProgress, setShareProgress] = useState<number | null>(null);
     const [localItem, setLocalItem] = useState(item);
     const [mediaErrors, setMediaErrors] = useState<{ [key: string]: boolean }>({});
     const [retryKeys, setRetryKeys] = useState<{ [key: string]: number }>({});
+    const [isMarkDeletedDialogVisible, setIsMarkDeletedDialogVisible] = useState(false);
+    const [isMarkingDeleted, setIsMarkingDeleted] = useState(false);
 
     const handleRetryMedia = useCallback((mediaKey: string) => {
         setMediaErrors(prev => ({ ...prev, [mediaKey]: false }));
@@ -189,9 +215,22 @@ export const InstagramPostDetailItem = ({
     }, [isActive]);
 
     // Draggable Sheet Logic
-    const START_TOP = height * 0.85;
-    const END_TOP = height * 0.15;
+    const COLLAPSED_SHEET_HEIGHT = Math.max(140, Math.min(190, currentHeight * 0.22)) + (insets.bottom || 0);
+    const START_TOP = currentHeight - COLLAPSED_SHEET_HEIGHT;
+    const END_TOP = insets.top + 60;
     const sheetTop = useSharedValue(START_TOP);
+    const startTopSV = useSharedValue(START_TOP);
+    const endTopSV = useSharedValue(END_TOP);
+
+    useEffect(() => {
+        startTopSV.value = START_TOP;
+        endTopSV.value = END_TOP;
+        if (!isExpanded) {
+            sheetTop.value = START_TOP;
+        } else {
+            sheetTop.value = END_TOP;
+        }
+    }, [START_TOP, END_TOP, isExpanded]);
 
     // Menu Sheet Logic
     const MENU_HIDDEN = 500;
@@ -199,7 +238,7 @@ export const InstagramPostDetailItem = ({
     const menuSheetTop = useSharedValue(MENU_HIDDEN);
     
     // YouTube Sheet Logic
-    const YOUTUBE_SHEET_HIDDEN = height;
+    const YOUTUBE_SHEET_HIDDEN = currentHeight;
     const YOUTUBE_SHEET_VISIBLE = 0;
     const youtubeSheetTop = useSharedValue(YOUTUBE_SHEET_HIDDEN);
 
@@ -434,7 +473,7 @@ export const InstagramPostDetailItem = ({
     const getMediaHeight = () => {
         const activeMedia = mediaLinks[activeMediaIndex] || localItem;
         const ratio = mediaAspectRatios[activeMedia?.id || 'initial'] || (isVideo(localItem) ? 9/16 : 1);
-        return width / ratio;
+        return currentWidth / ratio;
     };
     
     const context = useSharedValue(0);
@@ -448,8 +487,8 @@ export const InstagramPostDetailItem = ({
             }
         })
         .onUpdate((e) => {
-            sheetTop.value = Math.max(END_TOP, Math.min(START_TOP, context.value + e.translationY));
-            if (!hasFetchedLinksSV.value && sheetTop.value < START_TOP - 100) {
+            sheetTop.value = Math.max(endTopSV.value, Math.min(startTopSV.value, context.value + e.translationY));
+            if (!hasFetchedLinksSV.value && sheetTop.value < startTopSV.value - 100) {
                 hasFetchedLinksSV.value = true;
                 runOnJS(fetchLinks)();
             }
@@ -459,16 +498,16 @@ export const InstagramPostDetailItem = ({
                 runOnJS(onDraggingStateChange)(false);
             }
             if (e.translationY > 150 || e.velocityY > 1000) {
-                sheetTop.value = withSpring(START_TOP, { velocity: e.velocityY });
+                sheetTop.value = withSpring(startTopSV.value, { velocity: e.velocityY });
                 runOnJS(setIsExpanded)(false);
             } else if (e.translationY < -150 || e.velocityY < -1000) {
-                sheetTop.value = withSpring(END_TOP, { velocity: e.velocityY });
+                sheetTop.value = withSpring(endTopSV.value, { velocity: e.velocityY });
                 runOnJS(setIsExpanded)(true);
             } else {
                 // Determine snap point based on current position instead of JS state
-                const snapPoint = sheetTop.value < (START_TOP + END_TOP) / 2 ? END_TOP : START_TOP;
+                const snapPoint = sheetTop.value < (startTopSV.value + endTopSV.value) / 2 ? endTopSV.value : startTopSV.value;
                 sheetTop.value = withSpring(snapPoint);
-                runOnJS(setIsExpanded)(snapPoint === END_TOP);
+                runOnJS(setIsExpanded)(snapPoint === endTopSV.value);
             }
         });
 
@@ -508,7 +547,7 @@ export const InstagramPostDetailItem = ({
 
     const animatedStyle = useAnimatedStyle(() => ({
         transform: [{ translateY: sheetTop.value }],
-        height: height - END_TOP,
+        height: currentHeight - endTopSV.value,
     }));
 
     const menuAnimatedStyle = useAnimatedStyle(() => ({
@@ -536,7 +575,7 @@ export const InstagramPostDetailItem = ({
     const isTakeoff = competitorMultiplier >= 2.5;
 
     return (
-        <View style={{ width, height, backgroundColor: theme.colors.background }}>
+        <View style={{ width: currentWidth, height: currentHeight, backgroundColor: theme.colors.background }}>
             <View style={{ flex: 1 }}>
                 {/* Top Menu Icons - Only visible for active post */}
                 {isActive && (
@@ -575,16 +614,45 @@ export const InstagramPostDetailItem = ({
                         )}
 
                         <View style={[styles.topMenuContainer, { top: insets.top + 10 }]}>
-                            <IconButton 
-                                icon="dots-vertical" 
-                                iconColor="white" 
-                                size={24} 
-                                style={styles.menuTrigger}
-                                onPress={() => {
-                                    setIsMenuVisible(true);
-                                    menuSheetTop.value = withSpring(MENU_VISIBLE);
-                                }}
-                            />
+                            {/* Focus Preview & Visual Lens Button (Neon Cyan Touch) */}
+                            <TouchableOpacity 
+                                accessibilityRole="button"
+                                accessibilityLabel="Focus preview and visual lens"
+                                activeOpacity={0.7}
+                                onPress={() => setIsFocusModalVisible(true)}
+                            >
+                                <XStack
+                                    width={36}
+                                    height={36}
+                                    borderRadius={18}
+                                    backgroundColor="rgba(15, 23, 42, 0.75)"
+                                    borderWidth={1.5}
+                                    borderColor="#06B6D4"
+                                    alignItems="center"
+                                    justifyContent="center"
+                                >
+                                    <Icon source="camera-iris" size={18} color="#22D3EE" />
+                                </XStack>
+                            </TouchableOpacity>
+
+                            {/* 3-Dots Context Menu Button (Catalog PDP Style) */}
+                            <TouchableOpacity 
+                                accessibilityRole="button"
+                                accessibilityLabel="Open post options menu"
+                                activeOpacity={0.7}
+                                onPress={() => setIsMenuVisible(true)}
+                            >
+                                <XStack
+                                    width={36}
+                                    height={36}
+                                    borderRadius={18}
+                                    backgroundColor="rgba(0,0,0,0.55)"
+                                    alignItems="center"
+                                    justifyContent="center"
+                                >
+                                    <LuEllipsisVertical size={16} color="#ffffff" />
+                                </XStack>
+                            </TouchableOpacity>
                         </View>
                     </>
                 )}
@@ -600,7 +668,7 @@ export const InstagramPostDetailItem = ({
                         contentContainerStyle={{ alignItems: 'center' }}
                         data={mediaLinks.length > 0 ? mediaLinks : [localItem]}
                         onMomentumScrollEnd={(e) => {
-                            const index = Math.round(e.nativeEvent.contentOffset.x / width);
+                            const index = Math.round(e.nativeEvent.contentOffset.x / currentWidth);
                             setActiveMediaIndex(index);
                         }}
                         renderItem={({ item: media, index: mediaIdx }) => {
@@ -625,11 +693,11 @@ export const InstagramPostDetailItem = ({
                             };
 
                             return (
-                                <View key={media.id || mediaIdx} style={{ width, height: START_TOP - insets.top, justifyContent: 'center' }}>
+                                <View key={media.id || mediaIdx} style={{ width: currentWidth, height: START_TOP - insets.top, justifyContent: 'center' }}>
                                     {shouldPlayVideo ? (
                                         <InstagramVideoPlayer 
                                             media={playbackMedia}
-                                            width={width}
+                                            width={currentWidth}
                                             getMediaHeight={getMediaHeight}
                                             isMuted={isMuted}
                                             setIsMuted={setIsMuted}
@@ -639,7 +707,7 @@ export const InstagramPostDetailItem = ({
                                             isActive={isPlayerActive}
                                         />
                                     ) : hasMediaError ? (
-                                        <View style={[styles.placeholderContainer, { width, height: mHeight, backgroundColor: theme.colors.surfaceVariant }]}>
+                                        <View style={[styles.placeholderContainer, { width: currentWidth, height: mHeight, backgroundColor: theme.colors.surfaceVariant }]}>
                                             <Icon source="image-broken-variant" size={44} color={theme.colors.onSurfaceVariant} />
                                             <Text variant="bodyMedium" style={[styles.placeholderText, { color: theme.colors.onSurfaceVariant }]}>
                                                 Media unavailable
@@ -666,10 +734,14 @@ export const InstagramPostDetailItem = ({
                                             </View>
                                         </View>
                                     ) : (
-                                        <View style={{ width, height: mHeight, justifyContent: 'center', alignItems: 'center', position: 'relative' }}>
+                                        <TouchableOpacity 
+                                            activeOpacity={0.95}
+                                            onPress={() => setIsFocusModalVisible(true)}
+                                            style={{ width: currentWidth, height: mHeight, justifyContent: 'center', alignItems: 'center', position: 'relative' }}
+                                        >
                                             <Image 
                                                 source={{ uri: coverUri }} 
-                                                style={{ width, height: mHeight }}
+                                                style={{ width: currentWidth, height: mHeight }}
                                                 contentFit="cover"
                                                 onLoad={(e) => {
                                                     const ratio = e.source.width / e.source.height;
@@ -681,6 +753,10 @@ export const InstagramPostDetailItem = ({
                                                     setMediaErrors(prev => ({ ...prev, [mediaKey]: true }));
                                                 }}
                                             />
+                                            <View style={styles.mediaFocusPill} pointerEvents="none">
+                                                <Icon source="camera-iris" size={13} color="#FFFFFF" />
+                                                <Text style={styles.mediaFocusPillText}>Focus · Lens</Text>
+                                            </View>
                                             {(isMediaVideo || isCompetitor) && (
                                                 <View style={styles.thumbnailVideoOverlay}>
                                                     <TouchableOpacity 
@@ -698,7 +774,7 @@ export const InstagramPostDetailItem = ({
                                                     </TouchableOpacity>
                                                 </View>
                                             )}
-                                        </View>
+                                        </TouchableOpacity>
                                     )}
                                 </View>
                             );
@@ -725,9 +801,17 @@ export const InstagramPostDetailItem = ({
                             </View>
                         </View>
                     )}
+
+                    {/* Deleted on Instagram overlay banner */}
+                    {localItem.deletedOnInstagram && (
+                        <View style={styles.deletedOverlayBanner} pointerEvents="none">
+                            <Icon source="delete-alert" size={18} color="#fff" />
+                            <Text style={styles.deletedOverlayText}>DELETED ON INSTAGRAM</Text>
+                        </View>
+                    )}
                 </View>
 
-                <View style={styles.actionColumn}>
+                <View style={[styles.actionColumn, { top: insets.top + 60 }]}>
                     <View style={styles.statItem}>
                         <IconButton icon="eye" iconColor="white" size={24} style={styles.statIcon} />
                         <Text style={styles.statText}>
@@ -758,12 +842,15 @@ export const InstagramPostDetailItem = ({
                 </View>
 
                 <GestureDetector gesture={panGesture}>
-                    <Animated.View style={[styles.detailsContainer, animatedStyle]}>
+                    <Animated.View style={[styles.detailsContainer, animatedStyle, { paddingBottom: insets.bottom + 12 }]}>
                         <View style={styles.dragHandleContainer}>
                             <View style={styles.dragHandle} />
                         </View>
                         
-                        <ScrollView showsVerticalScrollIndicator={false}>
+                        <ScrollView 
+                            showsVerticalScrollIndicator={false}
+                            contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+                        >
                         <View style={styles.captionContainer}>
                             <TouchableOpacity 
                                 onPress={() => setIsExpanded(!isExpanded)} 
@@ -897,7 +984,7 @@ export const InstagramPostDetailItem = ({
                                 <View style={styles.detailSparklineWrapper}>
                                     <CompetitorSparkline
                                         points={localItem.curvePoints}
-                                        width={width - 72}
+                                        width={currentWidth - 72}
                                         height={80}
                                         multiplier={competitorMultiplier}
                                         dayNumber={localItem.dayNumber || 1}
@@ -1138,185 +1225,231 @@ export const InstagramPostDetailItem = ({
                     </Dialog.Actions>
                 </Dialog>
 
-                {/* Menu Sheet inside the same Portal */}
-                {isMenuVisible && (
-                    <View style={StyleSheet.absoluteFill}>
-                        <TouchableOpacity 
-                            style={styles.menuBackdrop} 
-                            activeOpacity={1} 
-                            onPress={() => {
-                                menuSheetTop.value = withSpring(MENU_HIDDEN);
-                                setTimeout(() => setIsMenuVisible(false), 300);
-                            }}
-                        />
-                        <GestureDetector gesture={menuPanGesture}>
-                            <Animated.View style={[styles.menuSheet, menuAnimatedStyle]}>
-                                <View style={styles.dragHandleContainer}>
-                                    <View style={styles.dragHandle} />
-                                </View>
-                                <View style={styles.menuContent}>
-                                    <Text variant="titleLarge" style={styles.menuTitle}>Post Actions</Text>
-                                    
-                                    <TouchableOpacity 
-                                        style={styles.menuItem}
-                                        onPress={() => postDetailsRefresh()}
-                                    >
-                                        <IconButton icon="sync" size={24} iconColor={theme.colors.primary} />
-                                        <Text variant="bodyLarge" style={{ color: theme.colors.primary }}>Refresh Data</Text>
-                                    </TouchableOpacity>
+                {/* Context Actions Menu Modal (Catalog PDP 3-dot Style) */}
+                <Modal
+                    visible={isMenuVisible}
+                    transparent
+                    animationType="fade"
+                    onRequestClose={() => setIsMenuVisible(false)}
+                >
+                    <TouchableOpacity
+                        activeOpacity={1}
+                        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
+                        onPress={() => setIsMenuVisible(false)}
+                    >
+                        <YStack
+                            backgroundColor={tokens.surface}
+                            borderTopLeftRadius={tokens.radius.xl}
+                            borderTopRightRadius={tokens.radius.xl}
+                            paddingVertical={12}
+                            paddingHorizontal={16}
+                            gap={2}
+                            onPress={(e) => e.stopPropagation()}
+                        >
+                            <XStack justifyContent="center" paddingBottom={8}>
+                                <YStack width={36} height={4} borderRadius={2} backgroundColor={tokens.border} />
+                            </XStack>
 
-                                    <TouchableOpacity 
-                                        style={styles.menuItem}
-                                        onPress={handleSyncComments}
-                                    >
-                                        <IconButton icon="comment-sync-outline" size={24} iconColor={theme.colors.primary} />
-                                        <Text variant="bodyLarge" style={{ color: theme.colors.primary }}>Sync Comments</Text>
-                                    </TouchableOpacity>
+                            {/* Visual Catalog Lens */}
+                            <TouchableOpacity
+                                accessibilityRole="button"
+                                accessibilityLabel="Visual Catalog Lens"
+                                activeOpacity={0.7}
+                                onPress={() => {
+                                    setIsMenuVisible(false);
+                                    const activeMedia = (mediaLinks && mediaLinks[activeMediaIndex]) || localItem;
+                                    const mediaUri = getMediaUri(activeMedia, 'large') || activeMedia.thumbnailUrl || activeMedia.mediaUrl;
+                                    router.push({
+                                        pathname: '/utilities/product-list',
+                                        params: {
+                                            visualImageUri: mediaUri || '',
+                                            visualPostId: localItem.id,
+                                            visualStoragePath: activeMedia.storagePath || '',
+                                            visualMediaId: activeMedia.id && activeMedia.id !== localItem.id ? activeMedia.id : '',
+                                        }
+                                    } as any);
+                                }}
+                            >
+                                <XStack alignItems="center" gap={12} paddingVertical={11}>
+                                    <LuViewfinderLens size={18} color={tokens.accent} />
+                                    <TamaguiText fontSize={14} fontWeight="700" color={tokens.accent}>
+                                        Visual Catalog Lens (Find Similar)
+                                    </TamaguiText>
+                                </XStack>
+                            </TouchableOpacity>
 
-                                    <TouchableOpacity 
-                                        style={styles.menuItem}
-                                        disabled={downloadProgress !== null}
-                                        onPress={async () => {
-                                            try {
-                                                const rawMedia = mediaLinks.length > 0 ? mediaLinks[activeMediaIndex] : localItem;
-                                                const activeMedia = isVideo(rawMedia) ? resolveVideoMedia(rawMedia, mediaLinks, localItem) : rawMedia;
-                                                const url = getMediaUri(activeMedia);
-                                                const path = activeMedia.storagePath || '';
-                                                const extension = path.split('.').pop()?.toLowerCase() || (isVideo(activeMedia) ? 'mp4' : 'jpg');
-                                                
-                                                setDownloadProgress(0);
-                                                await downloadMedia(url, `ig_${activeMedia.id || Date.now()}.${extension}`, (p) => {
-                                                    setDownloadProgress(p);
-                                                });
-                                                
-                                                setDownloadProgress(null);
-                                                Alert.alert('Success', 'Media saved to gallery!');
-                                                setIsMenuVisible(false);
-                                                menuSheetTop.value = withSpring(MENU_HIDDEN);
-                                            } catch {
-                                                setDownloadProgress(null);
-                                                Alert.alert('Download Failed', 'Could not download media.');
-                                            }
-                                        }}
-                                    >
-                                        <IconButton 
-                                            icon={downloadProgress !== null ? "loading" : "download"} 
-                                            size={24} 
-                                            iconColor={theme.colors.primary} 
-                                        />
-                                        <Text variant="bodyLarge" style={{ color: theme.colors.primary, flex: 1 }}>
-                                            {downloadProgress !== null 
-                                                ? `Downloading (${Math.round(downloadProgress * 100)}%)` 
-                                                : `Download ${isVideo(mediaLinks[activeMediaIndex] || localItem) ? 'Video' : 'Photo'}`}
-                                        </Text>
-                                    </TouchableOpacity>
+                            {/* Refresh Data */}
+                            <TouchableOpacity
+                                accessibilityRole="button"
+                                accessibilityLabel="Refresh Data"
+                                activeOpacity={0.7}
+                                onPress={() => {
+                                    setIsMenuVisible(false);
+                                    postDetailsRefresh();
+                                }}
+                            >
+                                <XStack alignItems="center" gap={12} paddingVertical={11}>
+                                    <LuRefreshCw size={18} color={tokens.text} />
+                                    <TamaguiText fontSize={14} fontWeight="700" color={tokens.text}>
+                                        Refresh Data
+                                    </TamaguiText>
+                                </XStack>
+                            </TouchableOpacity>
 
-                                    <TouchableOpacity 
-                                        style={styles.menuItem}
-                                        disabled={shareProgress !== null || downloadProgress !== null}
-                                        onPress={async () => {
-                                            try {
-                                                const rawMedia = mediaLinks.length > 0 ? mediaLinks[activeMediaIndex] : localItem;
-                                                const activeMedia = isVideo(rawMedia) ? resolveVideoMedia(rawMedia, mediaLinks, localItem) : rawMedia;
-                                                const url = getMediaUri(activeMedia);
-                                                const path = activeMedia.storagePath || '';
-                                                const extension = path.split('.').pop()?.toLowerCase() || (isVideo(activeMedia) ? 'mp4' : 'jpg');
-                                                
-                                                setShareProgress(0);
-                                                await shareMedia(url, extension, (p) => {
-                                                    setShareProgress(p);
-                                                });
-                                                
-                                                setShareProgress(null);
-                                                setIsMenuVisible(false);
-                                                menuSheetTop.value = withSpring(MENU_HIDDEN);
-                                            } catch {
-                                                setShareProgress(null);
-                                                Alert.alert('Sharing Failed', 'Could not prepare media for sharing.');
-                                            }
-                                        }}
-                                    >
-                                        <IconButton 
-                                            icon={shareProgress !== null ? "loading" : "share-variant"} 
-                                            size={24} 
-                                            iconColor={theme.colors.primary} 
-                                        />
-                                        <Text variant="bodyLarge" style={{ color: theme.colors.primary, flex: 1 }}>
-                                            {shareProgress !== null 
-                                                ? `Preparing (${Math.round(shareProgress * 100)}%)` 
-                                                : `Share ${isVideo(mediaLinks[activeMediaIndex] || localItem) ? 'Video' : 'Photo'}`}
-                                        </Text>
-                                    </TouchableOpacity>
+                            {/* Sync Comments */}
+                            <TouchableOpacity
+                                accessibilityRole="button"
+                                accessibilityLabel="Sync Comments"
+                                activeOpacity={0.7}
+                                onPress={() => {
+                                    setIsMenuVisible(false);
+                                    handleSyncComments();
+                                }}
+                            >
+                                <XStack alignItems="center" gap={12} paddingVertical={11}>
+                                    <LuMessageCircle size={18} color={tokens.text} />
+                                    <TamaguiText fontSize={14} fontWeight="700" color={tokens.text}>
+                                        Sync Comments
+                                    </TamaguiText>
+                                </XStack>
+                            </TouchableOpacity>
 
-                                    {(() => {
-                                        const currentMedia = mediaLinks.length > 0 ? mediaLinks[activeMediaIndex] : localItem;
-                                        const isCurrentVideo = isVideo(currentMedia);
-                                        
-                                        if (!isCurrentVideo) return null;
+                            {/* Download Media */}
+                            <TouchableOpacity
+                                accessibilityRole="button"
+                                accessibilityLabel="Download Media"
+                                activeOpacity={0.7}
+                                disabled={downloadProgress !== null}
+                                onPress={async () => {
+                                    try {
+                                        const rawMedia = mediaLinks.length > 0 ? mediaLinks[activeMediaIndex] : localItem;
+                                        const activeMedia = isVideo(rawMedia) ? resolveVideoMedia(rawMedia, mediaLinks, localItem) : rawMedia;
+                                        const url = getMediaUri(activeMedia);
+                                        const path = activeMedia.storagePath || '';
+                                        const extension = path.split('.').pop()?.toLowerCase() || (isVideo(activeMedia) ? 'mp4' : 'jpg');
 
-                                        return (
-                                            <TouchableOpacity 
-                                                style={styles.menuItem}
-                                                onPress={async () => {
-                                                    try {
-                                                        setIsMenuVisible(false);
-                                                        menuSheetTop.value = withSpring(MENU_HIDDEN);
-                                                        
-                                                        // Prepare defaults
-                                                        setIsYoutubeDialogVisible(true);
-                                                        youtubeSheetTop.value = withSpring(YOUTUBE_SHEET_VISIBLE);
-                                                    } catch {
-                                                        Alert.alert('Error', 'Could not prepare YouTube upload.');
-                                                    }
-                                                }}
-                                            >
-                                                <IconButton 
-                                                    icon="youtube" 
-                                                    size={24} 
-                                                    iconColor='#FF0000' 
-                                                />
-                                                <Text variant="bodyLarge" style={{ color: '#FF0000', flex: 1 }}>
-                                                    {localItem.youtubeUrl ? 'Repost to YouTube' : 'Post to YouTube Shorts'}
-                                                </Text>
-                                            </TouchableOpacity>
-                                        );
-                                    })()}
+                                        setDownloadProgress(0);
+                                        await downloadMedia(url, `ig_${activeMedia.id || Date.now()}.${extension}`, (p) => {
+                                            setDownloadProgress(p);
+                                        });
 
-                                    {localItem.youtubeUrl && (
-                                        <TouchableOpacity 
-                                            style={styles.menuItem}
-                                            onPress={() => {
-                                                setIsMenuVisible(false);
-                                                menuSheetTop.value = withSpring(MENU_HIDDEN);
-                                                Linking.openURL(localItem.youtubeUrl!);
-                                            }}
-                                        >
-                                            <IconButton 
-                                                icon="open-in-new" 
-                                                size={24} 
-                                                iconColor="#007AFF" 
-                                            />
-                                            <Text variant="bodyLarge" style={{ color: '#007AFF', flex: 1 }}>
-                                                View on YouTube
-                                            </Text>
-                                        </TouchableOpacity>
-                                    )}
+                                        setDownloadProgress(null);
+                                        Alert.alert('Success', 'Media saved to gallery!');
+                                        setIsMenuVisible(false);
+                                    } catch {
+                                        setDownloadProgress(null);
+                                        Alert.alert('Download Failed', 'Could not download media.');
+                                    }
+                                }}
+                            >
+                                <XStack alignItems="center" gap={12} paddingVertical={11}>
+                                    <LuDownload size={18} color={tokens.text} />
+                                    <TamaguiText fontSize={14} fontWeight="700" color={tokens.text}>
+                                        {downloadProgress !== null
+                                            ? `Downloading (${Math.round(downloadProgress * 100)}%)`
+                                            : `Download ${isVideo(mediaLinks[activeMediaIndex] || localItem) ? 'Video' : 'Photo'}`}
+                                    </TamaguiText>
+                                </XStack>
+                            </TouchableOpacity>
 
-                                    <TouchableOpacity 
-                                        style={[styles.menuItem, { marginTop: 10 }]}
-                                        onPress={() => {
-                                            menuSheetTop.value = withSpring(MENU_HIDDEN);
-                                            setTimeout(() => setIsMenuVisible(false), 300);
-                                        }}
-                                    >
-                                        <IconButton icon="close" size={24} iconColor={theme.colors.error} />
-                                        <Text variant="bodyLarge" style={{ color: theme.colors.error }}>Cancel</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            </Animated.View>
-                        </GestureDetector>
-                    </View>
-                )}
+                            {/* Share Media */}
+                            <TouchableOpacity
+                                accessibilityRole="button"
+                                accessibilityLabel="Share Media"
+                                activeOpacity={0.7}
+                                disabled={shareProgress !== null || downloadProgress !== null}
+                                onPress={async () => {
+                                    try {
+                                        const rawMedia = mediaLinks.length > 0 ? mediaLinks[activeMediaIndex] : localItem;
+                                        const activeMedia = isVideo(rawMedia) ? resolveVideoMedia(rawMedia, mediaLinks, localItem) : rawMedia;
+                                        const url = getMediaUri(activeMedia);
+                                        const path = activeMedia.storagePath || '';
+                                        const extension = path.split('.').pop()?.toLowerCase() || (isVideo(activeMedia) ? 'mp4' : 'jpg');
+
+                                        setShareProgress(0);
+                                        await shareMedia(url, extension, (p) => {
+                                            setShareProgress(p);
+                                        });
+
+                                        setShareProgress(null);
+                                        setIsMenuVisible(false);
+                                    } catch {
+                                        setShareProgress(null);
+                                        Alert.alert('Sharing Failed', 'Could not prepare media for sharing.');
+                                    }
+                                }}
+                            >
+                                <XStack alignItems="center" gap={12} paddingVertical={11}>
+                                    <LuShare2 size={18} color={tokens.text} />
+                                    <TamaguiText fontSize={14} fontWeight="700" color={tokens.text}>
+                                        {shareProgress !== null
+                                            ? `Preparing (${Math.round(shareProgress * 100)}%)`
+                                            : `Share ${isVideo(mediaLinks[activeMediaIndex] || localItem) ? 'Video' : 'Photo'}`}
+                                    </TamaguiText>
+                                </XStack>
+                            </TouchableOpacity>
+
+                            {/* YouTube Shorts / Repost */}
+                            {isVideo(mediaLinks.length > 0 ? mediaLinks[activeMediaIndex] : localItem) && (
+                                <TouchableOpacity
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Post to YouTube"
+                                    activeOpacity={0.7}
+                                    onPress={() => {
+                                        setIsMenuVisible(false);
+                                        setIsYoutubeDialogVisible(true);
+                                        youtubeSheetTop.value = withSpring(YOUTUBE_SHEET_VISIBLE);
+                                    }}
+                                >
+                                    <XStack alignItems="center" gap={12} paddingVertical={11}>
+                                        <LuYoutube size={18} color="#FF0000" />
+                                        <TamaguiText fontSize={14} fontWeight="700" color="#FF0000">
+                                            {localItem.youtubeUrl ? 'Repost to YouTube' : 'Post to YouTube Shorts'}
+                                        </TamaguiText>
+                                    </XStack>
+                                </TouchableOpacity>
+                            )}
+
+                            {/* View on YouTube */}
+                            {localItem.youtubeUrl && (
+                                <TouchableOpacity
+                                    accessibilityRole="button"
+                                    accessibilityLabel="View on YouTube"
+                                    activeOpacity={0.7}
+                                    onPress={() => {
+                                        setIsMenuVisible(false);
+                                        Linking.openURL(localItem.youtubeUrl!);
+                                    }}
+                                >
+                                    <XStack alignItems="center" gap={12} paddingVertical={11}>
+                                        <LuExternalLink size={18} color="#007AFF" />
+                                        <TamaguiText fontSize={14} fontWeight="700" color="#007AFF">
+                                            View on YouTube
+                                        </TamaguiText>
+                                    </XStack>
+                                </TouchableOpacity>
+                            )}
+
+                            {/* Mark / Restore Deleted on Instagram */}
+                            <TouchableOpacity
+                                accessibilityRole="button"
+                                accessibilityLabel="Toggle deleted status"
+                                activeOpacity={0.7}
+                                onPress={() => {
+                                    setIsMenuVisible(false);
+                                    setIsMarkDeletedDialogVisible(true);
+                                }}
+                            >
+                                <XStack alignItems="center" gap={12} paddingVertical={11}>
+                                    <LuTrash2 size={18} color="#EF4444" />
+                                    <TamaguiText fontSize={14} fontWeight="700" color="#EF4444">
+                                        {localItem.deletedOnInstagram ? 'Restore (Not Deleted)' : 'Mark as Deleted on Instagram'}
+                                    </TamaguiText>
+                                </XStack>
+                            </TouchableOpacity>
+                        </YStack>
+                    </TouchableOpacity>
+                </Modal>
 
                 {isYoutubeDialogVisible && (
                     <View style={StyleSheet.absoluteFill}>
@@ -1356,6 +1489,68 @@ export const InstagramPostDetailItem = ({
                         handleSyncComments();
                     }}
                 />
+
+                <InstagramMediaFocusModal
+                    visible={isFocusModalVisible}
+                    onClose={() => setIsFocusModalVisible(false)}
+                    post={localItem}
+                    mediaList={mediaLinks.length > 0 ? mediaLinks : [localItem]}
+                    initialIndex={activeMediaIndex}
+                    onOpenDedicatedLens={(selectedMedia) => {
+                        setIsFocusModalVisible(false);
+                        router.push({
+                            pathname: '/utilities/instagram/visual-lens',
+                            params: { 
+                                id: localItem.id, 
+                                data: JSON.stringify(localItem), 
+                                mediaIndex: activeMediaIndex 
+                            }
+                        } as any);
+                    }}
+                    onPostUpdated={(updated) => {
+                        fetchLinks(true);
+                        onPostUpdated?.(updated);
+                    }}
+                />
+
+                {/* Mark as Deleted on Instagram confirmation dialog */}
+                <Dialog visible={isMarkDeletedDialogVisible} onDismiss={() => setIsMarkDeletedDialogVisible(false)}>
+                    <Dialog.Title>
+                        {localItem.deletedOnInstagram ? 'Restore Post' : 'Deleted on Instagram?'}
+                    </Dialog.Title>
+                    <Dialog.Content>
+                        <Text>
+                            {localItem.deletedOnInstagram
+                                ? 'Mark this post as still available on Instagram? It will reappear in the sharing list and collab planner.'
+                                : 'Mark this post as deleted from Instagram? It will be hidden from the sharing list and collab planner, but still visible in the profile with a DELETED tag.'}
+                        </Text>
+                    </Dialog.Content>
+                    <Dialog.Actions>
+                        <Button onPress={() => setIsMarkDeletedDialogVisible(false)}>Cancel</Button>
+                        <Button
+                            textColor={localItem.deletedOnInstagram ? theme.colors.primary : '#E53935'}
+                            loading={isMarkingDeleted}
+                            disabled={isMarkingDeleted}
+                            onPress={async () => {
+                                try {
+                                    setIsMarkingDeleted(true);
+                                    const newVal = !localItem.deletedOnInstagram;
+                                    await instagramService.updateVideoStatus(localItem.id, { deletedOnInstagram: newVal });
+                                    const updated = { ...localItem, deletedOnInstagram: newVal };
+                                    setLocalItem(updated);
+                                    onPostUpdated?.(updated);
+                                    setIsMarkDeletedDialogVisible(false);
+                                } catch (err: any) {
+                                    Alert.alert('Error', err.message || 'Failed to update post.');
+                                } finally {
+                                    setIsMarkingDeleted(false);
+                                }
+                            }}
+                        >
+                            {localItem.deletedOnInstagram ? 'Restore' : 'Mark Deleted'}
+                        </Button>
+                    </Dialog.Actions>
+                </Dialog>
             </Portal>
         </View>
     );
@@ -1415,7 +1610,7 @@ const styles = StyleSheet.create({
     },
     actionColumn: {
         position: 'absolute',
-        top: height * 0.15,
+        top: defaultHeight * 0.15,
         right: 12,
         alignItems: 'center',
         gap: 20,
@@ -1439,12 +1634,47 @@ const styles = StyleSheet.create({
         position: 'absolute',
         right: 10,
         zIndex: 200,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    lensTopTrigger: {
+        width: 40,
+        height: 40,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(2, 132, 199, 0.75)',
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: 'rgba(56, 189, 248, 0.5)',
     },
     menuTrigger: {
         width: 44,
         height: 44,
         justifyContent: 'center',
         alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.45)',
+        borderRadius: 22,
+    },
+    mediaFocusPill: {
+        position: 'absolute',
+        bottom: 12,
+        left: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        backgroundColor: 'rgba(15, 23, 42, 0.75)',
+        paddingHorizontal: 9,
+        paddingVertical: 5,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.2)',
+    },
+    mediaFocusPillText: {
+        color: '#FFFFFF',
+        fontSize: 11,
+        fontWeight: '700',
+        letterSpacing: 0.3,
     },
     topLeftIconContainer: {
         position: 'absolute',
@@ -1496,14 +1726,14 @@ const styles = StyleSheet.create({
         borderTopRightRadius: 20,
         paddingBottom: 40,
         zIndex: 300,
-        minHeight: height * 0.4,
+        minHeight: defaultHeight * 0.4,
     },
     youtubeSheet: {
         position: 'absolute',
         left: 0,
         right: 0,
         bottom: 0,
-        top: height * 0.1,
+        top: defaultHeight * 0.1,
         backgroundColor: 'white',
         borderTopLeftRadius: 25,
         borderTopRightRadius: 25,
@@ -1543,8 +1773,8 @@ const styles = StyleSheet.create({
         left: 0,
         right: 0,
         backgroundColor: 'white',
-        borderTopLeftRadius: 0,
-        borderTopRightRadius: 0,
+        borderTopLeftRadius: 16,
+        borderTopRightRadius: 16,
         paddingHorizontal: 20,
         paddingTop: 8,
         shadowColor: '#000',
@@ -1556,15 +1786,15 @@ const styles = StyleSheet.create({
     },
     dragHandleContainer: {
         width: '100%',
-        height: 50,
+        height: 28,
         alignItems: 'center',
         justifyContent: 'center',
     },
     dragHandle: {
         width: 40,
-        height: 5,
-        backgroundColor: '#E0E0E0',
-        borderRadius: 3,
+        height: 4,
+        backgroundColor: '#D1D5DB',
+        borderRadius: 2,
     },
     captionContainer: {
         flexDirection: 'row',
@@ -1846,5 +2076,24 @@ const styles = StyleSheet.create({
         fontSize: 10,
         opacity: 0.65,
         fontWeight: '600',
+    },
+    deletedOverlayBanner: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: 'rgba(183,28,28,0.85)',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        paddingVertical: 6,
+        zIndex: 120,
+    },
+    deletedOverlayText: {
+        color: '#fff',
+        fontWeight: '800',
+        fontSize: 11,
+        letterSpacing: 1.5,
     },
 });

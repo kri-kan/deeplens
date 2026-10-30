@@ -21,7 +21,7 @@ export default function WhatsAppAdminScreen() {
     { title: 'Chats Admin', subtitle: 'Manage individual chat tracking', icon: 'chat-processing-outline', route: '/utilities/whatsapp/chats' },
     { title: 'Groups Admin', subtitle: 'Control group processing', icon: 'account-group-outline', route: '/utilities/whatsapp/groups' },
     { title: 'Announcements Admin', subtitle: 'Manage community channels', icon: 'bullhorn-outline', route: '/utilities/whatsapp/announcements' },
-    { title: 'Processing Settings', subtitle: 'Sync & Performance controls', icon: 'cog-outline', route: '/utilities/whatsapp/settings' },
+    { title: 'Pipeline & Queued Events', subtitle: 'Global event bus, active queue & worker sync', icon: 'transit-connection-variant', route: '/utilities/whatsapp/events' },
     { title: 'Emoji & Zone Separators', subtitle: 'Manage boundary delimiters & auto-resplit', icon: 'format-line-spacing', route: '/utilities/whatsapp/separators' },
     { title: 'Failed Extractions', subtitle: 'Review LLM enrichment errors', icon: 'alert-circle-outline', route: '/utilities/whatsapp/failed-enrichments' },
   ];

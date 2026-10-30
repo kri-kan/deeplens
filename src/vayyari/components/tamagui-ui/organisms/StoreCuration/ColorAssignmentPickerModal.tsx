@@ -3,7 +3,7 @@ import { View, Pressable, StyleSheet, ScrollView, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YStack, XStack, Text } from 'tamagui';
 import { LuX, LuCheck, LuSparkles, LuPlus } from '../../icons/lu';
-import { useTheme } from '@/theme';
+import { useTheme, useResponsiveLayout } from '@/theme';
 import {
   CustomSwatchDot,
   SwatchTemplateType,
@@ -65,6 +65,7 @@ export function ColorAssignmentPickerModal({
   onClose,
 }: ColorAssignmentPickerModalProps) {
   const { tokens } = useTheme();
+  const { modalMaxWidth, pagePaddingHorizontal } = useResponsiveLayout();
   const insets = useSafeAreaInsets();
 
   // Slot limits derived directly from swatch template
@@ -182,7 +183,7 @@ export function ColorAssignmentPickerModal({
     >
       <View style={styles.sheetBackdrop}>
         <Pressable style={styles.dismissArea} onPress={onClose} />
-        <YStack style={styles.sheetContainer}>
+        <YStack style={styles.sheetContainer} maxWidth={modalMaxWidth}>
         {/* Sheet Top Drag Handle Bar */}
         <View style={styles.sheetHandleBar} />
 
@@ -191,7 +192,7 @@ export function ColorAssignmentPickerModal({
           backgroundColor={tokens.surface}
           borderBottomWidth={1}
           borderBottomColor={tokens.border}
-          paddingHorizontal={14}
+          paddingHorizontal={pagePaddingHorizontal}
           paddingVertical={10}
           alignItems="center"
           justifyContent="space-between"
@@ -551,6 +552,7 @@ const styles = StyleSheet.create({
   },
   sheetContainer: {
     width: '100%',
+    alignSelf: 'center',
     maxHeight: '88%',
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 22,

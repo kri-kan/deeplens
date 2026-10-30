@@ -1,4 +1,4 @@
-import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import { createApi, fetchBaseQuery, BaseQueryFn, FetchArgs, FetchBaseQueryError } from '@reduxjs/toolkit/query/react';
 import { getSearchApiUrl } from '@/utils/api-config';
 import { identityService } from '@/services/identity.service';
 import { VendorProduct } from '@/types/products';
@@ -22,22 +22,37 @@ export interface FilterOptionsResponse {
   maxPrice: number;
 }
 
+const rawBaseQuery = fetchBaseQuery({
+  baseUrl: getSearchApiUrl(),
+  prepareHeaders: async (headers) => {
+    try {
+      const token = await identityService.getAccessTokenWithRefresh();
+      if (token) {
+        headers.set('authorization', `Bearer ${token}`);
+      }
+    } catch (err) {
+      console.warn('[catalogApi] Failed to acquire auth token for query:', err);
+    }
+    return headers;
+  },
+});
+
+const loggingBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = async (
+  args,
+  api,
+  extraOptions
+) => {
+  const method = typeof args === 'string' ? 'GET' : args.method || 'GET';
+  const url = typeof args === 'string' ? args : args.url;
+  const cleanBase = (getSearchApiUrl() || '').replace(/\/$/, '');
+  const cleanPath = url.startsWith('/') ? url : `/${url}`;
+  console.log(`[API Request] ${method} ${cleanBase}${cleanPath}`);
+  return rawBaseQuery(args, api, extraOptions);
+};
+
 export const catalogApi = createApi({
   reducerPath: 'catalogApi',
-  baseQuery: fetchBaseQuery({
-    baseUrl: getSearchApiUrl(),
-    prepareHeaders: async (headers) => {
-      try {
-        const token = await identityService.getAccessTokenWithRefresh();
-        if (token) {
-          headers.set('authorization', `Bearer ${token}`);
-        }
-      } catch (err) {
-        console.warn('[catalogApi] Failed to acquire auth token for query:', err);
-      }
-      return headers;
-    },
-  }),
+  baseQuery: loggingBaseQuery,
   tagTypes: ['Catalog', 'FilterOptions'],
   endpoints: (builder) => ({
     // 1. Fetch Paginated & Filtered Catalog
@@ -134,7 +149,8 @@ export const catalogApi = createApi({
           patchResults.forEach((patch) => patch.undo());
         }
       },
-      invalidatesTags: (_result, _error, { productId }) => [{ type: 'Catalog', id: productId }],
+      // Do not invalidate Catalog tags on toggleStar — the optimistic patch already updates
+      // in-memory query data without triggering an expensive 100-item network refetch and UI layout re-render.
     }),
 
     // 4. Bulk Archive Mutation

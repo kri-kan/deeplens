@@ -574,6 +574,10 @@ def _open_feed_post_tagging(device, creator, shortcode, xml_str, targets=None):
     print(f"[*] Tapping 'Edit' at ({edit_bounds['cx']}, {edit_bounds['cy']})...", file=sys.stderr)
     tap(device, edit_bounds["cx"], edit_bounds["cy"], delay=2.5)
 
+    # Immediately dismiss soft keyboard if it opened automatically on edit screen
+    run_cmd(f"adb -s {device} shell input keyevent 111", check=False)
+    time.sleep(0.6)
+
     # Check boosted post alert
     edit_xml = get_ui_dump(device)
     if is_boosted_ad_alert(edit_xml):
@@ -592,28 +596,52 @@ def _open_feed_post_tagging(device, creator, shortcode, xml_str, targets=None):
 
     # Tap "Tag people and collaborators" — for posts with long captions (especially carousels),
     # this row is pushed below the visible fold and won't appear in the initial dump.
-    # Scroll down and retry up to 2 times before raising.
     def _find_tag_people(xml_str):
         root = ET.fromstring(xml_str)
         return (
             find_node(root, res_id_contains="people_tagging")
+            or find_node(root, res_id_contains="tag_people")
+            or find_node(root, res_id_contains="tag_indicator")
+            or find_node(root, res_id_contains="tag_users")
+            or find_node(root, res_id_contains="tag_row")
+            or find_node(root, res_id_contains="tag_button")
             or find_node(root, text_contains="Tag people")
             or find_node(root, desc_contains="Tag people")
+            or find_node(root, text_contains="Tag people and collaborators")
+            or find_node(root, desc_contains="Tag people and collaborators")
+            or find_node(root, text_contains="Tag people & collaborators")
+            or find_node(root, desc_contains="Tag people & collaborators")
+            or find_node(root, text_contains="Invite collaborator")
+            or find_node(root, desc_contains="Invite collaborator")
+            or find_node(root, text_contains="Collaborator")
+            or find_node(root, desc_contains="Collaborator")
+            or find_node(root, text="Tag")
+            or find_node(root, desc="Tag")
+            or find_node(root, desc_contains="Tap to tag")
+            or find_node(root, res_id_contains="media_thumbnail")
         )
 
     tag_bounds = _find_tag_people(edit_xml)
     if not tag_bounds:
-        scroll_view = find_node(ET.fromstring(edit_xml), res_id_contains="edit_media_scroll_view")
-        scroll_cx = scroll_view["cx"] if scroll_view else 540
-        scroll_cy = scroll_view["cy"] if scroll_view else 1400
-        for scroll_attempt in range(2):
-            print(f"[!] 'Tag people' row not visible — scrolling edit screen down (attempt {scroll_attempt + 1}/2)...", file=sys.stderr)
-            run_cmd(f"adb -s {device} shell input swipe {scroll_cx} {scroll_cy} {scroll_cx} 600 500", check=False)
+        # Dismiss keyboard again just in case
+        run_cmd(f"adb -s {device} shell input keyevent 111", check=False)
+        time.sleep(0.4)
+        for scroll_attempt in range(3):
+            print(f"[!] 'Tag people' row not visible — scrolling edit screen down (attempt {scroll_attempt + 1}/3)...", file=sys.stderr)
+            run_cmd(f"adb -s {device} shell input swipe 540 1200 540 500 400", check=False)
             time.sleep(1.5)
             edit_xml = get_ui_dump(device)
             tag_bounds = _find_tag_people(edit_xml)
             if tag_bounds:
                 break
+
+    if not tag_bounds:
+        # Try scrolling up in case it was at the top
+        print(f"[!] Still not visible — scrolling edit screen back up...", file=sys.stderr)
+        run_cmd(f"adb -s {device} shell input swipe 540 500 540 1300 400", check=False)
+        time.sleep(1.5)
+        edit_xml = get_ui_dump(device)
+        tag_bounds = _find_tag_people(edit_xml)
 
     if not tag_bounds:
         raise RuntimeError("Feed Post navigation failed: 'Tag people' row not found in UI hierarchy")
@@ -720,6 +748,29 @@ def inspect_and_reconcile_tagging_screen(device, target_accounts, header_collabs
     print(f"[*] Accounts already attached: {already_active}", file=sys.stderr)
     print(f"[*] Missing accounts to invite: {missing_accounts}", file=sys.stderr)
 
+    # For Feed Posts: Instagram separates "Tag people" and "Invite collaborator" into separate tabs
+    if not is_reel and missing_accounts:
+        collab_tab = (
+            find_node(root, text_contains="Invite collaborator")
+            or find_node(root, desc_contains="Invite collaborator")
+            or find_node(root, text_contains="Invite collaborators")
+            or find_node(root, desc_contains="Invite collaborators")
+            or find_node(root, text="Collaborators")
+            or find_node(root, desc="Collaborators")
+            or find_node(root, text="Collaborator")
+            or find_node(root, desc="Collaborator")
+            or find_node(root, res_id_contains="invite_collaborator")
+            or find_node(root, res_id_contains="collaborator_tag_tab")
+            or find_node(root, res_id_contains="tag_collaborator")
+        )
+        if collab_tab:
+            print(f"[*] Switching to 'Invite collaborator' mode at ({collab_tab['cx']}, {collab_tab['cy']})...", file=sys.stderr)
+            tap(device, collab_tab["cx"], collab_tab["cy"], delay=2.0)
+            time.sleep(1.0)
+            xml_str = get_ui_dump(device)
+            if xml_str:
+                root = ET.fromstring(xml_str)
+
     # Step D: Invite missing accounts
     for missing_user in missing_accounts:
         print(f"[*] Inviting missing collaborator @{missing_user}...", file=sys.stderr)
@@ -737,8 +788,14 @@ def inspect_and_reconcile_tagging_screen(device, target_accounts, header_collabs
                 find_node(root, res_id_contains="invite_collaborator")
                 or find_node(root, desc_contains="Invite collaborator")
                 or find_node(root, text_contains="Invite collaborator")
+                or find_node(root, desc_contains="Invite collaborators")
+                or find_node(root, text_contains="Invite collaborators")
                 or find_node(root, text_contains="Add collaborator")
                 or find_node(root, desc_contains="Add collaborator")
+                or find_node(root, text="Collaborators")
+                or find_node(root, desc="Collaborators")
+                or find_node(root, text="Collaborator")
+                or find_node(root, desc="Collaborator")
                 or find_node(root, res_id_contains="collab")
             )
 
@@ -887,6 +944,21 @@ def inspect_and_reconcile_tagging_screen(device, target_accounts, header_collabs
             if confirm_b:
                 tap(device, confirm_b["cx"], confirm_b["cy"], delay=2.0)
                 xml_sheet = get_ui_dump(device)
+                shr = ET.fromstring(xml_sheet)
+
+            # In Feed Posts, selecting a user from search leaves the search bar open until Done checkmark is tapped
+            if "search_edit_text" in xml_sheet:
+                done_on_search = (
+                    find_node(shr, desc="Done")
+                    or find_node(shr, text="Done")
+                    or find_node(shr, desc="Save")
+                    or find_node(shr, res_id_contains="action_bar_button_action")
+                    or find_node(shr, res_id_contains="action_button")
+                )
+                if done_on_search and done_on_search["cy"] < 350 and done_on_search["cx"] > 700:
+                    print(f"[*] Committing search selection via Done button at ({done_on_search['cx']}, {done_on_search['cy']})...", file=sys.stderr)
+                    tap(device, done_on_search["cx"], done_on_search["cy"], delay=2.0)
+                    xml_sheet = get_ui_dump(device)
 
             # Check if search view is still open (tap didn't select an invite)
             if "search_edit_text" in xml_sheet:
@@ -919,7 +991,17 @@ def inspect_and_reconcile_tagging_screen(device, target_accounts, header_collabs
             or find_node(r_tag_done, text="Done")
             or find_node(r_tag_done, desc="Save")
             or find_node(r_tag_done, text="Save")
+            or find_node(r_tag_done, desc="Checkmark")
         )
+        if not done_b:
+            for node in r_tag_done.iter("node"):
+                if node.attrib.get("clickable") == "true":
+                    b = parse_bounds(node.attrib.get("bounds"))
+                    if b and b["cx"] > 800 and b["cy"] < 320:
+                        done_b = b
+                        print(f"[*] Found top-right Done button at {done_b}", file=sys.stderr)
+                        break
+
         if not done_b:
             raise RuntimeError("Tagging screen failed: 'Done/Save' button not found in UI hierarchy")
         tap(device, done_b["cx"], done_b["cy"], delay=2.5)
@@ -934,7 +1016,17 @@ def inspect_and_reconcile_tagging_screen(device, target_accounts, header_collabs
             or find_node(r_edit_done, text="Done")
             or find_node(r_edit_done, desc="Save")
             or find_node(r_edit_done, text="Save")
+            or find_node(r_edit_done, desc="Checkmark")
         )
+        if not save_b:
+            for node in r_edit_done.iter("node"):
+                if node.attrib.get("clickable") == "true":
+                    b = parse_bounds(node.attrib.get("bounds"))
+                    if b and b["cx"] > 800 and b["cy"] < 320:
+                        save_b = b
+                        print(f"[*] Found top-right Save button at {save_b}", file=sys.stderr)
+                        break
+
         if not save_b:
             raise RuntimeError("Edit screen failed: 'Save/Done' button not found in UI hierarchy")
         tap(device, save_b["cx"], save_b["cy"], delay=3.5)

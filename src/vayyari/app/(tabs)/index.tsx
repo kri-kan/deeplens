@@ -35,6 +35,7 @@ import {
   LuStore,
   LuSparkles,
   LuPackage,
+  LuActivity,
 } from '@/components/tamagui-ui/icons/lu';
 import {
   RiWhatsappLine,
@@ -181,6 +182,15 @@ const SYSTEM_UTILITIES: RawUtilityItem[] = [
     route: '/utilities/whatsapp',
     color: '#25D366',
     permission: PERMISSIONS.WHATSAPP_VIEW,
+  },
+  {
+    id: 'pipeline-events',
+    title: 'Pipeline Events',
+    icon: <LuActivity size={36} color="#0284C7" />,
+    route: '/utilities/whatsapp/events',
+    color: '#0284C7',
+    description: 'Global event bus, Kafka queue & worker sync',
+    permission: PERMISSIONS.SYSTEM_DASHBOARD_VIEW,
   },
   {
     id: 'playground',

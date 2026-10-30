@@ -4,6 +4,7 @@ import confetti from 'canvas-confetti';
 import { VIPMember } from '../types';
 import { BrandLogo } from './BrandLogo';
 import { sounds } from '../utils/audio';
+import { telemetry } from '../services/telemetry';
 
 interface VIPPassModalProps {
   member: VIPMember | null;
@@ -36,6 +37,7 @@ export const VIPPassModal: React.FC<VIPPassModalProps> = ({
     navigator.clipboard.writeText(member.vipCode);
     setCopied(true);
     sounds.playChime();
+    telemetry.trackSignal('vip_pass_copied', { vipCode: member.vipCode });
     onShowToast(`VIP Pass Code ${member.vipCode} copied to clipboard!`);
     setTimeout(() => setCopied(false), 2500);
   };
@@ -44,6 +46,7 @@ export const VIPPassModal: React.FC<VIPPassModalProps> = ({
     const text = encodeURIComponent(
       `I just received my exclusive VIP Early Access Pass for Vayyari Haute Couture! ✨\n\nPassport No: ${member.vipCode}\nDiscover handcrafted silks and royal bridal drapes before the public launch: ${window.location.origin}`
     );
+    telemetry.trackSignal('vip_pass_shared_whatsapp', { vipCode: member.vipCode });
     window.open(`https://wa.me/?text=${text}`, '_blank');
     sounds.playTick();
   };

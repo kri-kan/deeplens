@@ -46,14 +46,14 @@ export class GroupReadinessService {
             logLevel: logLevel.ERROR,
             retry: {
                 initialRetryTime: 300,
-                retries: 8
+                retries: 3
             }
         });
 
         this.producer = this.kafka.producer({
             retry: {
                 initialRetryTime: 300,
-                retries: 8
+                retries: 3
             }
         });
     }
@@ -208,6 +208,7 @@ export class GroupReadinessService {
             let isNewGroup = false;
 
             const oldHasPendingMedia = groupRes.rows[0]?.has_pending_media;
+            const hasDeeplensProduct = Boolean(groupRes.rows[0]?.deeplens_product_id);
             if (groupRes.rows.length > 0) {
                 currentStatus = groupRes.rows[0].status;
                 processAsProduct = groupRes.rows[0].process_as_product;
@@ -284,7 +285,7 @@ export class GroupReadinessService {
                 }
 
                 // In staging, we do NOT trigger create event immediately. It's handled by staging poller after 45s.
-                if (currentStatus === 'product_created') {
+                if (currentStatus === 'product_created' || hasDeeplensProduct) {
                     // Emit media.added event for new media files
                     await this.initialize();
                     if (!this.isConnected) {
@@ -315,7 +316,7 @@ export class GroupReadinessService {
                 }
             } else {
                 // Ineligible logic: If a group had a product (or product creation was requested) but now doesn't qualify (0 media or 0 text), delete it permanently!
-                if (['product_create_sent', 'product_created'].includes(currentStatus)) {
+                if (['product_create_sent', 'product_created'].includes(currentStatus) || hasDeeplensProduct) {
                     await this.initialize();
                     if (!this.isConnected) {
                         throw new Error('Kafka producer not connected, cannot emit delete event');

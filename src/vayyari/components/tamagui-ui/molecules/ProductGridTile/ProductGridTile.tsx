@@ -14,6 +14,7 @@ export interface ProductGridTileData {
   category?: string;
   imageUri?: string;
   isStarred?: boolean;
+  isMediaReviewRequired?: boolean;
   isPublishedToStore?: boolean;
   listingCount?: number;
   mediaCount?: number;
@@ -28,6 +29,7 @@ export interface ProductGridTileData {
   occasions?: string[];
   confidenceScore?: number;
   unifiedAttributes?: Record<string, any>;
+  similarityPercentage?: number;
 }
 
 export interface ProductGridTileProps {
@@ -41,7 +43,7 @@ export interface ProductGridTileProps {
   onError?: (message: string) => void;
 }
 
-export const ProductGridTile = memo(function ProductGridTile({
+function ProductGridTileComponent({
   item,
   selected = false,
   selectionMode = false,
@@ -95,20 +97,22 @@ export const ProductGridTile = memo(function ProductGridTile({
       }),
     ]).start();
 
-    // 4. Background mutation with rollback on error
+    // 4. Defer parent state & API mutation to next frame so visual flip & spring run with 0ms UI lockup
     isMutatingRef.current = true;
-    try {
-      await onToggleStar(item.id, nextValue);
-    } catch (err) {
-      // Rollback on error
-      setLocalStarred(prevValue);
-      if (Platform.OS !== 'web') {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+    setTimeout(async () => {
+      try {
+        await onToggleStar(item.id, nextValue);
+      } catch (err) {
+        // Rollback on error
+        setLocalStarred(prevValue);
+        if (Platform.OS !== 'web') {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+        }
+        onError?.('Failed to update star. Reverted change.');
+      } finally {
+        isMutatingRef.current = false;
       }
-      onError?.('Failed to update star. Reverted change.');
-    } finally {
-      isMutatingRef.current = false;
-    }
+    }, 0);
   };
 
   const hasAiFacets = Boolean(
@@ -137,11 +141,13 @@ export const ProductGridTile = memo(function ProductGridTile({
       ? (item.unifiedAttributes.confidence_score <= 1 ? Math.round(item.unifiedAttributes.confidence_score * 100) : Math.round(item.unifiedAttributes.confidence_score))
       : null);
 
-  const isHighMedia = Boolean(
-    (item.mediaCount ?? 0) > 30 ||
-    item.tags?.includes('needs-zoning-review') ||
-    item.rawItem?.tags?.includes('needs-zoning-review')
-  );
+  const isHighMedia = item.isMediaReviewRequired !== undefined
+    ? Boolean(item.isMediaReviewRequired)
+    : Boolean(
+        (item.mediaCount ?? 0) > 30 ||
+        item.tags?.includes('needs-zoning-review') ||
+        item.rawItem?.tags?.includes('needs-zoning-review')
+      );
 
   return (
     <TouchableOpacity
@@ -176,8 +182,36 @@ export const ProductGridTile = memo(function ProductGridTile({
           </YStack>
         )}
 
+        {/* Visual Similarity Match Badge */}
+        {item.similarityPercentage != null && (
+          <XStack
+            position="absolute"
+            top={selectionMode ? 32 : (item.isPublishedToStore ? 30 : 6)}
+            left={6}
+            backgroundColor={
+              item.similarityPercentage >= 80
+                ? '#059669'
+                : item.similarityPercentage >= 60
+                ? '#D97706'
+                : '#475569'
+            }
+            paddingHorizontal={6}
+            paddingVertical={2.5}
+            borderRadius={4}
+            alignItems="center"
+            gap={3.5}
+            zIndex={10}
+            borderWidth={0.5}
+            borderColor="rgba(255, 255, 255, 0.4)"
+          >
+            <Text fontSize={9} fontWeight="800" color="#FFFFFF">
+              {item.similarityPercentage}% Match
+            </Text>
+          </XStack>
+        )}
+
         {/* AI Enrichment Badge */}
-        {hasAiFacets && !!aiFacetLabel && (
+        {item.similarityPercentage == null && hasAiFacets && !!aiFacetLabel && (
           <XStack
             position="absolute"
             top={selectionMode ? 32 : (item.isPublishedToStore ? 30 : 6)}
@@ -337,4 +371,40 @@ export const ProductGridTile = memo(function ProductGridTile({
       </YStack>
     </TouchableOpacity>
   );
-});
+}
+
+function areTilePropsEqual(prev: ProductGridTileProps, next: ProductGridTileProps): boolean {
+  if (prev.selected !== next.selected) return false;
+  if (prev.selectionMode !== next.selectionMode) return false;
+  if (prev.onPress !== next.onPress) return false;
+  if (prev.onLongPress !== next.onLongPress) return false;
+  if (prev.onToggleStar !== next.onToggleStar) return false;
+  if (prev.onQuickEdit !== next.onQuickEdit) return false;
+  if (prev.onError !== next.onError) return false;
+  if (prev.item === next.item) return true;
+
+  const p = prev.item;
+  const n = next.item;
+  return (
+    p.id === n.id &&
+    p.isStarred === n.isStarred &&
+    p.isMediaReviewRequired === n.isMediaReviewRequired &&
+    p.price === n.price &&
+    p.imageUri === n.imageUri &&
+    p.productCode === n.productCode &&
+    p.category === n.category &&
+    p.title === n.title &&
+    p.timeAgo === n.timeAgo &&
+    p.mediaCount === n.mediaCount &&
+    p.isPublishedToStore === n.isPublishedToStore &&
+    p.craft === n.craft &&
+    p.fabric === n.fabric &&
+    p.motif === n.motif &&
+    p.border === n.border &&
+    p.stitchType === n.stitchType &&
+    p.confidenceScore === n.confidenceScore
+  );
+}
+
+export const ProductGridTile = memo(ProductGridTileComponent, areTilePropsEqual);
+

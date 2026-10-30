@@ -193,14 +193,6 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
         <View style={styles.meta}>
           <View style={styles.titleRow}>
             <View style={styles.nameContainer}>
-              {onBack && (
-                <IconButton
-                  icon="arrow-left"
-                  size={20}
-                  style={styles.backIcon}
-                  onPress={onBack}
-                />
-              )}
               <Text variant="titleLarge" style={styles.bold}>{profile.name || profile.username}</Text>
             </View>
             <IconButton icon="cog" size={20} style={styles.settingsIcon} onPress={onShowSettings} />
@@ -258,30 +250,85 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
             </TouchableOpacity>
           </View>
 
-          {profile.lastSyncedAt && (
-            <Text
-              variant="bodySmall"
-              style={{ color: theme.colors.onSurfaceVariant, fontStyle: 'italic', marginVertical: 3 }}
+          {/* Last Scraped & Collapsible Bio / Details Toggle */}
+          <View style={styles.lastScrapedRow}>
+            {profile.lastSyncedAt ? (
+              <Text
+                variant="bodySmall"
+                style={[styles.lastScrapedText, { color: theme.colors.onSurfaceVariant }]}
+                numberOfLines={1}
+              >
+                Last Scraped: {new Date(profile.lastSyncedAt).toLocaleString()}
+              </Text>
+            ) : (
+              <View style={{ flex: 1 }} />
+            )}
+
+            {Boolean(profile.biography) && (
+              <TouchableOpacity
+                onPress={onToggleBio}
+                activeOpacity={0.7}
+                style={[
+                  styles.collapseToggle,
+                  {
+                    backgroundColor: theme.colors.elevation?.level2 || theme.colors.surfaceVariant,
+                  },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={bioExpanded ? 'Hide Bio' : 'Show Bio'}
+              >
+                <Text
+                  variant="labelSmall"
+                  style={[styles.collapseToggleText, { color: theme.colors.primary }]}
+                >
+                  {bioExpanded ? 'Hide' : 'Details'}
+                </Text>
+                <Icon
+                  source={bioExpanded ? 'chevron-up' : 'chevron-down'}
+                  size={13}
+                  color={theme.colors.primary}
+                />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {bioExpanded && Boolean(profile.biography) && (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={onToggleBio}
+              style={[
+                styles.bioContainer,
+                { backgroundColor: theme.colors.elevation?.level1 || 'rgba(0,0,0,0.03)' },
+              ]}
             >
-              Last Scraped: {new Date(profile.lastSyncedAt).toLocaleString()}
-            </Text>
+              <Text
+                variant="bodySmall"
+                style={[styles.bio, { color: theme.colors.onSurface }]}
+              >
+                {profile.biography}
+              </Text>
+            </TouchableOpacity>
           )}
-          <Text
-            variant="bodySmall"
-            style={styles.bio}
-            numberOfLines={bioExpanded ? undefined : 3}
-            onPress={onToggleBio}
-          >
-            {profile.biography}
-          </Text>
         </View>
       </View>
 
-      <View style={[styles.statsRow, { backgroundColor: theme.colors.surfaceVariant, borderRadius: 12, marginHorizontal: 16 }]}>
+      <View
+        style={[
+          styles.statsRow,
+          {
+            backgroundColor: theme.colors.elevation?.level1 || theme.colors.surfaceVariant,
+            borderColor: theme.colors.outlineVariant || 'rgba(0,0,0,0.08)',
+          },
+        ]}
+      >
         <StatBox label="Followers" value={(profile?.followersCount || 0).toLocaleString()} />
         <StatBox label="Posts" value={profile?.mediaCount || 0} />
         <StatBox label="Avg. Likes" value={(metrics?.avgLikes || 0).toLocaleString()} />
-        <StatBox label="Eng. Rate" value={metrics?.engagementRate !== undefined ? `${metrics.engagementRate.toFixed(2)}%` : '0.00%'} />
+        <StatBox
+          label="Eng. Rate"
+          value={metrics?.engagementRate !== undefined ? `${metrics.engagementRate.toFixed(2)}%` : '0.00%'}
+          isLast
+        />
       </View>
 
       {/* Competitor Profile Trajectory Sparkline Curve with Metric Toggle */}
@@ -487,28 +534,48 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   );
 };
 
-const StatBox = ({ label, value }: { label: string; value: string | number }) => (
-  <View style={styles.statBox}>
-    <Text variant="titleMedium" style={styles.bold}>{value}</Text>
-    <Text variant="labelSmall">{label}</Text>
-  </View>
-);
+const StatBox = ({
+  label,
+  value,
+  isLast,
+}: {
+  label: string;
+  value: string | number;
+  isLast?: boolean;
+}) => {
+  const theme = useTheme();
+  return (
+    <View
+      style={[
+        styles.statBox,
+        !isLast && {
+          borderRightWidth: StyleSheet.hairlineWidth,
+          borderRightColor: theme.colors.outlineVariant || 'rgba(0,0,0,0.1)',
+        },
+      ]}
+    >
+      <Text style={[styles.statValue, { color: theme.colors.onSurface }]}>{value}</Text>
+      <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>{label}</Text>
+    </View>
+  );
+};
 
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: 8,
+    paddingVertical: 6,
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    marginBottom: 8,
+    alignItems: 'flex-start',
+    gap: 14,
+    marginBottom: 6,
     paddingHorizontal: 16,
   },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    marginTop: 2,
   },
   meta: {
     flex: 1,
@@ -558,17 +625,68 @@ const styles = StyleSheet.create({
   bold: {
     fontWeight: 'bold',
   },
+  lastScrapedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+    marginTop: 3,
+    marginBottom: 2,
+  },
+  lastScrapedText: {
+    fontStyle: 'italic',
+    fontSize: 11,
+    flexShrink: 1,
+  },
+  collapseToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  collapseToggleText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  bioContainer: {
+    marginTop: 4,
+    padding: 8,
+    borderRadius: 8,
+  },
   bio: {
-    marginTop: 2,
+    fontSize: 12,
+    lineHeight: 16,
   },
   statsRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-around',
-    paddingVertical: 12,
-    marginBottom: 4,
+    marginHorizontal: 16,
+    marginVertical: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   statBox: {
+    flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 2,
+  },
+  statValue: {
+    fontWeight: '700',
+    fontSize: 13,
+    lineHeight: 17,
+  },
+  statLabel: {
+    fontSize: 10,
+    lineHeight: 13,
+    marginTop: 1,
+    fontWeight: '500',
+    letterSpacing: 0.1,
   },
   curveCard: {
     borderRadius: 14,

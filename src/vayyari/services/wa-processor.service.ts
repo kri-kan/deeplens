@@ -26,7 +26,7 @@ async function handleResponseError(res: Response): Promise<never> {
   throw new Error(`WA Processor ${res.status}: ${errorText}`);
 }
 
-async function get<T>(path: string): Promise<T> {
+async function get<T>(path: string, retries = 1): Promise<T> {
   const token = await identityService.getAccessTokenWithRefresh();
   const res = await fetch(`${BASE_URL}/api${path}`, {
     headers: { 
@@ -34,11 +34,17 @@ async function get<T>(path: string): Promise<T> {
       'Authorization': `Bearer ${token}`
     },
   });
-  if (!res.ok) await handleResponseError(res);
+  if (!res.ok) {
+    if (retries > 0 && (res.status === 502 || res.status === 503 || res.status === 504)) {
+      await new Promise(r => setTimeout(r, 500));
+      return get<T>(path, retries - 1);
+    }
+    await handleResponseError(res);
+  }
   return res.json() as Promise<T>;
 }
 
-async function post<T = void>(path: string, body?: object): Promise<T> {
+async function post<T = void>(path: string, body?: object, retries = 1): Promise<T> {
   const token = await identityService.getAccessTokenWithRefresh();
   const res = await fetch(`${BASE_URL}/api${path}`, {
     method: 'POST',
@@ -48,7 +54,13 @@ async function post<T = void>(path: string, body?: object): Promise<T> {
     },
     body: body ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) await handleResponseError(res);
+  if (!res.ok) {
+    if (retries > 0 && (res.status === 502 || res.status === 503 || res.status === 504)) {
+      await new Promise(r => setTimeout(r, 500));
+      return post<T>(path, body, retries - 1);
+    }
+    await handleResponseError(res);
+  }
   if (res.status === 204 || res.headers.get('content-length') === '0') return undefined as T;
   return res.json() as Promise<T>;
 }
@@ -518,8 +530,81 @@ export const waProcessorService = {
   fetchSeparatorCandidates: async (): Promise<EmojiSeparatorCandidate[]> => {
     const res = await get<{ success: boolean; candidates: EmojiSeparatorCandidate[] }>('/emoji-separators/candidates');
     return res.candidates || [];
+  },
+
+  // ---------- Pipeline Events & Global Queue Monitor ----------
+
+  fetchPipelineEvents: async (filter = 'all', limit = 50, offset = 0): Promise<PipelineEventsResponse> => {
+    return get<PipelineEventsResponse>(
+      `/admin/pipeline-events?filter=${encodeURIComponent(filter)}&limit=${limit}&offset=${offset}`
+    );
   }
 };
+
+export interface PipelineMetricGauges {
+  stagingCount: number;
+  awaitingCreationCount: number;
+  pendingMediaSyncCount: number;
+  errorCount: number;
+  reprocessCount24h: number;
+}
+
+export interface PipelineEventCatalogItem {
+  topic: string;
+  name: string;
+  direction: string;
+  consumer: string;
+  purpose: string;
+  trigger: string;
+  priority: string;
+}
+
+export interface PipelineAuditEvent {
+  id: number;
+  groupId: string;
+  event: string;
+  category: 'split_merge' | 'reprocess' | 'product_create' | 'media_sync' | 'lifecycle' | 'error' | 'other';
+  actor: string;
+  occurredAt: string;
+  purposeDescription: string;
+  productCode: string | null;
+  productId: string | null;
+  chatName: string | null;
+  vendorName: string | null;
+  jid: string | null;
+  mediaCount: number;
+  textCount: number;
+  hasPendingMedia: boolean;
+  groupStatus: string | null;
+  errorDetail: string | null;
+  details: any;
+}
+
+export interface PipelineActiveQueueItem {
+  groupId: string;
+  jid: string;
+  status: string;
+  hasPendingMedia: boolean;
+  mediaCount: number;
+  textCount: number;
+  description: string | null;
+  errorDetail: string | null;
+  lastMessageAt: string | null;
+  updatedAt: string;
+  chatName: string | null;
+  vendorName: string | null;
+  productCode: string | null;
+  productId: string | null;
+}
+
+export interface PipelineEventsResponse {
+  success: boolean;
+  metrics: PipelineMetricGauges;
+  catalog: PipelineEventCatalogItem[];
+  recentEvents: PipelineAuditEvent[];
+  activeQueue: PipelineActiveQueueItem[];
+  totalEvents: number;
+}
 
 export interface EmojiSeparator {
   id: number;

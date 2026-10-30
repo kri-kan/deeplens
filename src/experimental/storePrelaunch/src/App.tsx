@@ -7,6 +7,7 @@ import { Footer } from './components/Footer';
 import { Toast } from './components/Toast';
 import { ToastMessage } from './types';
 import { sounds } from './utils/audio';
+import { telemetry } from './services/telemetry';
 
 export const App: React.FC = () => {
   const [toast, setToast] = useState<ToastMessage | null>(null);
@@ -20,10 +21,27 @@ export const App: React.FC = () => {
     } catch {
       // ignore
     }
+
+    // Track scroll milestones (25%, 50%, 75%, 100%) for prelaunch engagement funnels
+    const reachedMilestones = new Set<number>();
+    const handleScroll = () => {
+      const scrollHeight = document.documentElement.scrollHeight - window.innerHeight;
+      if (scrollHeight <= 0) return;
+      const progress = Math.min(100, Math.round((window.scrollY / scrollHeight) * 100));
+      [25, 50, 75, 100].forEach((milestone) => {
+        if (progress >= milestone && !reachedMilestones.has(milestone)) {
+          reachedMilestones.add(milestone);
+          telemetry.trackScrollMilestone(milestone);
+        }
+      });
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   const toggleVideo = () => {
     if (!videoRef.current) return;
+    const nextState = !isPlaying;
     if (isPlaying) {
       videoRef.current.pause();
       setIsPlaying(false);
@@ -32,6 +50,7 @@ export const App: React.FC = () => {
       setIsPlaying(true);
     }
     sounds.playTick();
+    telemetry.trackVideoAction(nextState ? 'play' : 'pause');
   };
 
   const showToast = (message: string, type: 'gold' | 'success' | 'info' = 'gold') => {

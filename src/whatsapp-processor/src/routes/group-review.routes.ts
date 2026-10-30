@@ -286,10 +286,10 @@ export function createGroupReviewRoutes(): Router {
 
             // Check if group is already created as product
             const groupRes = await client.query(
-                `SELECT status, process_as_product FROM wa.message_groups WHERE group_id = $1`,
+                `SELECT status, process_as_product, deeplens_product_id FROM wa.message_groups WHERE group_id = $1`,
                 [groupId]
             );
-            const isProductCreated = groupRes.rows[0]?.status === 'product_created';
+            const isProductCreated = groupRes.rows[0]?.status === 'product_created' || Boolean(groupRes.rows[0]?.deeplens_product_id);
             const processAsProduct = groupRes.rows[0]?.process_as_product || false;
 
             const newGroupId = `product_${randomUUID()}`;
@@ -314,13 +314,26 @@ export function createGroupReviewRoutes(): Router {
             await logAudit(newGroupId, 'group_staged', 'operator', null, { status: 'staging', splitFrom: groupId });
 
             // Re-evaluate old group
-            await groupReadinessService.checkAndEmitGroupEvent(groupId);
+            try {
+                await groupReadinessService.checkAndEmitGroupEvent(groupId);
+            } catch (err: any) {
+                logger.warn({ err: err.message, groupId }, 'Non-fatal: checkAndEmitGroupEvent failed on old group');
+            }
+
             // Re-evaluate new group
-            await groupReadinessService.checkAndEmitGroupEvent(newGroupId);
+            try {
+                await groupReadinessService.checkAndEmitGroupEvent(newGroupId);
+            } catch (err: any) {
+                logger.warn({ err: err.message, newGroupId }, 'Non-fatal: checkAndEmitGroupEvent failed on new group');
+            }
 
             // If old group was already a product, emit reprocessing event to unlink media on C# side
             if (isProductCreated) {
-                await groupReadinessService.emitReprocessEvent('split', groupId, newGroupId);
+                try {
+                    await groupReadinessService.emitReprocessEvent('split', groupId, newGroupId);
+                } catch (err: any) {
+                    logger.warn({ err: err.message, groupId, newGroupId }, 'Non-fatal: emitReprocessEvent for split failed');
+                }
             }
 
             res.json({ success: true, message: 'Group split successful', newGroupId, splitCount: updateRes.rowCount });
@@ -349,11 +362,11 @@ export function createGroupReviewRoutes(): Router {
         try {
             // Fetch groups
             const sourceGroupRes = await client.query(
-                `SELECT status FROM wa.message_groups WHERE group_id = $1`,
+                `SELECT status, deeplens_product_id FROM wa.message_groups WHERE group_id = $1`,
                 [groupId]
             );
             const targetGroupRes = await client.query(
-                `SELECT status FROM wa.message_groups WHERE group_id = $1`,
+                `SELECT status, deeplens_product_id FROM wa.message_groups WHERE group_id = $1`,
                 [targetGroupId]
             );
 
@@ -363,7 +376,36 @@ export function createGroupReviewRoutes(): Router {
 
             const sourceStatus = sourceGroupRes.rows[0].status;
             const targetStatus = targetGroupRes.rows[0].status;
-            const isReprocessNeeded = sourceStatus === 'product_created' || targetStatus === 'product_created';
+
+            if (sourceStatus === 'ignored' || targetStatus === 'ignored') {
+                return res.status(400).json({ success: false, message: 'Cannot merge with an already ignored group' });
+            }
+
+            // Guard: Do not allow merging with groups linked to soft-deleted or archived products
+            const linkedProductIds = [
+                sourceGroupRes.rows[0]?.deeplens_product_id,
+                targetGroupRes.rows[0]?.deeplens_product_id
+            ].filter(Boolean);
+
+            if (linkedProductIds.length > 0) {
+                const prodRes = await client.query(
+                    `SELECT id, base_sku, is_deleted, is_archived FROM public.products WHERE id = ANY($1)`,
+                    [linkedProductIds]
+                );
+                for (const prod of prodRes.rows) {
+                    if (prod.is_deleted || prod.is_archived) {
+                        return res.status(400).json({
+                            success: false,
+                            message: `Cannot merge: Group is linked to a soft-deleted or archived product (${prod.base_sku || prod.id}). Restore the product first before merging.`
+                        });
+                    }
+                }
+            }
+
+            const isReprocessNeeded = sourceStatus === 'product_created' || 
+                                      targetStatus === 'product_created' || 
+                                      Boolean(sourceGroupRes.rows[0]?.deeplens_product_id) || 
+                                      Boolean(targetGroupRes.rows[0]?.deeplens_product_id);
 
             // Merge messages to target group
             const updateRes = await client.query(
@@ -386,11 +428,19 @@ export function createGroupReviewRoutes(): Router {
             );
 
             // Re-evaluate target group
-            await groupReadinessService.checkAndEmitGroupEvent(targetGroupId);
+            try {
+                await groupReadinessService.checkAndEmitGroupEvent(targetGroupId);
+            } catch (err: any) {
+                logger.warn({ err: err.message, targetGroupId }, 'Non-fatal: checkAndEmitGroupEvent on target group failed');
+            }
 
             // Emit Kafka reprocess if either was product_created
             if (isReprocessNeeded) {
-                await groupReadinessService.emitReprocessEvent('merge', groupId, targetGroupId);
+                try {
+                    await groupReadinessService.emitReprocessEvent('merge', groupId, targetGroupId);
+                } catch (err: any) {
+                    logger.warn({ err: err.message, groupId, targetGroupId }, 'Non-fatal: emitReprocessEvent for merge failed');
+                }
             }
 
             res.json({ success: true, message: 'Groups merged successfully', mergedCount: updateRes.rowCount });
@@ -442,10 +492,10 @@ export function createGroupReviewRoutes(): Router {
             }
 
             const oldGroupRes = await client.query(
-                `SELECT status FROM wa.message_groups WHERE group_id = $1`,
+                `SELECT status, deeplens_product_id FROM wa.message_groups WHERE group_id = $1`,
                 [groupId]
             );
-            const isOldProductCreated = oldGroupRes.rows[0]?.status === 'product_created';
+            const isOldProductCreated = oldGroupRes.rows[0]?.status === 'product_created' || Boolean(oldGroupRes.rows[0]?.deeplens_product_id);
 
             // Update message group assignment
             await client.query(

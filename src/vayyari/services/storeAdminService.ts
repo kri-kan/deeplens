@@ -1,6 +1,6 @@
 const TOKEN_KEY = 'vayyari_admin_token';
 
-function getStoreApiUrl(): string {
+export function getStoreApiUrl(): string {
   if (typeof process !== 'undefined' && process.env) {
     return (
       process.env.EXPO_PUBLIC_STORE_API_URL ||
@@ -9,6 +9,24 @@ function getStoreApiUrl(): string {
     );
   }
   return 'http://adminapi.vayyarifashions.com';
+}
+
+export function normalizeMediaUrl(url?: string | null): string {
+  if (!url) return '';
+  const storeApiUrl = getStoreApiUrl();
+  return url
+    .replace(/^https?:\/\/media\.vayyarifashions\.com/, storeApiUrl)
+    .replace(/^https?:\/\/(?:localhost|127\.0\.0\.1|192\.168\.0\.170):9000\/store-assets/, `${storeApiUrl}/store-assets`)
+    .replace(/^https?:\/\/(?:localhost|127\.0\.0\.1|192\.168\.0\.170):9000/, `${storeApiUrl}/store-assets`);
+}
+
+export function normalizeStoreMediaItem(m: StoreMediaItem): StoreMediaItem {
+  return {
+    ...m,
+    url: normalizeMediaUrl(m.url),
+    originalUrl: m.originalUrl ? normalizeMediaUrl(m.originalUrl) : normalizeMediaUrl(m.url),
+    modifiedUrl: m.modifiedUrl ? normalizeMediaUrl(m.modifiedUrl) : null,
+  };
 }
 
 async function getStoredAuthToken(): Promise<string | null> {
@@ -21,6 +39,12 @@ async function getStoredAuthToken(): Promise<string | null> {
   }
 }
 
+export interface PublishMediaItem {
+  catalogMediaId?: string;
+  url: string;
+  mediaType?: number;
+}
+
 export interface PublishProductItem {
   vayyariProductId: string;
   productCode: string;
@@ -29,7 +53,8 @@ export interface PublishProductItem {
   categoryName: string;
   fabric?: string;
   baseCost: number;
-  mediaUrls: string[];
+  mediaUrls?: string[];
+  mediaItems?: PublishMediaItem[];
 }
 
 export interface StoreMediaItem {
@@ -39,6 +64,7 @@ export interface StoreMediaItem {
   order: number;
   dwellSeconds: number;
   isCover: boolean;
+  catalogMediaId?: string | null;
   colorGroupId?: string | null;
   isQualified?: boolean;
   isCommon?: boolean;
@@ -48,6 +74,9 @@ export interface StoreMediaItem {
   activeDisplaySource?: 'original' | 'modified';
   hasModified?: boolean;
   transformRecipe?: string | null;
+  sourcePlatform?: 'instagram' | 'catalog' | 'whatsapp' | null;
+  sourceUrl?: string | null;
+  sourcePostId?: string | null;
 }
 
 export interface StoreProduct {
@@ -80,6 +109,8 @@ export interface StoreProduct {
   isReEvaluationPending?: boolean;
   waitlistCount?: number;
   siblingSwatches?: any[];
+  swatchesCount?: number;
+  skus?: any[];
 }
 
 export interface StoreProductAudit {
@@ -112,6 +143,7 @@ export interface UpdateCurationPayload {
   colorGroups?: any[];
   mediaOrder?: StoreMediaItem[];
   tags?: string[];
+  skus?: any[];
 }
 
 class StoreAdminService {
@@ -172,7 +204,15 @@ class StoreAdminService {
       throw new Error(`Failed to fetch in-store products: ${res.status}`);
     }
 
-    return res.json();
+    const products: StoreProduct[] = await res.json();
+    return (products || []).map((p) => ({
+      ...p,
+      mediaOrder: (p.mediaOrder || []).map(normalizeStoreMediaItem),
+      siblingSwatches: (p.siblingSwatches || []).map((s: any) => ({
+        ...s,
+        heroImageUrl: normalizeMediaUrl(s.heroImageUrl),
+      })),
+    }));
   }
 
   async getProductCuration(productId: string): Promise<StoreProductCuration> {
@@ -187,7 +227,18 @@ class StoreAdminService {
       throw new Error(`Failed to fetch product curation: ${res.status}`);
     }
 
-    return res.json();
+    const curation: StoreProductCuration = await res.json();
+    if (curation?.product) {
+      curation.product = {
+        ...curation.product,
+        mediaOrder: (curation.product.mediaOrder || []).map(normalizeStoreMediaItem),
+        siblingSwatches: (curation.product.siblingSwatches || []).map((s: any) => ({
+          ...s,
+          heroImageUrl: normalizeMediaUrl(s.heroImageUrl),
+        })),
+      };
+    }
+    return curation;
   }
 
   async updateProductCuration(productId: string, payload: UpdateCurationPayload): Promise<boolean> {
@@ -229,7 +280,8 @@ class StoreAdminService {
       throw new Error(`Failed to upload modified media: ${res.status}`);
     }
 
-    return res.json();
+    const raw: StoreMediaItem = await res.json();
+    return normalizeStoreMediaItem(raw);
   }
 
   async deleteModifiedMedia(productId: string, mediaId: string): Promise<StoreMediaItem> {
@@ -244,7 +296,8 @@ class StoreAdminService {
       throw new Error(`Failed to delete modified media: ${res.status}`);
     }
 
-    return res.json();
+    const raw: StoreMediaItem = await res.json();
+    return normalizeStoreMediaItem(raw);
   }
 
   async toggleMediaDisplaySource(
@@ -264,7 +317,8 @@ class StoreAdminService {
       throw new Error(`Failed to toggle media display source: ${res.status}`);
     }
 
-    return res.json();
+    const raw: StoreMediaItem = await res.json();
+    return normalizeStoreMediaItem(raw);
   }
 
   async getFleetStats(): Promise<DeviceFleetStats> {
@@ -417,6 +471,31 @@ class StoreAdminService {
       return [];
     }
   }
+
+  async getDailyAcquisitions(range = 10, granularity: GrowthGranularity = 'day'): Promise<DailyGrowthSummary> {
+    const headers = await this.getAuthHeaders();
+    const baseUrl = getStoreApiUrl();
+    try {
+      const res = await fetch(`${baseUrl}/api/v1/admin/telemetry/growth/acquisitions?range=${range}&granularity=${granularity}`, {
+        method: 'GET',
+        headers,
+      });
+      if (!res.ok) {
+        throw new Error(`Failed to load daily acquisitions: ${res.status}`);
+      }
+      return res.json();
+    } catch (err) {
+      console.error('Failed to load daily acquisitions:', err);
+      return {
+        dailyRecords: [],
+        totalNewDevices: 0,
+        totalNewUsers: 0,
+        daysAnalyzed: range,
+        rangeAnalyzed: range,
+        granularity,
+      };
+    }
+  }
 }
 
 export interface DeltaMediaAllocation {
@@ -473,6 +552,29 @@ export interface HourlyActivitySummary {
   historicalHoursRetained: number;
 }
 
+export type GrowthGranularity = 'day' | 'week' | 'month';
+
+export interface DailyAcquisitionItem {
+  date: string;
+  dateLabel: string;
+  dayOfWeek: string;
+  newDevices: number;
+  newUsers: number;
+  cumulativeDevices: number;
+  cumulativeUsers: number;
+}
+
+export interface DailyGrowthSummary {
+  dailyRecords: DailyAcquisitionItem[];
+  totalNewDevices: number;
+  totalNewUsers: number;
+  daysAnalyzed: number;
+  rangeAnalyzed: number;
+  granularity: GrowthGranularity;
+  peakNewDevicesDate?: string | null;
+  peakNewUsersDate?: string | null;
+}
+
 export interface StoreDeviceItem {
   deviceId: string;
   fingerprintHash?: string;
@@ -495,6 +597,39 @@ export interface DeviceFleetStats {
   platformBreakdown: Record<string, number>;
   topSignalTypes: Record<string, number>;
   recentDevices: StoreDeviceItem[];
+}
+
+export interface TelemetrySignalRecord {
+  id: string;
+  deviceId: string;
+  sessionId?: string | null;
+  userId?: string | null;
+  signalType: string;
+  properties?: Record<string, any> | null;
+  clientTimestamp?: string | null;
+  serverTimestamp: string;
+  ip?: string | null;
+}
+
+export interface SessionSummaryItem {
+  sessionId: string;
+  deviceId: string;
+  userId?: string | null;
+  startTime: string;
+  endTime?: string | null;
+  durationSeconds: number;
+  landingPage?: string | null;
+  exitPage?: string | null;
+  utmSource?: string | null;
+  utmCampaign?: string | null;
+  totalPageViews: number;
+  productsViewed: number;
+  swatchesExplored: number;
+  bagAdditions: number;
+  reachedCheckout: boolean;
+  converted: boolean;
+  orderId?: string | null;
+  createdAt: string;
 }
 
 export const storeAdminService = new StoreAdminService();

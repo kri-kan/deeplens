@@ -16,8 +16,9 @@ import {
   LuTrash2,
   LuCheck,
 } from '../../icons/lu';
-import { useTheme } from '@/theme';
+import { useTheme, useResponsiveLayout } from '@/theme';
 import { StoreCurationMediaItem } from './types';
+import { normalizeMediaUrl } from '@/services/storeAdminService';
 
 export interface MediaDualCardStackModalProps {
   visible: boolean;
@@ -39,11 +40,12 @@ export function MediaDualCardStackModal({
   onDeleteModified,
 }: MediaDualCardStackModalProps) {
   const { tokens } = useTheme();
+  const { modalMaxWidth, pagePaddingHorizontal } = useResponsiveLayout();
 
   if (!visible || !mediaItem) return null;
 
-  const originalUrl = mediaItem.originalUri || mediaItem.uri;
-  const modifiedUrl = mediaItem.modifiedUri;
+  const originalUrl = normalizeMediaUrl(mediaItem.originalUri || mediaItem.uri);
+  const modifiedUrl = mediaItem.modifiedUri ? normalizeMediaUrl(mediaItem.modifiedUri) : null;
   const hasModified = !!mediaItem.hasModified && !!modifiedUrl;
   const activeSource = mediaItem.activeDisplaySource || (hasModified ? 'modified' : 'original');
   const isOriginalActive = activeSource === 'original';
@@ -52,13 +54,13 @@ export function MediaDualCardStackModal({
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
       <View style={styles.modalBackdrop}>
-        <View style={[styles.modalSheet, { backgroundColor: tokens.surface }]}>
+        <View style={[styles.modalSheet, { backgroundColor: tokens.surface, maxWidth: modalMaxWidth as any }]}>
           {/* Header */}
           <XStack
             alignItems="center"
             justifyContent="space-between"
-            paddingHorizontal={20}
-            paddingVertical={16}
+            paddingHorizontal={pagePaddingHorizontal}
+            paddingVertical={14}
             borderBottomWidth={1}
             borderBottomColor={tokens.border}
           >
@@ -308,7 +310,7 @@ export function MediaDualCardStackModal({
 
           {/* Footer */}
           <XStack
-            paddingHorizontal={20}
+            paddingHorizontal={pagePaddingHorizontal}
             paddingVertical={12}
             borderTopWidth={1}
             borderTopColor={tokens.border}
@@ -337,7 +339,7 @@ const styles = StyleSheet.create({
   },
   modalSheet: {
     width: '100%',
-    maxWidth: 680,
+    alignSelf: 'center',
     maxHeight: '90%',
     borderRadius: 16,
     overflow: 'hidden',

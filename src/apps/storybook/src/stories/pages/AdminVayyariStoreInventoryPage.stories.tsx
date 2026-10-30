@@ -45,3 +45,15 @@ export const EmptyStoreInventory: Story = {
     products: [],
   },
 };
+
+/**
+ * 3. Filtered In-Store Inventory:
+ * Demonstrates the inventory screen with filtered products matching active criteria.
+ */
+export const FilteredStoreInventory: Story = {
+  name: '3. Filtered In-Store Inventory (Multi-SKU Pure Silk Sarees)',
+  args: {
+    products: MOCK_PUBLISHED_PRODUCTS.filter((p) => p.fabric.includes('Silk')),
+  },
+};
+

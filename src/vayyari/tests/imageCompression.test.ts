@@ -45,3 +45,5 @@ describe('Image WebP Compression & Pre-Upload Optimization Rules', () => {
     assert.strictEqual(result.height, 3000);
   });
 });
+
+

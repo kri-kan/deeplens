@@ -25,6 +25,9 @@ import {
   LuExternalLink,
   LuPencil,
   LuSparkles,
+  LuPalette,
+  LuLayers,
+  LuX,
 } from '../icons/lu';
 import { useTheme } from '@/theme';
 import {
@@ -36,6 +39,13 @@ import {
   StoreSortOption,
   PriceRangeOption,
 } from './AdminVayyariStorePublishPage';
+import {
+  StoreInventoryFilterDrawer,
+  StoreInventoryFilterState,
+  DEFAULT_STORE_INVENTORY_FILTER_STATE,
+  getActiveStoreInventoryFilterCount,
+} from '../molecules/StoreInventoryFilterDrawer';
+import { isFuzzyMatch } from '@/utils/fuzzySearch';
 
 export type StoreLifecycleFilter = 'all' | 'available' | 'few_left' | 'sold_out' | 'out_of_stock';
 
@@ -83,66 +93,104 @@ export function AdminVayyariStoreInventoryPage({
   const topInset = disableSafeArea ? 0 : insets.top;
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
-  const [selectedFabric, setSelectedFabric] = useState('All');
-  const [selectedPriceRange, setSelectedPriceRange] = useState<PriceRangeOption>('all');
-  const [selectedLifecycle, setSelectedLifecycle] = useState<StoreLifecycleFilter>('all');
-  const [selectedSort, setSelectedSort] = useState<StoreSortOption>('newest');
+  const [filters, setFilters] = useState<StoreInventoryFilterState>(DEFAULT_STORE_INVENTORY_FILTER_STATE);
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
   const [resyncToast, setResyncToast] = useState<string | null>(null);
 
   const activeFilterCount = useMemo(() => {
-    let count = 0;
-    if (selectedCategory !== 'All') count++;
-    if (selectedFabric !== 'All') count++;
-    if (selectedPriceRange !== 'all') count++;
-    if (selectedLifecycle !== 'all') count++;
-    if (selectedSort !== 'newest') count++;
-    return count;
-  }, [selectedCategory, selectedFabric, selectedPriceRange, selectedLifecycle, selectedSort]);
+    return getActiveStoreInventoryFilterCount(filters);
+  }, [filters]);
+
+  const activeFilterChips = useMemo(() => {
+    const chips: { id: string; label: string; onRemove: () => void }[] = [];
+    if (filters.lifecycle !== 'all') {
+      const match = LIFECYCLE_FILTERS.find((l) => l.id === filters.lifecycle);
+      chips.push({
+        id: 'lifecycle',
+        label: `${match?.icon || ''} ${match?.label || filters.lifecycle}`,
+        onRemove: () => setFilters((f) => ({ ...f, lifecycle: 'all' })),
+      });
+    }
+    if (filters.fabric !== 'All') {
+      chips.push({
+        id: 'fabric',
+        label: `Fabric: ${filters.fabric}`,
+        onRemove: () => setFilters((f) => ({ ...f, fabric: 'All' })),
+      });
+    }
+    if (filters.priceRange !== 'all') {
+      const match = PRICE_OPTIONS.find((p) => p.id === filters.priceRange);
+      chips.push({
+        id: 'price',
+        label: match?.label || filters.priceRange,
+        onRemove: () => setFilters((f) => ({ ...f, priceRange: 'all' })),
+      });
+    }
+    if (filters.sortBy !== 'newest') {
+      const match = SORT_OPTIONS.find((s) => s.id === filters.sortBy);
+      chips.push({
+        id: 'sort',
+        label: match?.label || filters.sortBy,
+        onRemove: () => setFilters((f) => ({ ...f, sortBy: 'newest' })),
+      });
+    }
+    if (filters.skuType && filters.skuType !== 'all') {
+      chips.push({
+        id: 'skuType',
+        label: filters.skuType === 'multi' ? 'Multi-SKU (2+)' : 'Single SKU',
+        onRemove: () => setFilters((f) => ({ ...f, skuType: 'all' })),
+      });
+    }
+    return chips;
+  }, [filters]);
 
   const resetFilters = () => {
-    setSelectedCategory('All');
-    setSelectedFabric('All');
-    setSelectedPriceRange('all');
-    setSelectedLifecycle('all');
-    setSelectedSort('newest');
+    setFilters({ ...DEFAULT_STORE_INVENTORY_FILTER_STATE });
     setSearchQuery('');
   };
 
   const filteredProducts = useMemo(() => {
     let list = products.filter((p) => {
-      const matchCat = selectedCategory === 'All' || p.category.toLowerCase().includes(selectedCategory.toLowerCase());
-      const matchFabric = selectedFabric === 'All' || p.fabric.toLowerCase().includes(selectedFabric.toLowerCase());
-      
+      const matchCat =
+        filters.category === 'All' ||
+        p.category.toLowerCase().includes(filters.category.toLowerCase());
+      const matchFabric =
+        filters.fabric === 'All' ||
+        p.fabric.toLowerCase().includes(filters.fabric.toLowerCase());
+
       let matchPrice = true;
       const price = p.price || 8000;
-      if (selectedPriceRange === 'under_5k') matchPrice = price < 5000;
-      else if (selectedPriceRange === '5k_10k') matchPrice = price >= 5000 && price <= 10000;
-      else if (selectedPriceRange === '10k_20k') matchPrice = price > 10000 && price <= 20000;
-      else if (selectedPriceRange === 'above_20k') matchPrice = price > 20000;
+      if (filters.priceRange === 'under_5k') matchPrice = price < 5000;
+      else if (filters.priceRange === '5k_10k') matchPrice = price >= 5000 && price <= 10000;
+      else if (filters.priceRange === '10k_20k') matchPrice = price > 10000 && price <= 20000;
+      else if (filters.priceRange === 'above_20k') matchPrice = price > 20000;
+
+      let matchSku = true;
+      const swatchesCount = p.swatchesCount || p.siblingSwatches?.length || 1;
+      if (filters.skuType === 'multi') matchSku = swatchesCount > 1;
+      else if (filters.skuType === 'single') matchSku = swatchesCount <= 1;
 
       const q = searchQuery.toLowerCase().trim();
       const matchQuery =
         !q ||
-        p.title.toLowerCase().includes(q) ||
-        p.productCode.toLowerCase().includes(q) ||
-        p.fabric.toLowerCase().includes(q) ||
-        p.category.toLowerCase().includes(q);
+        isFuzzyMatch(p.title, q, 0.45) ||
+        isFuzzyMatch(p.productCode, q, 0.45) ||
+        isFuzzyMatch(p.fabric, q, 0.45) ||
+        isFuzzyMatch(p.category, q, 0.45);
 
-      return matchCat && matchFabric && matchPrice && matchQuery;
+      return matchCat && matchFabric && matchPrice && matchSku && matchQuery;
     });
 
-    if (selectedSort === 'price_low') {
+    if (filters.sortBy === 'price_low') {
       list = [...list].sort((a, b) => (a.price || 8000) - (b.price || 8000));
-    } else if (selectedSort === 'price_high') {
+    } else if (filters.sortBy === 'price_high') {
       list = [...list].sort((a, b) => (b.price || 8000) - (a.price || 8000));
-    } else if (selectedSort === 'media_count') {
+    } else if (filters.sortBy === 'media_count') {
       list = [...list].sort((a, b) => b.mediaCount - a.mediaCount);
     }
 
     return list;
-  }, [products, selectedCategory, selectedFabric, selectedPriceRange, selectedLifecycle, selectedSort, searchQuery]);
+  }, [products, filters, searchQuery]);
 
   const handleResync = (productId: string, code: string) => {
     onResyncProduct?.(productId);
@@ -151,6 +199,9 @@ export function AdminVayyariStoreInventoryPage({
   };
 
   const renderItem = ({ item: product }: { item: VayyariStarredProductItem }) => {
+    const swatchesCount = product.swatchesCount || product.siblingSwatches?.length || 1;
+    const siblingSwatches = product.siblingSwatches || [];
+
     return (
       <View style={styles.gridCard}>
         <Pressable
@@ -179,6 +230,16 @@ export function AdminVayyariStoreInventoryPage({
                 📸 {product.mediaCount}
               </Text>
             </View>
+
+            {/* SKUs Count Badge (Bottom-Left on Image) */}
+            <View style={styles.swatchCountBadge}>
+              <XStack alignItems="center" gap={3}>
+                <LuLayers size={10} color="#fff" />
+                <Text fontSize={9} fontWeight="800" color="#fff">
+                  {swatchesCount} {swatchesCount === 1 ? 'SKU' : 'SKUs'}
+                </Text>
+              </XStack>
+            </View>
           </View>
 
           {/* Card Details & Action */}
@@ -195,6 +256,48 @@ export function AdminVayyariStoreInventoryPage({
             <Text fontSize={10} color={tokens.textMuted} numberOfLines={1}>
               {product.title}
             </Text>
+
+            {/* Swatch Color Preview Dots & SKU Count */}
+            <XStack alignItems="center" justifyContent="space-between" marginTop={2} minHeight={16}>
+              <XStack alignItems="center" gap={3}>
+                {siblingSwatches.length > 0 ? (
+                  <>
+                    {siblingSwatches.slice(0, 4).map((s: any, idx: number) => (
+                      <View
+                        key={idx}
+                        style={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: 5,
+                          backgroundColor: s.colorHex || '#1B4D3E',
+                          borderWidth: 1,
+                          borderColor: tokens.border,
+                        }}
+                      />
+                    ))}
+                    {siblingSwatches.length > 4 && (
+                      <Text fontSize={8.5} fontWeight="700" color={tokens.textMuted}>
+                        +{siblingSwatches.length - 4}
+                      </Text>
+                    )}
+                  </>
+                ) : (
+                  <View
+                    style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: 5,
+                      backgroundColor: product.color && product.color.startsWith('#') ? product.color : '#1B4D3E',
+                      borderWidth: 1,
+                      borderColor: tokens.border,
+                    }}
+                  />
+                )}
+              </XStack>
+              <Text fontSize={9} fontWeight="700" color={tokens.textMuted}>
+                {swatchesCount} {swatchesCount === 1 ? 'SKU' : 'SKUs'}
+              </Text>
+            </XStack>
 
             {/* Prominent Qualify & Group CTA Button */}
             <Pressable
@@ -323,37 +426,46 @@ export function AdminVayyariStoreInventoryPage({
               placeholderTextColor={tokens.textMuted}
               style={styles.searchInput}
             />
+            {searchQuery.length > 0 && (
+              <Pressable onPress={() => setSearchQuery('')} hitSlop={6}>
+                <LuX size={12} color={tokens.textMuted} />
+              </Pressable>
+            )}
           </XStack>
 
-          {/* Toggle Advanced Filters Button */}
+          {/* Dynamic Left Filter Drawer Trigger Button */}
           <Pressable
-            onPress={() => setIsFilterDrawerOpen(!isFilterDrawerOpen)}
+            accessibilityRole="button"
+            accessibilityLabel="Open filter drawer"
+            onPress={() => setIsFilterDrawerOpen(true)}
             style={[
               styles.filterToggleBtn,
               {
-                backgroundColor: activeFilterCount > 0 ? tokens.accent : 'rgba(0,0,0,0.04)',
+                backgroundColor: activeFilterCount > 0 ? `${tokens.accent}14` : 'rgba(0,0,0,0.04)',
                 borderColor: activeFilterCount > 0 ? tokens.accent : tokens.border,
               },
             ]}
           >
-            <XStack alignItems="center" gap={4}>
-              <LuSlidersHorizontal size={13} color={activeFilterCount > 0 ? tokens.accentForeground : tokens.text} />
+            <XStack alignItems="center" gap={5}>
+              <LuSlidersHorizontal size={14} color={activeFilterCount > 0 ? tokens.accent : tokens.text} />
               {activeFilterCount > 0 && (
-                <Text fontSize={11} fontWeight="800" color={tokens.accentForeground}>
-                  {activeFilterCount}
-                </Text>
-              )}
-              {isFilterDrawerOpen ? (
-                <LuChevronUp size={12} color={activeFilterCount > 0 ? tokens.accentForeground : tokens.textSecondary} />
-              ) : (
-                <LuChevronDown size={12} color={activeFilterCount > 0 ? tokens.accentForeground : tokens.textSecondary} />
+                <XStack
+                  paddingHorizontal={5}
+                  paddingVertical={1}
+                  borderRadius={10}
+                  backgroundColor={tokens.accent}
+                >
+                  <Text fontSize={10} fontWeight="800" color="#ffffff">
+                    {activeFilterCount}
+                  </Text>
+                </XStack>
               )}
             </XStack>
           </Pressable>
 
           {activeFilterCount > 0 && (
             <Pressable onPress={resetFilters} hitSlop={6} style={styles.resetBtn}>
-              <LuRotateCcw size={12} color={tokens.textMuted} />
+              <LuRotateCcw size={13} color={tokens.textMuted} />
             </Pressable>
           )}
         </XStack>
@@ -361,11 +473,11 @@ export function AdminVayyariStoreInventoryPage({
         {/* Category Horizontal Scroll */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
           {CATEGORIES.map((cat) => {
-            const isSelected = selectedCategory === cat;
+            const isSelected = filters.category === cat;
             return (
               <Pressable
                 key={cat}
-                onPress={() => setSelectedCategory(cat)}
+                onPress={() => setFilters((f) => ({ ...f, category: cat }))}
                 style={[
                   styles.categoryPill,
                   {
@@ -382,125 +494,37 @@ export function AdminVayyariStoreInventoryPage({
           })}
         </ScrollView>
 
-        {/* ── EXPANDABLE ADVANCED FILTERS ── */}
-        {isFilterDrawerOpen && (
-          <YStack gap={8} paddingTop={6} borderTopWidth={1} borderTopColor={tokens.border}>
-            {/* Lifecycle Status Row */}
-            <YStack gap={4}>
-              <Text fontSize={10} fontWeight="700" color={tokens.textMuted} textTransform="uppercase">
-                Lifecycle Availability
-              </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 5 }}>
-                {LIFECYCLE_FILTERS.map((item) => {
-                  const isSelected = selectedLifecycle === item.id;
-                  return (
-                    <Pressable
-                      key={item.id}
-                      onPress={() => setSelectedLifecycle(item.id)}
-                      style={[
-                        styles.chipPill,
-                        {
-                          backgroundColor: isSelected ? tokens.accentSubtle : 'transparent',
-                          borderColor: isSelected ? tokens.accent : tokens.border,
-                        },
-                      ]}
-                    >
-                      <Text fontSize={10} fontWeight={isSelected ? '800' : '600'} color={isSelected ? tokens.accent : tokens.textSecondary}>
-                        {item.icon} {item.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </YStack>
-
-            {/* Fabric Row */}
-            <YStack gap={4}>
-              <Text fontSize={10} fontWeight="700" color={tokens.textMuted} textTransform="uppercase">
-                Fabric
-              </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 5 }}>
-                {FABRIC_OPTIONS.map((fab) => {
-                  const isSelected = selectedFabric === fab;
-                  return (
-                    <Pressable
-                      key={fab}
-                      onPress={() => setSelectedFabric(fab)}
-                      style={[
-                        styles.chipPill,
-                        {
-                          backgroundColor: isSelected ? tokens.accentSubtle : 'transparent',
-                          borderColor: isSelected ? tokens.accent : tokens.border,
-                        },
-                      ]}
-                    >
-                      <Text fontSize={10} fontWeight={isSelected ? '800' : '600'} color={isSelected ? tokens.accent : tokens.textSecondary}>
-                        {fab}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </YStack>
-
-            {/* Price Range Row */}
-            <YStack gap={4}>
-              <Text fontSize={10} fontWeight="700" color={tokens.textMuted} textTransform="uppercase">
-                Price Range
-              </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 5 }}>
-                {PRICE_OPTIONS.map((p) => {
-                  const isSelected = selectedPriceRange === p.id;
-                  return (
-                    <Pressable
-                      key={p.id}
-                      onPress={() => setSelectedPriceRange(p.id)}
-                      style={[
-                        styles.chipPill,
-                        {
-                          backgroundColor: isSelected ? tokens.accentSubtle : 'transparent',
-                          borderColor: isSelected ? tokens.accent : tokens.border,
-                        },
-                      ]}
-                    >
-                      <Text fontSize={10} fontWeight={isSelected ? '800' : '600'} color={isSelected ? tokens.accent : tokens.textSecondary}>
-                        {p.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </YStack>
-
-            {/* Sort Row */}
-            <YStack gap={4}>
-              <Text fontSize={10} fontWeight="700" color={tokens.textMuted} textTransform="uppercase">
-                Sort By
-              </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 5 }}>
-                {SORT_OPTIONS.map((s) => {
-                  const isSelected = selectedSort === s.id;
-                  return (
-                    <Pressable
-                      key={s.id}
-                      onPress={() => setSelectedSort(s.id)}
-                      style={[
-                        styles.chipPill,
-                        {
-                          backgroundColor: isSelected ? tokens.accentSubtle : 'transparent',
-                          borderColor: isSelected ? tokens.accent : tokens.border,
-                        },
-                      ]}
-                    >
-                      <Text fontSize={10} fontWeight={isSelected ? '800' : '600'} color={isSelected ? tokens.accent : tokens.textSecondary}>
-                        {s.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </YStack>
-          </YStack>
+        {/* Active Filter Chips Bar */}
+        {activeFilterChips.length > 0 && (
+          <XStack alignItems="center" gap={6} paddingTop={2}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, alignItems: 'center' }}>
+              {activeFilterChips.map((chip) => (
+                <XStack
+                  key={chip.id}
+                  alignItems="center"
+                  gap={4}
+                  paddingHorizontal={8}
+                  paddingVertical={3}
+                  borderRadius={tokens.radius.full}
+                  backgroundColor={`${tokens.accent}14`}
+                  borderWidth={1}
+                  borderColor={`${tokens.accent}40`}
+                >
+                  <Text fontSize={10} fontWeight="700" color={tokens.accent}>
+                    {chip.label}
+                  </Text>
+                  <Pressable hitSlop={6} onPress={chip.onRemove}>
+                    <LuX size={10} color={tokens.accent} />
+                  </Pressable>
+                </XStack>
+              ))}
+              <Pressable hitSlop={6} onPress={resetFilters}>
+                <Text fontSize={10} fontWeight="700" color={tokens.textMuted} paddingHorizontal={4}>
+                  Clear all
+                </Text>
+              </Pressable>
+            </ScrollView>
+          </XStack>
         )}
       </YStack>
 
@@ -578,6 +602,14 @@ export function AdminVayyariStoreInventoryPage({
           }
         />
       )}
+
+      {/* Dynamic Left Filter Panel / Drawer */}
+      <StoreInventoryFilterDrawer
+        visible={isFilterDrawerOpen}
+        onClose={() => setIsFilterDrawerOpen(false)}
+        current={filters}
+        onApply={(nextFilters) => setFilters(nextFilters)}
+      />
     </YStack>
   );
 }
@@ -677,6 +709,16 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 4,
     backgroundColor: 'rgba(0,0,0,0.65)',
+    zIndex: 2,
+  },
+  swatchCountBadge: {
+    position: 'absolute',
+    bottom: 6,
+    left: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2.5,
+    borderRadius: 4,
+    backgroundColor: 'rgba(0,0,0,0.68)',
     zIndex: 2,
   },
   curateActionBtn: {

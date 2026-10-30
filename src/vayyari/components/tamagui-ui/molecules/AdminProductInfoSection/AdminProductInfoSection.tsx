@@ -1,12 +1,16 @@
-import React from 'react';
-import { TouchableOpacity } from 'react-native';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { TouchableOpacity, Platform } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
+import * as Clipboard from 'expo-clipboard';
+import * as Haptics from 'expo-haptics';
 import {
   LuClock,
   LuPencil,
   LuTag,
   LuArchive,
   LuRotateCcw,
+  LuCopy,
+  LuCheck,
 } from '../../icons/lu';
 import { useTheme } from '@/theme';
 
@@ -38,6 +42,33 @@ export function AdminProductInfoSection({
   onEditPress,
 }: AdminProductInfoSectionProps) {
   const { tokens } = useTheme();
+  const [copied, setCopied] = useState(false);
+  const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleCopyProductCode = useCallback(async () => {
+    if (!productCode || productCode === '---') return;
+    try {
+      await Clipboard.setStringAsync(productCode);
+      if (Platform.OS !== 'web') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      }
+      setCopied(true);
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+      copyTimeoutRef.current = setTimeout(() => {
+        setCopied(false);
+      }, 2000);
+    } catch {
+      // Ignore clipboard write failure gracefully
+    }
+  }, [productCode]);
 
   return (
     <YStack
@@ -106,18 +137,41 @@ export function AdminProductInfoSection({
           {title}
         </Text>
 
-        <XStack
-          paddingHorizontal={8}
-          paddingVertical={3}
-          borderRadius={tokens.radius.full}
-          backgroundColor={tokens.surfaceRaised}
-          borderWidth={1}
-          borderColor={tokens.border}
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={`Copy product code ${productCode}`}
+          accessibilityHint="Copies product code to clipboard"
+          activeOpacity={0.7}
+          onPress={handleCopyProductCode}
+          disabled={!productCode || productCode === '---'}
         >
-          <Text fontSize={11} fontWeight="800" color={tokens.textMuted} letterSpacing={0.5}>
-            {productCode}
-          </Text>
-        </XStack>
+          <XStack
+            alignItems="center"
+            gap={4}
+            paddingHorizontal={8}
+            paddingVertical={3}
+            borderRadius={tokens.radius.full}
+            backgroundColor={copied ? 'rgba(16, 185, 129, 0.12)' : tokens.surfaceRaised}
+            borderWidth={1}
+            borderColor={copied ? '#10B981' : tokens.border}
+          >
+            {copied ? (
+              <>
+                <LuCheck size={11} color="#10B981" />
+                <Text fontSize={11} fontWeight="800" color="#10B981" letterSpacing={0.5}>
+                  Copied!
+                </Text>
+              </>
+            ) : (
+              <>
+                <LuCopy size={11} color={tokens.textMuted} />
+                <Text fontSize={11} fontWeight="800" color={tokens.textMuted} letterSpacing={0.5}>
+                  {productCode}
+                </Text>
+              </>
+            )}
+          </XStack>
+        </TouchableOpacity>
       </XStack>
 
       {/* Timestamp */}

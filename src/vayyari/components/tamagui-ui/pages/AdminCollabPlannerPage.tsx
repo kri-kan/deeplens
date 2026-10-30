@@ -20,6 +20,7 @@ import {
   LuLayers,
   LuSlidersHorizontal,
   LuX,
+  LuZap,
 } from '../icons/lu';
 import { useTheme } from '@/theme';
 import {
@@ -371,15 +372,27 @@ export const CollabMediaTile = React.memo(function CollabMediaTile({
         </Text>
       </View>
 
-      {/* Collaborators Badge if already collabing or target set */}
-      {collabCount > 0 && (
-        <View style={styles.tileCollabBadge}>
-          <LuUsers size={10} color="#FFFFFF" />
-          <Text fontSize={9} fontWeight="800" color="#FFFFFF">
-            {collabCount}
-          </Text>
-        </View>
-      )}
+      {/* Top-Right Badges: Boosted & Collaborators */}
+      <View style={styles.tileTopRightContainer}>
+        {post.isBoosted && (
+          <View style={styles.tileBoostedBadge}>
+            <LuZap size={10} color="#FFFFFF" />
+            <Text fontSize={9} fontWeight="800" color="#FFFFFF">
+              BOOSTED
+            </Text>
+          </View>
+        )}
+
+        {/* Collaborators Badge if already collabing or target set */}
+        {collabCount > 0 && (
+          <View style={styles.tileCollabBadge}>
+            <LuUsers size={10} color="#FFFFFF" />
+            <Text fontSize={9} fontWeight="800" color="#FFFFFF">
+              {collabCount}
+            </Text>
+          </View>
+        )}
+      </View>
 
       {/* Bottom Owner Overlay */}
       <View style={styles.tileBottomOverlay}>
@@ -1158,10 +1171,24 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 4,
   },
-  tileCollabBadge: {
+  tileTopRightContainer: {
     position: 'absolute',
     top: 6,
     right: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  tileBoostedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: '#8B5CF6',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  tileCollabBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,

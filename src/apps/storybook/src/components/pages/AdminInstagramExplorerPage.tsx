@@ -178,6 +178,8 @@ export const DEFAULT_CATEGORY_GROUPS: ProfileCategoryGroup[] = [
 const DEFAULT_POST_PLANNER_ACTIONS: PlannerAction[] = [
   { id: 'curation', title: 'Curation' },
   { id: 'post_planner', title: 'Post Planner' },
+  { id: 'collab', title: 'Collab' },
+  { id: 'wa_updates', title: 'WA Updates' },
 ];
 
 export function AdminInstagramExplorerPage({

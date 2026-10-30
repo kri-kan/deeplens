@@ -56,6 +56,9 @@ export interface VayyariStarredProductItem {
   store_publish_updated_at?: string;
   storePublishUpdatedAt?: string;
   syncedMediaCount?: number;
+  swatchesCount?: number;
+  siblingSwatches?: any[];
+  parentProductCode?: string;
 }
 
 export type StoreSortOption = 'newest' | 'price_low' | 'price_high' | 'media_count';
@@ -125,6 +128,10 @@ export function AdminVayyariStorePublishPage({
   const [publishSuccessToast, setPublishSuccessToast] = useState<string | null>(null);
 
   const publishUpdatesCount = useMemo(() => filterPublishUpdatesQueue(products).length, [products]);
+  const allStarredCount = useMemo(
+    () => products.filter((p) => !p.isPublishedToStore && !p.isPublished).length,
+    [products]
+  );
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -145,8 +152,21 @@ export function AdminVayyariStorePublishPage({
 
   const filteredProducts = useMemo(() => {
     let list = products.filter((p) => {
-      const matchCat = selectedCategory === 'All' || p.category.toLowerCase().includes(selectedCategory.toLowerCase());
-      const matchFabric = selectedFabric === 'All' || p.fabric.toLowerCase().includes(selectedFabric.toLowerCase());
+      const catLower = (p.category || '').toLowerCase();
+      const selCatLower = selectedCategory.toLowerCase();
+      const matchCat =
+        selectedCategory === 'All' ||
+        !catLower ||
+        catLower.includes(selCatLower) ||
+        selCatLower.includes(catLower);
+
+      const fabricLower = (p.fabric || '').toLowerCase();
+      const selFabricLower = selectedFabric.toLowerCase();
+      const matchFabric =
+        selectedFabric === 'All' ||
+        !fabricLower ||
+        fabricLower.includes(selFabricLower) ||
+        selFabricLower.includes(fabricLower);
       
       let matchPrice = true;
       const price = p.price || 8000;
@@ -168,6 +188,8 @@ export function AdminVayyariStorePublishPage({
 
     if (activeQueue === 'publish_updates') {
       list = filterPublishUpdatesQueue(list);
+    } else {
+      list = list.filter((p) => !p.isPublishedToStore && !p.isPublished);
     }
 
     if (selectedSort === 'price_low') {
@@ -197,16 +219,19 @@ export function AdminVayyariStorePublishPage({
     }
   };
 
-  const handleTriggerPublish = () => {
-    if (selectedIds.length === 0) return;
+  const handleTriggerPublish = async () => {
+    if (selectedIds.length === 0 || isPublishing) return;
     setIsPublishing(true);
-    setTimeout(() => {
-      onPublishBatch?.(selectedIds);
-      setIsPublishing(false);
+    try {
+      await onPublishBatch?.(selectedIds);
       setPublishSuccessToast(`🚀 Successfully published ${selectedIds.length} products to Store!`);
       setSelectedIds([]);
-      setTimeout(() => setPublishSuccessToast(null), 3000);
-    }, 1200);
+      setTimeout(() => setPublishSuccessToast(null), 3500);
+    } catch (err) {
+      console.error('Failed to publish products:', err);
+    } finally {
+      setIsPublishing(false);
+    }
   };
 
   const renderItem = ({ item: product }: { item: VayyariStarredProductItem }) => {
@@ -369,7 +394,7 @@ export function AdminVayyariStorePublishPage({
             fontWeight="700"
             color={activeQueue === 'all' ? tokens.accentForeground : tokens.text}
           >
-            All Starred ({products.length})
+            All Starred ({allStarredCount})
           </Text>
         </Pressable>
 
@@ -638,7 +663,7 @@ export function AdminVayyariStorePublishPage({
           columnWrapperStyle={styles.columnWrapper}
           contentContainerStyle={{ padding: 6, paddingBottom: 130 }}
           showsVerticalScrollIndicator={false}
-          onEndReached={onLoadMore}
+          onEndReached={activeQueue === 'all' && hasMore ? onLoadMore : undefined}
           onEndReachedThreshold={0.5}
           refreshControl={
             onRefresh ? (
@@ -651,14 +676,14 @@ export function AdminVayyariStorePublishPage({
             ) : undefined
           }
           ListFooterComponent={
-            isLoadingMore ? (
+            activeQueue === 'all' && isLoadingMore ? (
               <YStack alignItems="center" paddingVertical={16} gap={6}>
                 <ActivityIndicator size="small" color={tokens.accent} />
                 <Text fontSize={10} color={tokens.textMuted}>
                   Loading more starred weaves...
                 </Text>
               </YStack>
-            ) : hasMore ? (
+            ) : activeQueue === 'all' && hasMore ? (
               <YStack alignItems="center" paddingVertical={12}>
                 <Pressable onPress={onLoadMore} style={styles.loadMoreBtn}>
                   <Text fontSize={11} fontWeight="700" color={tokens.accent}>

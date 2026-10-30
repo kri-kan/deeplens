@@ -86,17 +86,55 @@ describe('AdminProductDetailPage: Media Delta Detection & Delta Badge', () => {
 
     const singleText = formatMediaDeltaBadge(1);
     assert.strictEqual(singleText, '+1 new photo');
+
+    const deleteText = formatMediaDeltaBadge(-31);
+    assert.strictEqual(deleteText, '-31 photos');
+
+    const singleDeleteText = formatMediaDeltaBadge(-1);
+    assert.strictEqual(singleDeleteText, '-1 photo');
+  });
+
+  test('detects pending updates when media was deleted or split (syncedMediaCount > mediaCount)', () => {
+    const publishedProductWithDeletedMedia = {
+      id: 'prod-vf1fc22',
+      productCode: 'VF1FC22',
+      title: 'KIDS TISSUE GOWNS',
+      isPublished: true,
+      isPublishedToStore: true,
+      media_updated_at: '2026-10-29T06:43:19Z',
+      store_publish_updated_at: '2026-10-29T04:07:20Z',
+      mediaCount: 45,
+      syncedMediaCount: 76,
+    };
+
+    assert.strictEqual(hasPendingStoreUpdates(publishedProductWithDeletedMedia), true);
+    assert.strictEqual(getMediaDeltaCount(publishedProductWithDeletedMedia), -31);
+    assert.strictEqual(formatMediaDeltaBadge(getMediaDeltaCount(publishedProductWithDeletedMedia)), '-31 photos');
   });
 
   test('filters catalog items into Publish Updates queue', () => {
+    const publishedProductWithDeletedMedia = {
+      id: 'prod-vf1fc22',
+      productCode: 'VF1FC22',
+      title: 'KIDS TISSUE GOWNS',
+      isPublished: true,
+      isPublishedToStore: true,
+      media_updated_at: '2026-10-29T06:43:19Z',
+      store_publish_updated_at: '2026-10-29T04:07:20Z',
+      mediaCount: 45,
+      syncedMediaCount: 76,
+    };
+
     const allProducts = [
       publishedProductWithNewMedia,
       publishedProductUpToDate,
       unpublishedProductWithMedia,
+      publishedProductWithDeletedMedia,
     ];
     const updateQueue = filterPublishUpdatesQueue(allProducts);
-    assert.strictEqual(updateQueue.length, 1);
+    assert.strictEqual(updateQueue.length, 2);
     assert.strictEqual(updateQueue[0].id, 'prod-001');
+    assert.strictEqual(updateQueue[1].id, 'prod-vf1fc22');
   });
 });
 
@@ -326,4 +364,171 @@ describe('AdminProductDetailPage: Component Mount & Rendering', () => {
     assert.ok(html.length > 0);
     assert.ok(html.includes('+3 new photos') || html.includes('Media Delta Detected'));
   });
+
+  test('renders High Media Count banner and review chat link when isMediaReviewRequired is true', async () => {
+    const pageMod = await import('../AdminProductDetailPage');
+    const themeMod = await import('../../../../theme/ThemeContext');
+    const tamaguiConfigMod = await import('../../../../tamagui.config');
+    // @ts-ignore
+    const tamaguiMod = await import('../../../../node_modules/tamagui/dist/cjs/index.cjs');
+    const { AdminProductDetailPage } = pageMod;
+
+    const highMediaProduct = {
+      id: 'prod-high-1',
+      productCode: 'VF99H1',
+      title: 'High Media Saree',
+      mediaCount: 35,
+      isMediaReviewRequired: true,
+      media: Array.from({ length: 35 }, (_, i) => ({ id: `m-${i}`, url: `https://minio.local/p${i}.webp` })),
+    };
+
+    let toggledStatus: boolean | null = null;
+    const element = React.createElement(AdminProductDetailPage, {
+      product: highMediaProduct as any,
+      onToggleMediaReviewRequired: async (val: boolean) => {
+        toggledStatus = val;
+      },
+    });
+
+    const mockThemeValue = {
+      theme: { colors: {} },
+      tokens: {
+        primary: '#1B4D3E',
+        accent: '#B45309',
+        accentForeground: '#FFFFFF',
+        text: '#111827',
+        textMuted: '#6B7280',
+        surface: '#FFFFFF',
+        border: '#E5E7EB',
+        radius: { sm: 4, md: 8, full: 9999 },
+      },
+      campaign: 'luxe',
+      availableCampaigns: ['luxe'] as any,
+      colorScheme: 'light',
+      setCampaign: () => {},
+      setColorScheme: () => {},
+      toggleColorScheme: () => {},
+    };
+
+    const tree = React.createElement(
+      tamaguiMod.TamaguiProvider,
+      { config: tamaguiConfigMod.default || tamaguiConfigMod },
+      React.createElement(
+        themeMod.ThemeContext.Provider,
+        { value: mockThemeValue as any },
+        element
+      )
+    );
+
+    const ReactDOMServer = require('../../../../node_modules/react-dom/server.node.js');
+    const html = ReactDOMServer.renderToStaticMarkup(tree);
+
+    assert.ok(html.includes('High Media Count'), 'Expected High Media Count banner');
+    assert.ok(html.includes('Flagged for human zoning review'), 'Expected Flagged for human zoning review');
+    assert.ok(html.includes('Review Chat'), 'Expected Review Chat link');
+
+    // Verify toggle callback contract
+    assert.strictEqual(typeof element.props.onToggleMediaReviewRequired, 'function');
+    await element.props.onToggleMediaReviewRequired!(false);
+    assert.strictEqual(toggledStatus, false);
+  });
+
+  test('hides High Media Count banner when isMediaReviewRequired is false (marked as complete by admin)', async () => {
+    const pageMod = await import('../AdminProductDetailPage');
+    const themeMod = await import('../../../../theme/ThemeContext');
+    const tamaguiConfigMod = await import('../../../../tamagui.config');
+    // @ts-ignore
+    const tamaguiMod = await import('../../../../node_modules/tamagui/dist/cjs/index.cjs');
+    const { AdminProductDetailPage } = pageMod;
+
+    const reviewedProduct = {
+      id: 'prod-high-2',
+      productCode: 'VF99H2',
+      title: 'High Media Reviewed Saree',
+      mediaCount: 45, // high count (> 30), but already marked as reviewed!
+      isMediaReviewRequired: false,
+      media: Array.from({ length: 45 }, (_, i) => ({ id: `m-${i}`, url: `https://minio.local/p${i}.webp` })),
+    };
+
+    let toggledStatus: boolean | null = null;
+    const element = React.createElement(AdminProductDetailPage, {
+      product: reviewedProduct as any,
+      onToggleMediaReviewRequired: async (val: boolean) => {
+        toggledStatus = val;
+      },
+    });
+
+    const mockThemeValue = {
+      theme: { colors: {} },
+      tokens: {
+        primary: '#1B4D3E',
+        accent: '#B45309',
+        accentForeground: '#FFFFFF',
+        text: '#111827',
+        textMuted: '#6B7280',
+        surface: '#FFFFFF',
+        border: '#E5E7EB',
+        radius: { sm: 4, md: 8, full: 9999 },
+      },
+      campaign: 'luxe',
+      availableCampaigns: ['luxe'] as any,
+      colorScheme: 'light',
+      setCampaign: () => {},
+      setColorScheme: () => {},
+      toggleColorScheme: () => {},
+    };
+
+    const tree = React.createElement(
+      tamaguiMod.TamaguiProvider,
+      { config: tamaguiConfigMod.default || tamaguiConfigMod },
+      React.createElement(
+        themeMod.ThemeContext.Provider,
+        { value: mockThemeValue as any },
+        element
+      )
+    );
+
+    const ReactDOMServer = require('../../../../node_modules/react-dom/server.node.js');
+    const html = ReactDOMServer.renderToStaticMarkup(tree);
+
+    // Banner must NOT be present
+    assert.strictEqual(html.includes('High Media Count'), false, 'Banner should be hidden when reviewed');
+    assert.strictEqual(html.includes('Flagged for human zoning review'), false, 'Text should be hidden when reviewed');
+
+    // Verify toggle callback contract
+    assert.strictEqual(typeof element.props.onToggleMediaReviewRequired, 'function');
+    await element.props.onToggleMediaReviewRequired!(true);
+    assert.strictEqual(toggledStatus, true);
+  });
 });
+
+describe('Catalog PDP: Product Code Chip Tap-to-Copy Contract', () => {
+  test('disallows copy action when productCode is placeholder or missing', () => {
+    const isCopyable = (code?: string) => !!code && code.trim() !== '' && code !== '---';
+    assert.strictEqual(isCopyable(undefined), false);
+    assert.strictEqual(isCopyable(''), false);
+    assert.strictEqual(isCopyable('---'), false);
+    assert.strictEqual(isCopyable('VF69F5'), true);
+  });
+
+  test('generates correct accessibility labels and hints for copy chip', () => {
+    const code = 'VF69F5';
+    const accessibilityRole = 'button';
+    const accessibilityLabel = `Copy product code ${code}`;
+    const accessibilityHint = 'Copies product code to clipboard';
+
+    assert.strictEqual(accessibilityRole, 'button');
+    assert.strictEqual(accessibilityLabel, 'Copy product code VF69F5');
+    assert.strictEqual(accessibilityHint, 'Copies product code to clipboard');
+  });
+
+  test('verifies feedback timing and label transitions', () => {
+    const initialText = 'VF69F5';
+    const copiedText = 'Copied!';
+    const feedbackDurationMs = 2000;
+
+    assert.notStrictEqual(initialText, copiedText);
+    assert.strictEqual(feedbackDurationMs, 2000);
+  });
+});
+

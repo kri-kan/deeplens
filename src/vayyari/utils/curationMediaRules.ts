@@ -1,4 +1,19 @@
-import { StoreCurationMediaItem, StoreColorGroup } from '@/types/curation';
+import { StoreCurationMediaItem, StoreColorGroup } from '../types/curation';
+import { normalizeMediaUrl } from '../services/storeAdminService';
+
+/**
+ * Returns the normalized display URI for a StoreCurationMediaItem,
+ * honoring the activeDisplaySource ('modified' vs 'original') and
+ * normalizing legacy or local URLs to the reachable store assets endpoint.
+ */
+export function getMediaDisplayUri(item?: Partial<StoreCurationMediaItem> | null): string {
+  if (!item) return '';
+  const uri =
+    item.activeDisplaySource === 'modified' && item.modifiedUri
+      ? item.modifiedUri
+      : (item.uri || item.thumbnailUri || '');
+  return normalizeMediaUrl(uri);
+}
 
 /**
  * Filter qualified media for PDP preview or live catalog display based on active color group.

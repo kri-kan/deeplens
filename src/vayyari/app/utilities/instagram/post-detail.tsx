@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Dimensions, ActivityIndicator, FlatList } from 'react-native';
+import { View, StyleSheet, Dimensions, ActivityIndicator, FlatList, useWindowDimensions, LayoutChangeEvent, Platform } from 'react-native';
 import { IconButton, useTheme } from 'react-native-paper';
 import { StatusBar } from 'expo-status-bar';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
@@ -9,12 +9,27 @@ import { InstagramPostDetailItem } from '@/components/utility/instagram/Instagra
 import { useVideoSettings } from '@/hooks/useVideoSettings';
 import { normalizeData } from '@/utils/instagram-helpers';
 
-const { height } = Dimensions.get('window');
-
 export default function PostDetailScreen() {
     const { id, username, sortBy, sortOrder, data: initialData } = useLocalSearchParams();
     const router = useRouter();
     const insets = useSafeAreaInsets();
+    const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+    
+    // Default to screen height on Android for edge-to-edge full viewport, or windowHeight
+    const initialHeight = (Platform.OS === 'android' ? Dimensions.get('screen')?.height : null) || windowHeight;
+    const [containerHeight, setContainerHeight] = useState<number>(initialHeight);
+    const [containerWidth, setContainerWidth] = useState<number>(windowWidth);
+    const containerHeightRef = useRef<number>(initialHeight);
+
+    const onContainerLayout = (e: LayoutChangeEvent) => {
+        const { height: h, width: w } = e.nativeEvent.layout;
+        if (h > 0 && Math.abs(h - containerHeight) > 1) {
+            setContainerHeight(h);
+        }
+        if (w > 0 && Math.abs(w - containerWidth) > 1) {
+            setContainerWidth(w);
+        }
+    };
     
     const initialItem = initialData ? normalizeData(JSON.parse(initialData as string)) : null;
     const targetId = (id as string) || initialItem?.id?.toString();
@@ -73,11 +88,19 @@ export default function PostDetailScreen() {
     useEffect(() => {
         if (activeIndex > 0) {
             const timer = setTimeout(() => {
-                flatListRef.current?.scrollToOffset({ offset: activeIndex * height, animated: false });
+                flatListRef.current?.scrollToOffset({ offset: activeIndex * containerHeight, animated: false });
             }, 60);
             return () => clearTimeout(timer);
         }
     }, []);
+
+    // Re-align scroll when containerHeight is measured/updated by onLayout
+    useEffect(() => {
+        if (Math.abs(containerHeightRef.current - containerHeight) > 1 && activeIndex > 0) {
+            flatListRef.current?.scrollToOffset({ offset: activeIndex * containerHeight, animated: false });
+        }
+        containerHeightRef.current = containerHeight;
+    }, [containerHeight, activeIndex]);
 
     useEffect(() => {
         // If we already have the target post in a populated list (e.g. from the explorer cache),
@@ -127,7 +150,7 @@ export default function PostDetailScreen() {
                     // scrollToOffset is reliable regardless of rendered window size;
                     // scrollToIndex silently fails when the target isn't rendered yet.
                     setTimeout(() => {
-                        flatListRef.current?.scrollToOffset({ offset: finalIndex * height, animated: false });
+                        flatListRef.current?.scrollToOffset({ offset: finalIndex * containerHeight, animated: false });
                     }, 150);
                 }
             } catch (e) {
@@ -142,7 +165,10 @@ export default function PostDetailScreen() {
     const theme = useTheme();
 
     return (
-            <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+            <View 
+                style={{ flex: 1, backgroundColor: theme.colors.background }}
+                onLayout={onContainerLayout}
+            >
                 <Stack.Screen options={{ headerShown: false }} />
                 <StatusBar style="dark" />
                 
@@ -150,25 +176,30 @@ export default function PostDetailScreen() {
                     <FlatList
                         ref={flatListRef}
                         data={posts}
-                        pagingEnabled
+                        pagingEnabled={Platform.OS === 'ios'}
+                        snapToInterval={containerHeight}
+                        snapToAlignment="start"
+                        decelerationRate="fast"
                         scrollEnabled={!isDragging}
                         initialScrollIndex={activeIndex}
                         getItemLayout={(data, index) => ({
-                            length: height,
-                            offset: height * index,
+                            length: containerHeight,
+                            offset: containerHeight * index,
                             index,
                         })}
                         onMomentumScrollEnd={(e) => {
-                            const index = Math.round(e.nativeEvent.contentOffset.y / height);
+                            const index = Math.round(e.nativeEvent.contentOffset.y / containerHeight);
                             setActiveIndex(index);
                         }}
                         onScrollToIndexFailed={({ index }) => {
                             // Fallback: scroll by offset if item isn't rendered yet
-                            flatListRef.current?.scrollToOffset({ offset: index * height, animated: false });
+                            flatListRef.current?.scrollToOffset({ offset: index * containerHeight, animated: false });
                         }}
                         renderItem={({ item, index }) => (
                             <InstagramPostDetailItem 
                                 item={item}
+                                itemHeight={containerHeight}
+                                itemWidth={containerWidth}
                                 isMuted={isMuted}
                                 setIsMuted={setIsMuted}
                                 volume={volume}
@@ -180,6 +211,12 @@ export default function PostDetailScreen() {
                                 onDraggingStateChange={setIsDragging}
                                 onPostUpdated={(updatedPost) => {
                                     setPosts(prev => prev.map(p => p.id === updatedPost.id ? updatedPost : p));
+                                    const cached = instagramService.getLastFetchedPosts();
+                                    if (cached && cached.length > 0) {
+                                        instagramService.setLastFetchedPosts(
+                                            cached.map(p => p.id === updatedPost.id ? { ...p, ...updatedPost } : p)
+                                        );
+                                    }
                                 }}
                             />
                         )}

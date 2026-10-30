@@ -5,6 +5,11 @@ import {
   DeviceFleetStats,
   StoreDeviceItem,
   HourlyActivitySummary,
+  DailyGrowthSummary,
+  DailyAcquisitionItem,
+  GrowthGranularity,
+  TelemetrySignalRecord,
+  SessionSummaryItem,
 } from '@/services/storeAdminService';
 
 export interface DeviceTasteProfile {
@@ -58,7 +63,7 @@ export const telemetryApi = createApi({
       return headers;
     },
   }),
-  tagTypes: ['FleetStats', 'Devices', 'HourlyActivity', 'DeviceProfile'],
+  tagTypes: ['FleetStats', 'Devices', 'HourlyActivity', 'DailyGrowth', 'DeviceProfile', 'DeviceSignals'],
   endpoints: (builder) => ({
     // 1. Get Fleet Overview KPI Stats
     getFleetStats: builder.query<DeviceFleetStats, void>({
@@ -87,6 +92,16 @@ export const telemetryApi = createApi({
       providesTags: ['HourlyActivity'],
     }),
 
+    // 3b. Get Acquisitions Growth (First-Seen New Devices & Users across Day/Week/Month)
+    getDailyGrowth: builder.query<DailyGrowthSummary, { range?: number; days?: number; granularity?: GrowthGranularity } | void>({
+      query: (args) => {
+        const range = args?.range ?? args?.days ?? 10;
+        const granularity = args?.granularity ?? 'day';
+        return `/api/v1/admin/telemetry/growth/acquisitions?range=${range}&granularity=${granularity}`;
+      },
+      providesTags: ['DailyGrowth'],
+    }),
+
     // 4. Get Specific Device Taste Profile & Identity
     getDeviceProfile: builder.query<DeviceTasteProfile, string>({
       query: (deviceId) => `/api/v1/admin/telemetry/devices/${encodeURIComponent(deviceId)}/profile`,
@@ -100,7 +115,7 @@ export const telemetryApi = createApi({
         method: 'POST',
         body,
       }),
-      invalidatesTags: ['FleetStats', 'Devices'],
+      invalidatesTags: ['FleetStats', 'Devices', 'DailyGrowth'],
     }),
 
     // 6. Trigger Background Rollup & 30-Day Purge
@@ -109,7 +124,21 @@ export const telemetryApi = createApi({
         url: `/api/v1/admin/telemetry/rollup/trigger?retentionDays=${args?.retentionDays ?? 30}`,
         method: 'POST',
       }),
-      invalidatesTags: ['FleetStats', 'Devices', 'HourlyActivity'],
+      invalidatesTags: ['FleetStats', 'Devices', 'HourlyActivity', 'DailyGrowth'],
+    }),
+
+    // 7. Get Device Signals Timeline (Drill-Down User Journey)
+    getDeviceSignals: builder.query<TelemetrySignalRecord[], { deviceId: string; limit?: number; days?: number }>({
+      query: ({ deviceId, limit = 100, days = 30 }) =>
+        `/api/v1/admin/telemetry/devices/${encodeURIComponent(deviceId)}/signals?limit=${limit}&days=${days}`,
+      providesTags: (_result, _error, { deviceId }) => [{ type: 'DeviceSignals', id: deviceId }],
+    }),
+
+    // 8. Get Device Session Summaries
+    getDeviceSessions: builder.query<SessionSummaryItem[], { deviceId: string; limit?: number }>({
+      query: ({ deviceId, limit = 50 }) =>
+        `/api/v1/admin/telemetry/sessions?deviceId=${encodeURIComponent(deviceId)}&limit=${limit}`,
+      providesTags: (_result, _error, { deviceId }) => [{ type: 'DeviceSignals', id: deviceId }],
     }),
   }),
 });
@@ -118,7 +147,10 @@ export const {
   useGetFleetStatsQuery,
   useGetRegisteredDevicesQuery,
   useGetHourlyActivityQuery,
+  useGetDailyGrowthQuery,
   useGetDeviceProfileQuery,
+  useGetDeviceSignalsQuery,
+  useGetDeviceSessionsQuery,
   useStitchDeviceMutation,
   useTriggerRollupMutation,
 } = telemetryApi;

@@ -20,9 +20,10 @@ import {
 } from '@/components/tamagui-ui/molecules/CatalogFilterDrawer';
 import { useProductCatalog, ProductCatalogFilters } from '@/hooks/useProductCatalog';
 import { useMultiSelect } from '@/hooks/useMultiSelect';
+import * as ImagePicker from 'expo-image-picker';
 import { productService } from '@/services/productService';
 import { formatISTTimestamp } from '@/utils/date-format';
-import type { VendorProduct, MediaEntry } from '@/types/products';
+import type { VendorProduct, MediaEntry, VisualSimilarityMatch } from '@/types/products';
 
 const CATEGORIES: CatalogCategory[] = [
   { id: 'all', label: 'All' },
@@ -73,6 +74,8 @@ function mapVendorProductToTileData(item: VendorProduct): ProductGridTileData {
   const sourceGroupId = getProp(item, 'sourceGroupId', 'SourceGroupId');
   const formattedTime = formatISTTimestamp(createdAt, sourceGroupId);
   const isStarred = Boolean(getProp(item, 'isStarred', 'IsStarred'));
+  const rawMediaReviewRequired = getProp(item, 'isMediaReviewRequired', 'IsMediaReviewRequired');
+  const isMediaReviewRequired = rawMediaReviewRequired !== undefined ? Boolean(rawMediaReviewRequired) : undefined;
   const category = getProp(item, 'category', 'Category');
   const title = getProp(item, 'title', 'Title');
   const rawMediaCount = getProp(item, 'mediaCount', 'MediaCount');
@@ -100,6 +103,7 @@ function mapVendorProductToTileData(item: VendorProduct): ProductGridTileData {
     category,
     imageUri,
     isStarred,
+    isMediaReviewRequired,
     isPublishedToStore,
     listingCount,
     mediaCount,
@@ -146,12 +150,27 @@ export default function ProductCatalogScreen() {
     maxPrice?: string;
     status?: string;
     includeArchived?: string;
+    visualImageUri?: string;
+    visualPostId?: string;
+    visualStoragePath?: string;
+    visualMediaId?: string;
   }>();
 
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [activeFilters, setActiveFilters] = useState<FilterState>(DEFAULT_FILTER_STATE);
+
+  // Visual similarity search state
+  const [visualSearchState, setVisualSearchState] = useState<{
+    imageUri?: string;
+    imageBase64?: string;
+    totalMatches?: number;
+    isSearching?: boolean;
+    postId?: string;
+  } | null>(null);
+
+  const [visualMatchedMap, setVisualMatchedMap] = useState<Map<string, VisualSimilarityMatch> | null>(null);
 
   // Dynamic filter options from backend
   const [filterOptions, setFilterOptions] = useState<{
@@ -316,10 +335,185 @@ export default function ProductCatalogScreen() {
     toggleStar,
   } = useProductCatalog(catalogFilters);
 
-  // Map VendorProduct items to ProductGridTileData
+  const runVisualSimilaritySearch = useCallback(
+    async (opts: {
+      imageUri?: string;
+      imageBase64?: string;
+      postId?: string;
+      storagePath?: string;
+      mediaId?: string;
+    }) => {
+      let storagePath = opts.storagePath;
+      if (!storagePath && opts.imageUri && opts.imageUri.includes('path=')) {
+        try {
+          const match = opts.imageUri.match(/[?&]path=([^&]+)/);
+          if (match && match[1]) {
+            storagePath = decodeURIComponent(match[1]);
+          }
+        } catch {}
+      }
+
+      let imageBase64 = opts.imageBase64;
+      if (!imageBase64 && opts.imageUri && (opts.imageUri.startsWith('file://') || opts.imageUri.startsWith('content://'))) {
+        try {
+          const { readAsStringAsync, EncodingType } = await import('expo-file-system/legacy');
+          imageBase64 = await readAsStringAsync(opts.imageUri, { encoding: EncodingType.Base64 });
+        } catch (readErr) {
+          console.warn('[runVisualSimilaritySearch] Could not read local file as base64:', readErr);
+        }
+      }
+
+      setVisualSearchState({
+        imageUri: opts.imageUri,
+        imageBase64,
+        postId: opts.postId,
+        isSearching: true,
+      });
+
+      try {
+        const res = await productService.searchVisualSimilarity({
+          postId: opts.postId || undefined,
+          mediaId: opts.mediaId || undefined,
+          storagePath: storagePath || undefined,
+          imageUrl: opts.imageUri || undefined,
+          imageBase64: imageBase64 || undefined,
+          take: 50,
+          minSimilarity: 30,
+        });
+
+        const map = new Map<string, VisualSimilarityMatch>();
+        (res.matches || []).forEach((m) => {
+          map.set(m.productId, m);
+        });
+
+        setVisualMatchedMap(map);
+        setVisualSearchState((prev) =>
+          prev
+            ? {
+                ...prev,
+                totalMatches: res.matches?.length || 0,
+                isSearching: false,
+              }
+            : null
+        );
+      } catch (err: any) {
+        console.error('Visual similarity search failed:', err);
+        Alert.alert('Visual Search Error', err?.message || 'Could not find similar products.');
+        setVisualSearchState(null);
+        setVisualMatchedMap(null);
+      }
+    },
+    []
+  );
+
+  // Listen for incoming visual search route parameters
+  useEffect(() => {
+    if (params.visualImageUri || params.visualPostId || params.visualStoragePath || params.visualMediaId) {
+      runVisualSimilaritySearch({
+        imageUri: params.visualImageUri,
+        postId: params.visualPostId,
+        storagePath: params.visualStoragePath,
+        mediaId: params.visualMediaId,
+      });
+    }
+  }, [
+    params.visualImageUri,
+    params.visualPostId,
+    params.visualStoragePath,
+    params.visualMediaId,
+    runVisualSimilaritySearch,
+  ]);
+
+  const handleCameraPress = useCallback(async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(
+          'Permission Required',
+          'Media library access is needed to select a product photo for visual similarity search.'
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.8,
+        base64: true,
+        allowsEditing: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        await runVisualSimilaritySearch({
+          imageUri: asset.uri,
+          imageBase64: asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : undefined,
+        });
+      }
+    } catch (err: any) {
+      console.error('Failed to pick image for visual search:', err);
+      Alert.alert('Image Picker Error', 'Could not open image picker.');
+    }
+  }, [runVisualSimilaritySearch]);
+
+  const handleClearVisualSearch = useCallback(() => {
+    setVisualSearchState(null);
+    setVisualMatchedMap(null);
+  }, []);
+
+  // Map VendorProduct items to ProductGridTileData with per-item reference caching
+  const tileCacheRef = useRef<Map<string, { raw: VendorProduct; tile: ProductGridTileData }>>(new Map());
   const gridItems: ProductGridTileData[] = useMemo(() => {
-    return products.map(mapVendorProductToTileData);
+    const cache = tileCacheRef.current;
+    const nextCache = new Map<string, { raw: VendorProduct; tile: ProductGridTileData }>();
+    const mapped = products.map((item) => {
+      const cached = cache.get(item.id);
+      if (cached && cached.raw === item) {
+        nextCache.set(item.id, cached);
+        return cached.tile;
+      }
+      const tile = mapVendorProductToTileData(item);
+      nextCache.set(item.id, { raw: item, tile });
+      return tile;
+    });
+    tileCacheRef.current = nextCache;
+    return mapped;
   }, [products]);
+
+  // Construct visual search grid items if visual search is active
+  const visualGridItems: ProductGridTileData[] | null = useMemo(() => {
+    if (!visualMatchedMap || visualMatchedMap.size === 0) return null;
+
+    const items = Array.from(visualMatchedMap.values()).map((match) => {
+      const existing = products.find((p) => p.id === match.productId);
+      if (existing) {
+        const baseTile = mapVendorProductToTileData(existing);
+        return {
+          ...baseTile,
+          similarityPercentage: match.similarityPercentage,
+          mediaCount: baseTile.mediaCount ?? match.mediaCount ?? 1,
+        };
+      }
+
+      return {
+        id: match.productId,
+        productCode: match.sku || '---',
+        title: match.title || match.sku || 'Matching Product',
+        price: match.vendorPrice ? Number(match.vendorPrice) : undefined,
+        category: match.category || 'Saree',
+        imageUri: match.storagePath ? productService.getThumbnailUrlByPath(match.storagePath, 'medium') : '',
+        similarityPercentage: match.similarityPercentage,
+        isStarred: false,
+        listingCount: 0,
+        mediaCount: match.mediaCount ?? 1,
+        timeAgo: `${match.similarityPercentage}% match`,
+        tags: [],
+      };
+    });
+
+    return items.sort((a, b) => (b.similarityPercentage || 0) - (a.similarityPercentage || 0));
+  }, [visualMatchedMap, products]);
+
+  const effectiveGridItems = visualGridItems || gridItems;
 
   // Multi-selection management via useMultiSelect
   const {
@@ -332,7 +526,7 @@ export default function ProductCatalogScreen() {
     toggleSelectAll,
     toggleSelectionMode,
   } = useMultiSelect({
-    items: gridItems,
+    items: effectiveGridItems,
   });
 
   // Active filter count
@@ -570,8 +764,11 @@ export default function ProductCatalogScreen() {
     }
   };
 
+  const productsRef = useRef(products);
+  productsRef.current = products;
+
   const handleToggleStar = useCallback(async (id: string, nextStarred?: boolean) => {
-    const current = products.find((p) => p.id === id);
+    const current = productsRef.current.find((p) => p.id === id);
     const targetState = nextStarred !== undefined
       ? nextStarred
       : !Boolean(getProp(current, 'isStarred', 'IsStarred'));
@@ -581,7 +778,7 @@ export default function ProductCatalogScreen() {
       Alert.alert('Error', 'Failed to update star status. Reverting change.');
       throw e;
     }
-  }, [products, toggleStar]);
+  }, [toggleStar]);
 
   const handleBack = useCallback(() => {
     if (selectionMode) {
@@ -594,7 +791,7 @@ export default function ProductCatalogScreen() {
   return (
     <>
       <AdminProductCatalogPage
-        products={gridItems}
+        products={effectiveGridItems}
         categories={CATEGORIES}
         activeCategoryId={activeCategory}
         onSelectCategory={(id) => {
@@ -603,6 +800,9 @@ export default function ProductCatalogScreen() {
         }}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
+        onCameraPress={handleCameraPress}
+        visualSearchState={visualSearchState}
+        onClearVisualSearch={handleClearVisualSearch}
         activeFilterCount={activeFilterCount}
         filterChips={filterChips}
         onRemoveFilterChip={handleRemoveFilterChip}
@@ -619,16 +819,32 @@ export default function ProductCatalogScreen() {
         onBulkMoveCategory={() => setMoveCategoryModalVisible(true)}
         onBulkReevaluate={handleBulkReevaluate}
         onSaveQuickEdit={handleSaveQuickEdit}
-        isLoading={loading}
+        isLoading={visualSearchState?.isSearching ? true : (visualSearchState?.imageUri || visualMatchedMap ? false : loading)}
         isRefreshing={refreshing}
-        onRefresh={() => fetchProducts(true)}
+        onRefresh={() => {
+          if (visualSearchState?.imageUri || visualMatchedMap) {
+            if (visualSearchState?.imageUri || visualSearchState?.postId || params.visualStoragePath) {
+              runVisualSimilaritySearch({
+                imageUri: visualSearchState?.imageUri || params.visualImageUri,
+                imageBase64: visualSearchState?.imageBase64,
+                postId: visualSearchState?.postId || params.visualPostId,
+                storagePath: params.visualStoragePath,
+                mediaId: params.visualMediaId,
+              });
+            }
+            return;
+          }
+          fetchProducts(true);
+        }}
         onEndReached={() => {
+          // If in visual similarity search mode, never trigger regular catalog infinite scroll
+          if (visualSearchState?.imageUri || visualMatchedMap) return;
           if (hasMore && !loading) {
             fetchProducts(false);
           }
         }}
-        hasMore={hasMore}
-        totalCount={totalCount}
+        hasMore={visualSearchState?.imageUri || visualMatchedMap ? false : hasMore}
+        totalCount={visualSearchState?.imageUri || visualMatchedMap ? (visualGridItems?.length || 0) : totalCount}
         columns={columns}
         selectedIds={selectedIds}
         selectionMode={selectionMode}

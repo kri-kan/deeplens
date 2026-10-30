@@ -293,7 +293,7 @@ export const storeInventoryToCurationJourney: JourneyDefinition<StoreCurationJou
           'Merchandiser synthesizes weaver story and sets selling price at ₹10,999 with 27% discount from MRP.',
         durationMs: 3500,
       },
-      render: ({ state, nextStep, prevStep, updateState }) => (
+      render: ({ state, nextStep, goToStep, updateState }) => (
         <AdminStoreProductCurationPage
           productCode={state.productCode}
           title={state.title}
@@ -305,7 +305,7 @@ export const storeInventoryToCurationJourney: JourneyDefinition<StoreCurationJou
           initialMedia={state.mediaList}
           initialColorGroups={state.colorGroups}
           initialScreen="metadata"
-          onBack={prevStep}
+          onBack={() => goToStep(1)}
           onSave={(payload) => {
             updateState(payload);
             nextStep();

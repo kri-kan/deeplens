@@ -312,5 +312,35 @@ export const LuZoomIn: React.FC<IconProps> = ({ size = 16, color = "#333333", st
   <Feather name="zoom-in" size={size} color={color} style={style} />
 );
 
+export const LuZap: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="zap" size={size} color={color} style={style} />
+);
+
+export const LuBarChart2: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="bar-chart-2" size={size} color={color} style={style} />
+);
+
+export const LuFilter: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="filter" size={size} color={color} style={style} />
+);
+
+export const LuSmartphone: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="smartphone" size={size} color={color} style={style} />
+);
+
+export const LuBell: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="bell" size={size} color={color} style={style} />
+);
+
+export const LuInstagram: React.FC<IconProps> = ({ size = 16, color = "#E1306C", style }) => (
+  <MaterialCommunityIcons name="instagram" size={size} color={color} style={style} />
+);
+
+export const LuActivity: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="activity" size={size} color={color} style={style} />
+);
+
+export { ViewfinderLensIcon as LuViewfinderLens } from '@/components/icons/ViewfinderLensIcon';
+
 
 

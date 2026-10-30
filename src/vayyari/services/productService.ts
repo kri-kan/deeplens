@@ -7,7 +7,10 @@ import type {
   RecordShareRequest, 
   GenerateShareDescriptionResponse,
   ProductPublishEvent,
-  InstagramAccountOption 
+  InstagramAccountOption,
+  VisualSimilarityMatch,
+  VisualSimilaritySearchRequest,
+  VisualSimilaritySearchResponse
 } from '../types/products';
 import { getIdentityApiUrl, getSearchApiUrl, getWhatsappProcessorUrl, getOtelEndpointUrl } from '@/utils/api-config';
 import { uriToBlob } from '@/utils/media-helpers';
@@ -91,6 +94,7 @@ class ProductService {
     includeArchived?: boolean | null;
     status?: string;
     isStarred?: boolean;
+    isPublished?: boolean;
   }): Promise<{ products: VendorProduct[], totalCount: number }> {
     // Serialize arrays as repeated query params
     const searchParams = new URLSearchParams();
@@ -109,6 +113,7 @@ class ProductService {
       searchParams.append('includeArchived', String(params.includeArchived));
     }
     if (params.isStarred !== undefined) searchParams.append('isStarred', String(params.isStarred));
+    if (params.isPublished !== undefined) searchParams.append('isPublished', String(params.isPublished));
     params.fabrics?.forEach(f => searchParams.append('fabrics', f));
     params.crafts?.forEach(c => searchParams.append('crafts', c));
     params.motifs?.forEach(m => searchParams.append('motifs', m));
@@ -163,6 +168,10 @@ class ProductService {
 
   async toggleStar(productId: string, isStarred: boolean): Promise<void> {
     return productMgmtApiClient.patch(`/api/v1/catalog/products/${productId}/star`, { isStarred });
+  }
+
+  async toggleMediaReviewRequired(productId: string, isMediaReviewRequired: boolean): Promise<{ id: string; isMediaReviewRequired: boolean }> {
+    return productMgmtApiClient.patch<{ id: string; isMediaReviewRequired: boolean }>(`/api/v1/catalog/products/${productId}/media-review-required`, { isMediaReviewRequired });
   }
 
   async setDefaultMedia(productId: string, mediaId: string): Promise<void> {
@@ -283,6 +292,25 @@ class ProductService {
 
   async getPublishingInstagramAccounts(): Promise<InstagramAccountOption[]> {
     return productMgmtApiClient.get<InstagramAccountOption[]>('/api/v1/products/instagram-accounts');
+  }
+
+  async recordStorePublish(productIds: string[], publishedAt?: string): Promise<{ success: boolean; count: number }> {
+    return productMgmtApiClient.post('/api/v1/products/store-publish', {
+      productIds,
+      publishedAt: publishedAt || new Date().toISOString(),
+    });
+  }
+
+  async searchVisualSimilarity(request: VisualSimilaritySearchRequest): Promise<VisualSimilaritySearchResponse> {
+    return productMgmtApiClient.post<VisualSimilaritySearchResponse>('/api/v1/products/visual-similarity', request);
+  }
+
+  async linkInstagramPost(postId: string, productId: string, linkType: string = 'is'): Promise<void> {
+    return productMgmtApiClient.post<void>('/api/v1/products/instagram/link', {
+      postId,
+      productId,
+      linkType
+    });
   }
 }
 

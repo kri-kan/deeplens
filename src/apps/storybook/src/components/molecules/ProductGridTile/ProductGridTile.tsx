@@ -12,6 +12,7 @@ export interface ProductGridTileData {
   category?: string;
   imageUri?: string;
   isStarred?: boolean;
+  isMediaReviewRequired?: boolean;
   isPublishedToStore?: boolean;
   listingCount?: number;
   mediaCount?: number;
@@ -234,27 +235,32 @@ export function ProductGridTile({
         )}
 
         {/* Media Count Badge */}
-        {item.mediaCount !== undefined && item.mediaCount > 0 && (
-          <XStack
-            position="absolute"
-            top={6}
-            right={!selectionMode && onToggleStar ? 36 : 6}
-            backgroundColor="rgba(0, 0, 0, 0.65)"
-            paddingHorizontal={5}
-            paddingVertical={2.5}
-            borderRadius={tokens.radius.full}
-            alignItems="center"
-            gap={3}
-            zIndex={8}
-            borderWidth={0.5}
-            borderColor="rgba(255, 255, 255, 0.2)"
-          >
-            <LuImage size={10} color="#FFFFFF" />
-            <Text fontSize={9} fontWeight="700" color="#FFFFFF">
-              {item.mediaCount}
-            </Text>
-          </XStack>
-        )}
+        {item.mediaCount !== undefined && item.mediaCount > 0 && (() => {
+          const isHighMedia = item.isMediaReviewRequired !== undefined
+            ? Boolean(item.isMediaReviewRequired)
+            : Boolean((item.mediaCount ?? 0) > 30);
+          return (
+            <XStack
+              position="absolute"
+              top={6}
+              right={!selectionMode && onToggleStar ? 36 : 6}
+              backgroundColor={isHighMedia ? 'rgba(217, 119, 6, 0.9)' : 'rgba(0, 0, 0, 0.65)'}
+              paddingHorizontal={5}
+              paddingVertical={2.5}
+              borderRadius={tokens.radius.full}
+              alignItems="center"
+              gap={3}
+              zIndex={8}
+              borderWidth={0.5}
+              borderColor={isHighMedia ? 'rgba(251, 191, 36, 0.8)' : 'rgba(255, 255, 255, 0.2)'}
+            >
+              <LuImage size={10} color="#FFFFFF" />
+              <Text fontSize={9} fontWeight="700" color="#FFFFFF">
+                {item.mediaCount}
+              </Text>
+            </XStack>
+          );
+        })()}
 
         {/* Top-Right: Star Button */}
         {!selectionMode && onToggleStar && (

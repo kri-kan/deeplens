@@ -1,0 +1,235 @@
+import React from 'react';
+import type { Meta, StoryObj } from '@storybook/react-native';
+import { AdminPipelineEventsPage } from '@/components/tamagui-ui/pages/AdminPipelineEventsPage';
+import { withFormFactor } from '../utils/FormFactorPreview';
+import { THEME_ARG_TYPES, THEME_ARGS } from '../../utils/storyTheme';
+import { PipelineEventsResponse } from '@/services/wa-processor.service';
+
+const mockPipelineData: PipelineEventsResponse = {
+  success: true,
+  totalEvents: 6,
+  metrics: {
+    stagingCount: 6104,
+    awaitingCreationCount: 0,
+    pendingMediaSyncCount: 1283,
+    errorCount: 395,
+    reprocessCount24h: 53,
+  },
+  recentEvents: [
+    {
+      id: 2075861,
+      groupId: 'product_4243b203-4224-49b0-8b80-952eef6834ad',
+      event: 'product_created',
+      category: 'product_create',
+      actor: 'system',
+      occurredAt: '2026-10-29T14:13:47.754Z',
+      purposeDescription: 'Product Created: Successfully generated product [VF1FCD6] in catalog',
+      productCode: 'VF1FCD6',
+      productId: '6abed7e8-15e6-4897-b7c3-06f7cb5203a9',
+      chatName: 'Mk Collection Group',
+      vendorName: 'MK Collections',
+      jid: '120363373155055309@g.us',
+      mediaCount: 13,
+      textCount: 1,
+      hasPendingMedia: false,
+      groupStatus: 'product_created',
+      errorDetail: null,
+      details: null,
+    },
+    {
+      id: 2075860,
+      groupId: 'product_175dead5-6861-4cbc-ab9f-84408d451b97',
+      event: 'merged',
+      category: 'split_merge',
+      actor: 'admin',
+      occurredAt: '2026-10-29T14:11:20.000Z',
+      purposeDescription: 'Merged Zones: Consolidated zone with VF1FC82 (+6 media)',
+      productCode: 'VF1FC82',
+      productId: 'abf46e75-4a21-43af-8f1c-0f730c685195',
+      chatName: 'Mk Collection Group',
+      vendorName: 'MK Collections',
+      jid: '120363373155055309@g.us',
+      mediaCount: 12,
+      textCount: 2,
+      hasPendingMedia: false,
+      groupStatus: 'product_created',
+      errorDetail: null,
+      details: null,
+    },
+    {
+      id: 2075859,
+      groupId: 'product_98a72bc1-1200-4b21-8201-9876543210ab',
+      event: 'split',
+      category: 'split_merge',
+      actor: 'admin',
+      occurredAt: '2026-10-29T14:05:12.000Z',
+      purposeDescription: 'Split Zone: Extracted 4 late messages into new staging zone',
+      productCode: 'VF1FC81',
+      productId: '38590b3b-692b-496c-8574-a5c87aa4ca1a',
+      chatName: 'Mk Collection Group',
+      vendorName: 'MK Collections',
+      jid: '120363373155055309@g.us',
+      mediaCount: 8,
+      textCount: 1,
+      hasPendingMedia: true,
+      groupStatus: 'staging',
+      errorDetail: null,
+      details: null,
+    },
+    {
+      id: 2075858,
+      groupId: 'product_fa3b2100-2210-4100-9812-abcdef123456',
+      event: 'media_added',
+      category: 'media_sync',
+      actor: 'system',
+      occurredAt: '2026-10-29T13:58:30.000Z',
+      purposeDescription: 'Media Sync: Added late-arriving media to VF1FC79',
+      productCode: 'VF1FC79',
+      productId: '41e915bc-a532-4ba6-b9ca-8ab6b0a9b454',
+      chatName: 'Uzra sarees',
+      vendorName: 'UZRA Sarees',
+      jid: '120363368960782259@g.us',
+      mediaCount: 4,
+      textCount: 0,
+      hasPendingMedia: false,
+      groupStatus: 'product_created',
+      errorDetail: null,
+      details: null,
+    },
+    {
+      id: 2075857,
+      groupId: 'product_41e915bc-a532-4ba6-b9ca-8ab6b0a9b454',
+      event: 'error',
+      category: 'error',
+      actor: 'system',
+      occurredAt: '2026-10-29T13:45:00.000Z',
+      purposeDescription: 'Pipeline Alert: Vendor listing foreign key constraint violation',
+      productCode: null,
+      productId: null,
+      chatName: 'Uzra sarees',
+      vendorName: 'UZRA Sarees',
+      jid: '120363368960782259@g.us',
+      mediaCount: 8,
+      textCount: 3,
+      hasPendingMedia: false,
+      groupStatus: 'error',
+      errorDetail: '23503: insert or update on table "vendor_listings" violates foreign key constraint',
+      details: null,
+    },
+  ],
+  activeQueue: [
+    {
+      groupId: 'product_4243b203-4224-49b0-8b80-952eef6834ad',
+      jid: '120363373155055309@g.us',
+      status: 'staging',
+      hasPendingMedia: false,
+      mediaCount: 13,
+      textCount: 1,
+      description: 'New COTTON Saree\nFABRIC: SOFT MUL COTTON\nPrice: 799/- + ship',
+      errorDetail: null,
+      lastMessageAt: '2026-10-29T13:48:13.000Z',
+      updatedAt: '2026-10-29T14:13:59.783Z',
+      chatName: 'Mk Collection Group',
+      vendorName: 'MK Collections',
+      productCode: 'VF1FCD6',
+      productId: '6abed7e8-15e6-4897-b7c3-06f7cb5203a9',
+    },
+    {
+      groupId: 'product_41e915bc-a532-4ba6-b9ca-8ab6b0a9b454',
+      jid: '120363368960782259@g.us',
+      status: 'error',
+      hasPendingMedia: false,
+      mediaCount: 8,
+      textCount: 3,
+      description: 'Banarasi green Rao mango soft silk fabric saree',
+      errorDetail: '23503: foreign key constraint violation on vendor_listings',
+      lastMessageAt: '2026-10-28T06:54:25.000Z',
+      updatedAt: '2026-10-28T06:56:20.527Z',
+      chatName: 'Uzra sarees',
+      vendorName: 'UZRA Sarees',
+      productCode: null,
+      productId: null,
+    },
+  ],
+  catalog: [
+    {
+      topic: 'WhatsApp.group.reprocess',
+      name: 'Zone Reprocess & Re-evaluation Stream',
+      direction: 'WhatsApp Processor ➔ .NET Worker Service',
+      consumer: 'WhatsAppGroupWorker',
+      purpose: 'Re-evaluates image counts, extracts vendor texts, recalculates hashes, and links or promotes the group.',
+      trigger: 'Manual split, merge, or backfilled media items.',
+      priority: 'High',
+    },
+    {
+      topic: 'WhatsApp.group.media.added',
+      name: 'Late-Arrival Media Synchronization',
+      direction: 'WhatsApp Processor ➔ .NET Worker Service',
+      consumer: 'WhatsAppGroupWorker',
+      purpose: 'Imports newly arrived photos or video documents into MinIO and links them to published catalog products.',
+      trigger: 'Vendor posts additional media items into an existing product zone.',
+      priority: 'Normal',
+    },
+    {
+      topic: 'WhatsApp.group.product.create',
+      name: 'Product Auto-Promotion Queue',
+      direction: 'WhatsApp Processor ➔ .NET Worker Service',
+      consumer: 'WhatsAppGroupWorker',
+      purpose: 'Promotes qualified message groups into DeepLens products and vendor listings.',
+      trigger: '45-second staging buffer expiry or manual "Publish" button press.',
+      priority: 'Normal',
+    },
+  ],
+};
+
+const meta: Meta<any> = {
+  title: 'Pages/Admin/Global Pipeline & Events',
+  component: AdminPipelineEventsPage,
+  decorators: [withFormFactor('mobile', 'Vayyari Pipeline Intelligence (Mobile 390px)')],
+  args: {
+    ...THEME_ARGS,
+    data: mockPipelineData,
+  },
+  argTypes: {
+    ...THEME_ARG_TYPES,
+  },
+};
+
+export default meta;
+type Story = StoryObj<typeof AdminPipelineEventsPage>;
+
+export const LiveEventsFeed: Story = {
+  name: '1. Live Events Feed & Metrics (Default)',
+  args: {
+    data: mockPipelineData,
+  },
+};
+
+export const ActiveWorkerQueue: Story = {
+  name: '2. Active Worker Queue & Staged Items',
+  args: {
+    data: {
+      ...mockPipelineData,
+      recentEvents: [],
+    },
+  },
+};
+
+export const LoadingState: Story = {
+  name: '3. Real-Time Telemetry Loading',
+  args: {
+    data: null,
+    loading: true,
+  },
+};
+
+export const EmptyQueueState: Story = {
+  name: '4. Empty Queue State (Clear)',
+  args: {
+    data: {
+      ...mockPipelineData,
+      recentEvents: [],
+      activeQueue: [],
+    },
+  },
+};

@@ -1,6 +1,7 @@
 import React from 'react';
 import { WhatsAppIcon } from './Icons';
 import { sounds } from '../utils/audio';
+import { telemetry } from '../services/telemetry';
 
 export const WaitlistSection: React.FC = () => {
   const whatsappUrl = `https://wa.me/919494511272?text=${encodeURIComponent(
@@ -145,7 +146,10 @@ export const WaitlistSection: React.FC = () => {
               href={whatsappUrl}
               target="_blank"
               rel="noopener noreferrer"
-              onClick={() => sounds.playChime()}
+              onClick={() => {
+                sounds.playChime();
+                telemetry.trackSignal('waitlist_join_clicked', { source: 'vip_section' });
+              }}
               style={{
                 display: 'flex',
                 alignItems: 'center',

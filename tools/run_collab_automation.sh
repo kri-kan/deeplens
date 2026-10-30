@@ -820,15 +820,33 @@ execute_post_collab_pipeline() {
         api_update_channel_phase "$post_id" "$ci_acc" "cant_invite" "$boosted_reason"
       done
 
-      # 3. Mark post curation status as 'collab_curated'
+      # 3. Mark post curation status as 'collab_curated' and flag is_boosted = true with metrics
       if [[ -n "$post_id" ]]; then
-        echo -e "${GREEN}✓ Marking post ${shortcode} as 'collab_curated' (Reason: ${boosted_reason})...${NC}"
+        echo -e "${GREEN}✓ Marking post ${shortcode} as 'collab_curated' & 'is_boosted = true' (Reason: ${boosted_reason})...${NC}"
+        local active_collabs_array="[]"
+        if [[ ${#already_active[@]} -gt 0 ]]; then
+          active_collabs_array=$(printf '%s\n' "${already_active[@]}" | jq -R '{username: .}' | jq -s .)
+        fi
+        local cant_invite_array="[]"
+        if [[ ${#cant_invite[@]} -gt 0 ]]; then
+          cant_invite_array=$(printf '%s\n' "${cant_invite[@]}" | jq -R . | jq -s .)
+        fi
+
+        local handle_boosted_payload
+        handle_boosted_payload=$(jq -n \
+          --arg pid "$post_id" \
+          --arg reason "$boosted_reason" \
+          --argjson collabs "$active_collabs_array" \
+          --argjson cant "$cant_invite_array" \
+          '{postId: $pid, reason: $reason, existingCollaborators: $collabs, cantInviteChannels: $cant}')
+
         if [[ "$DRY_RUN" == "true" ]]; then
-          echo -e "${YELLOW}[DRY RUN] Would call: POST ${API_BASE_URL}/api/v1/insta/collab-planner/curate with postId=${post_id}${NC}"
+          echo -e "${YELLOW}[DRY RUN] Would call: POST ${API_BASE_URL}/api/v1/insta/collab-planner/handle-boosted with:${NC}"
+          echo "$handle_boosted_payload" | jq .
         else
-          curl -s -X POST "${API_BASE_URL}/api/v1/insta/collab-planner/curate" \
+          curl -s -X POST "${API_BASE_URL}/api/v1/insta/collab-planner/handle-boosted" \
             -H "Content-Type: application/json" \
-            -d "{\"postId\": \"$post_id\"}" >/dev/null || true
+            -d "$handle_boosted_payload" >/dev/null || true
         fi
       fi
 

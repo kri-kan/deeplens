@@ -177,6 +177,14 @@ export default function WhatsAppChatListScreen() {
             />
           )}
           <IconButton 
+            icon="transit-connection-variant" 
+            iconColor={theme.colors.primary}
+            size={22}
+            style={{ margin: 0 }}
+            accessibilityLabel="Pipeline & Queued Events"
+            onPress={() => router.push('/utilities/whatsapp/events')} 
+          />
+          <IconButton 
             icon="menu" 
             onPress={() => router.push('/utilities/whatsapp/admin')} 
             style={{ margin: 0 }}

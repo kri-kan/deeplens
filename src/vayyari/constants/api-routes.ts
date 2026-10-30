@@ -198,6 +198,30 @@ export const API_ROUTES = {
     COLLAB_PLANNER_COMPLETE: '/api/v1/Insta/collab-planner/complete',
     COLLAB_PLANNER_UPDATE_PHASE: '/api/v1/Insta/collab-planner/update-phase',
     COLLAB_PLANNER_SYNC_COLLABORATORS: '/api/v1/Insta/collab-planner/sync-collaborators',
+    WA_UPDATES: (options?: {
+      target?: 'customer' | 'reseller';
+      channel?: string;
+      includeShared?: boolean;
+      search?: string;
+      sortBy?: string;
+      sortOrder?: string;
+      limit?: number;
+      offset?: number;
+    }) => {
+      const q = new URLSearchParams();
+      if (options?.target) q.append('target', options.target);
+      if (options?.channel) q.append('channel', options.channel);
+      if (options?.includeShared !== undefined) q.append('includeShared', String(options.includeShared));
+      if (options?.search) q.append('search', options.search);
+      if (options?.sortBy) q.append('sortBy', options.sortBy);
+      if (options?.sortOrder) q.append('sortOrder', options.sortOrder);
+      if (options?.limit !== undefined) q.append('limit', String(options.limit));
+      if (options?.offset !== undefined) q.append('offset', String(options.offset));
+      const qs = q.toString();
+      return `/api/v1/Insta/wa-updates${qs ? `?${qs}` : ''}`;
+    },
+    WA_UPDATES_SHARE: '/api/v1/Insta/wa-updates/share',
+    WA_UPDATES_UNSHARE: '/api/v1/Insta/wa-updates/unshare',
   },
 
   // Common / Master Data

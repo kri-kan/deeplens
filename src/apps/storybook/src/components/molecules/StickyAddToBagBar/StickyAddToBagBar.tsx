@@ -6,12 +6,16 @@ export type StickyAddToBagBarProps = {
   price: string;
   title: string;
   onAddToBag?: () => void;
+  buttonLabel?: string;
+  buttonBg?: string;
 };
 
 export function StickyAddToBagBar({
   price,
   title,
   onAddToBag,
+  buttonLabel,
+  buttonBg,
 }: StickyAddToBagBarProps) {
   const { tokens } = useTheme();
 
@@ -41,7 +45,7 @@ export function StickyAddToBagBar({
       <XStack
         height={48}
         paddingHorizontal={24}
-        backgroundColor={tokens.accent}
+        backgroundColor={buttonBg || tokens.accent}
         borderRadius={9999}
         alignItems="center"
         justifyContent="center"
@@ -54,12 +58,12 @@ export function StickyAddToBagBar({
         pressStyle={{ scale: 0.96 }}
       >
         <Text
-          color={tokens.accentForeground}
+          color="#FFFFFF"
           fontWeight="800"
           fontSize={15}
           letterSpacing={0.2}
         >
-          🛍 Add to Bag
+          {buttonLabel || '🛍 Add to Bag'}
         </Text>
       </XStack>
     </XStack>

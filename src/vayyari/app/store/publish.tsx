@@ -6,7 +6,7 @@ import {
   VayyariStarredProductItem,
 } from '@/components/tamagui-ui/pages/AdminVayyariStorePublishPage';
 import { productService } from '@/services/productService';
-import { storeAdminService, PublishProductItem } from '@/services/storeAdminService';
+import { storeAdminService, PublishProductItem, PublishMediaItem, StoreProduct } from '@/services/storeAdminService';
 
 const PAGE_SIZE = 60;
 
@@ -20,31 +20,40 @@ export default function StorePublishScreen() {
   const [hasMore, setHasMore] = useState(true);
   const [publishedVayyariIds, setPublishedVayyariIds] = useState<Set<string>>(new Set());
 
-  const fetchInStoreMetadata = async () => {
+  const [inStoreProductsMap, setInStoreProductsMap] = useState<Map<string, StoreProduct>>(new Map());
+
+  const fetchInStoreMetadata = async (): Promise<Map<string, StoreProduct>> => {
     try {
       const inStore = await storeAdminService.getInStoreProducts();
       setPublishedCount(inStore.length);
+      const map = new Map<string, StoreProduct>();
       const ids = new Set<string>();
       inStore.forEach((p) => {
-        if (p.vayyariProductId) ids.add(p.vayyariProductId);
+        const key = (p.vayyariProductId || p.id || '').toLowerCase();
+        if (key) {
+          map.set(key, p);
+          ids.add(key);
+        }
       });
       setPublishedVayyariIds(ids);
-      return ids;
+      setInStoreProductsMap(map);
+      return map;
     } catch (err) {
       console.warn('Failed to fetch in-store products from Store.Api:', err);
-      return new Set<string>();
+      return new Map<string, StoreProduct>();
     }
   };
 
-  const mapProducts = (rawProducts: any[], publishedIds: Set<string>): VayyariStarredProductItem[] => {
+  const mapProducts = (rawProducts: any[], inStoreMap: Map<string, StoreProduct>): VayyariStarredProductItem[] => {
     const getProp = (obj: any, camel: string, pascal: string) =>
       obj[camel] !== undefined ? obj[camel] : obj[pascal];
 
-    const unpublished = rawProducts.filter(
-      (item: any) => !publishedIds.has(item.masterProductId || item.id)
-    );
+    return rawProducts.map((item: any) => {
+      const id = item.masterProductId || item.id;
+      const key = (id || '').toLowerCase();
+      const inStoreProduct = inStoreMap.get(key);
+      const isPublished = Boolean(inStoreProduct || item.isPublished || item.is_published);
 
-    return unpublished.map((item: any) => {
       const mediaList = item.media || [];
       let imageUri = 'https://picsum.photos/seed/saree/600/800';
 
@@ -79,20 +88,41 @@ export default function StorePublishScreen() {
         return imageUri;
       });
 
+      const mediaCount = item.mediaCount ?? mediaList.length;
+      const inStoreMediaCount = inStoreProduct?.mediaOrder?.length;
+      const syncedMediaCount = inStoreMediaCount !== undefined ? inStoreMediaCount : (item.syncedMediaCount ?? 0);
+      const mediaUpdatedAt = item.mediaUpdatedAt || item.media_updated_at;
+      const platformPublishAt = item.storePublishUpdatedAt || item.store_publish_updated_at;
+      const storePublishAt = inStoreProduct?.publishedAt;
+      let storePublishUpdatedAt = storePublishAt || platformPublishAt;
+      if (storePublishAt && platformPublishAt) {
+        storePublishUpdatedAt =
+          new Date(storePublishAt).getTime() > new Date(platformPublishAt).getTime()
+            ? storePublishAt
+            : platformPublishAt;
+      }
+
       return {
-        id: item.masterProductId || item.id,
-        productCode: item.productCode || 'PROD',
-        title: item.title || 'Handloom Saree',
-        category: item.category || 'Saree',
-        fabric: item.fabric || 'Pure Silk',
-        price: getProp(item, 'vendorPrice', 'VendorPrice') || 8000,
-        color: item.color || (mediaList[0]?.color) || 'Standard',
-        mediaCount: mediaList.length || 1,
+        id,
+        productCode: item.productCode || inStoreProduct?.productCode || 'PROD',
+        title: item.title || inStoreProduct?.title || 'Handloom Saree',
+        category: item.category || inStoreProduct?.categoryName || 'Saree',
+        fabric: item.fabric || inStoreProduct?.fabric || 'Pure Silk',
+        price: getProp(item, 'vendorPrice', 'VendorPrice') || inStoreProduct?.baseCost || 8000,
+        color: item.color || inStoreProduct?.colorwayName || (mediaList[0]?.color) || 'Standard',
+        mediaCount,
         primaryImageUri: imageUri,
         allMediaUris: allUris,
         descriptions: item.exclusiveDescription ? [item.exclusiveDescription] : item.description ? [item.description] : [],
-        isStarred: true,
-        isPublishedToStore: false,
+        isStarred: Boolean(item.isStarred),
+        isPublishedToStore: isPublished,
+        isPublished,
+        publishedAt: inStoreProduct?.publishedAt,
+        syncedMediaCount,
+        media_updated_at: mediaUpdatedAt,
+        mediaUpdatedAt,
+        store_publish_updated_at: storePublishUpdatedAt,
+        storePublishUpdatedAt,
       };
     });
   };
@@ -105,19 +135,59 @@ export default function StorePublishScreen() {
         setLoading(true);
       }
 
-      const inStoreIds = await fetchInStoreMetadata();
+      const inStoreMap = await fetchInStoreMetadata();
 
-      const catalogData = await productService.getCatalog({
-        isStarred: true,
-        skip: 0,
-        take: PAGE_SIZE,
-      });
+      // Concurrently fetch published catalog items (guarantees published updates show up even if unstarred, e.g. VF1FC22)
+      // and starred catalog items (first-time publishing queue)
+      const [publishedRes, starredRes] = await Promise.allSettled([
+        productService.getCatalog({
+          isPublished: true,
+          skip: 0,
+          take: 100,
+        }),
+        productService.getCatalog({
+          isStarred: true,
+          skip: 0,
+          take: PAGE_SIZE,
+        }),
+      ]);
 
-      if (catalogData && catalogData.products) {
-        const mapped = mapProducts(catalogData.products, inStoreIds);
-        setStarredProducts(mapped);
-        setHasMore(catalogData.products.length >= PAGE_SIZE);
+      const productMap = new Map<string, any>();
+
+      if (publishedRes.status === 'fulfilled' && publishedRes.value?.products) {
+        publishedRes.value.products.forEach((p) => {
+          const idKey = (p.masterProductId || p.id).toLowerCase();
+          productMap.set(idKey, p);
+        });
       }
+
+      if (starredRes.status === 'fulfilled' && starredRes.value?.products) {
+        starredRes.value.products.forEach((p) => {
+          const idKey = (p.masterProductId || p.id).toLowerCase();
+          if (!productMap.has(idKey)) {
+            productMap.set(idKey, p);
+          }
+        });
+      }
+
+      // Ensure all in-store products are present in the list so published delta updates can be surfaced
+      const missingInStoreIds = Array.from(inStoreMap.keys()).filter((id) => !productMap.has(id.toLowerCase()));
+      if (missingInStoreIds.length > 0) {
+        const inStoreCatalogDetails = await Promise.allSettled(
+          missingInStoreIds.map((id) => productService.getProductById(id))
+        );
+        inStoreCatalogDetails.forEach((res) => {
+          if (res.status === 'fulfilled' && res.value) {
+            const idKey = (res.value.masterProductId || res.value.id).toLowerCase();
+            productMap.set(idKey, res.value);
+          }
+        });
+      }
+
+      const fetchedProducts = Array.from(productMap.values());
+      const mapped = mapProducts(fetchedProducts, inStoreMap);
+      setStarredProducts(mapped);
+      setHasMore(starredRes.status === 'fulfilled' && starredRes.value?.products ? starredRes.value.products.length >= PAGE_SIZE : false);
     } catch (err) {
       console.warn('Failed to load initial catalog products:', err);
     } finally {
@@ -131,7 +201,7 @@ export default function StorePublishScreen() {
 
     try {
       setIsLoadingMore(true);
-      const currentSkip = starredProducts.length;
+      const currentSkip = starredProducts.filter((p) => !p.isPublishedToStore).length;
 
       const catalogData = await productService.getCatalog({
         isStarred: true,
@@ -140,13 +210,19 @@ export default function StorePublishScreen() {
       });
 
       if (catalogData && catalogData.products && catalogData.products.length > 0) {
-        const mapped = mapProducts(catalogData.products, publishedVayyariIds);
+        const mapped = mapProducts(catalogData.products, inStoreProductsMap);
+        let newItemsCount = 0;
         setStarredProducts((prev) => {
           const existingIds = new Set(prev.map((p) => p.id));
           const newItems = mapped.filter((p) => !existingIds.has(p.id));
+          newItemsCount = newItems.length;
           return [...prev, ...newItems];
         });
-        setHasMore(catalogData.products.length >= PAGE_SIZE);
+        if (newItemsCount === 0) {
+          setHasMore(false);
+        } else {
+          setHasMore(catalogData.products.length >= PAGE_SIZE);
+        }
       } else {
         setHasMore(false);
       }
@@ -163,23 +239,90 @@ export default function StorePublishScreen() {
 
   const handlePublishBatch = async (selectedIds: string[]) => {
     const selectedItems = starredProducts.filter((p) => selectedIds.includes(p.id));
-    const payload: PublishProductItem[] = selectedItems.map((p) => ({
-      vayyariProductId: p.id,
-      productCode: p.productCode,
-      title: p.title,
-      categoryName: p.category,
-      fabric: p.fabric,
-      baseCost: p.price || 8000,
-      mediaUrls: p.allMediaUris && p.allMediaUris.length > 0 ? p.allMediaUris : [p.primaryImageUri],
-    }));
+    const payload: PublishProductItem[] = await Promise.all(
+      selectedItems.map(async (p) => {
+        let mediaUrls = p.allMediaUris && p.allMediaUris.length > 0 ? p.allMediaUris : [p.primaryImageUri];
+        let mediaItems: PublishMediaItem[] = mediaUrls.map((url) => ({ url, mediaType: 1 }));
+
+        try {
+          const fullProd = await productService.getProductById(p.id);
+          if (fullProd?.media && fullProd.media.length > 0) {
+            const resolvedItems: PublishMediaItem[] = [];
+            const resolvedUrls: string[] = [];
+
+            for (const m of fullProd.media) {
+              let url: string | null = null;
+              if (m.id && m.id !== '00000000-0000-0000-0000-000000000000') {
+                url = productService.getThumbnailUrl(m.id, 'large');
+              } else if (m.storagePath) {
+                url = productService.getThumbnailUrlByPath(m.storagePath, 'large');
+              }
+              if (url) {
+                resolvedUrls.push(url);
+                resolvedItems.push({
+                  catalogMediaId: m.id && m.id !== '00000000-0000-0000-0000-000000000000' ? m.id : undefined,
+                  url,
+                  mediaType: m.mediaType || 1,
+                });
+              }
+            }
+
+            if (resolvedUrls.length > 0) {
+              mediaUrls = resolvedUrls;
+              mediaItems = resolvedItems;
+            }
+          }
+        } catch (e) {
+          console.warn(`Failed to fetch full media list for product ${p.productCode}:`, e);
+        }
+
+        return {
+          vayyariProductId: p.id,
+          productCode: p.productCode,
+          title: p.title,
+          categoryName: p.category,
+          fabric: p.fabric,
+          baseCost: p.price || 8000,
+          mediaUrls,
+          mediaItems,
+        };
+      })
+    );
 
     try {
       const res = await storeAdminService.batchPublish(payload);
-      Alert.alert('Published', `Successfully published ${res.count} products to Store!`);
-      loadData(true);
+      const nowIso = new Date().toISOString();
+      // Synchronize publish state to deeplens_platform
+      try {
+        await productService.recordStorePublish(selectedIds, nowIso);
+      } catch (platErr) {
+        console.warn('Failed to record store publish to platform:', platErr);
+      }
+
+      // Immediately reflect synchronized state so products disappear from publish_updates
+      setStarredProducts((prev) =>
+        prev.map((p) => {
+          if (selectedIds.includes(p.id)) {
+            return {
+              ...p,
+              isPublishedToStore: true,
+              isPublished: true,
+              publishedAt: nowIso,
+              storePublishUpdatedAt: nowIso,
+              store_publish_updated_at: nowIso,
+              syncedMediaCount: p.mediaCount,
+            };
+          }
+          return p;
+        })
+      );
+      setPublishedCount((prev) => prev + res.count);
+
+      await loadData(true);
     } catch (err) {
       console.error('Failed to batch publish:', err);
       Alert.alert('Error', 'Failed to publish to Store.');
+      throw err;
     }
   };
 

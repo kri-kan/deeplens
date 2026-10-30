@@ -61,6 +61,25 @@ export const styles = StyleSheet.create({
     marginTop: 4,
     fontWeight: 'bold',
   },
+  searchBarContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 6,
+    paddingBottom: 4,
+  },
+  searchInput: {
+    height: 38,
+    fontSize: 13,
+  },
+  searchOutline: {
+    borderRadius: 10,
+  },
+  searchCountRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    paddingTop: 4,
+  },
   filterBar: {
     flexDirection: 'row', 
     alignItems: 'center', 

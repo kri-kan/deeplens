@@ -1,12 +1,14 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
-import { Text, YStack } from 'tamagui';
+import { View, StyleSheet, Pressable } from 'react-native';
+import { Text, YStack, XStack } from 'tamagui';
+import { LuChevronRight } from '../../icons/lu';
 
 export interface MetricStatCardProps {
   label: string;
   value: string | number;
   subtitle: string;
   valueColor?: string;
+  onPress?: () => void;
 }
 
 export const MetricStatCard: React.FC<MetricStatCardProps> = ({
@@ -14,15 +16,28 @@ export const MetricStatCard: React.FC<MetricStatCardProps> = ({
   value,
   subtitle,
   valueColor = '#FFFFFF',
+  onPress,
 }) => {
+  const CardContainer = onPress ? Pressable : View;
+
   return (
-    <View style={styles.card}>
+    <CardContainer
+      onPress={onPress}
+      style={({ pressed }: any) => [
+        styles.card,
+        onPress && styles.interactiveCard,
+        pressed && styles.cardPressed,
+      ]}
+    >
       <YStack gap="$1">
-        <Text style={styles.label}>{label}</Text>
+        <XStack justifyContent="space-between" alignItems="center">
+          <Text style={styles.label}>{label}</Text>
+          {onPress ? <LuChevronRight size={14} color="#6B7280" /> : null}
+        </XStack>
         <Text style={[styles.value, { color: valueColor }]}>{value}</Text>
         <Text style={styles.subtitle}>{subtitle}</Text>
       </YStack>
-    </View>
+    </CardContainer>
   );
 };
 
@@ -51,5 +66,13 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 10,
     color: '#6B7280',
+  },
+  interactiveCard: {
+    cursor: 'pointer' as any,
+  },
+  cardPressed: {
+    opacity: 0.8,
+    borderColor: '#0D9488',
+    backgroundColor: '#131D2E',
   },
 });

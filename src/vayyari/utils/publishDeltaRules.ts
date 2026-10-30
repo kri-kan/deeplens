@@ -46,6 +46,9 @@ export interface DeltaMediaAllocationItem {
   isCommon?: boolean;
   allocationType: 'existing_color' | 'new_color' | 'shared_pool';
   newColorGroup?: DeltaNewColorGroupInput;
+  sourcePlatform?: 'instagram' | 'catalog' | 'whatsapp';
+  sourceUrl?: string;
+  sourcePostId?: string;
   [key: string]: any;
 }
 
@@ -91,7 +94,7 @@ export function hasPendingStoreUpdates(product?: ProductDeltaCheckable | null): 
 
   const currentCount = product.mediaCount ?? (product.media?.length || 0);
   const syncedCount = product.syncedMediaCount ?? 0;
-  if (syncedCount > 0 && currentCount > syncedCount) {
+  if (syncedCount > 0 && currentCount !== syncedCount) {
     return true;
   }
 
@@ -103,7 +106,7 @@ export function hasPendingStoreUpdates(product?: ProductDeltaCheckable | null): 
 }
 
 /**
- * Calculates the exact delta count of new/un-synced photos.
+ * Calculates the exact delta count of new/un-synced photos (positive for additions, negative for deletions).
  */
 export function getMediaDeltaCount(product?: ProductDeltaCheckable | null): number {
   if (!product) return 0;
@@ -114,9 +117,10 @@ export function getMediaDeltaCount(product?: ProductDeltaCheckable | null): numb
 
   const currentCount = product.mediaCount ?? (product.media?.length || 0);
   const syncedCount = product.syncedMediaCount ?? 0;
-  const countDelta = Math.max(0, currentCount - syncedCount);
-
-  if (countDelta > 0) return countDelta;
+  if (syncedCount > 0) {
+    const countDelta = currentCount - syncedCount;
+    if (countDelta !== 0) return countDelta;
+  }
 
   // Fallback if timestamps indicate delta but count wasn't explicitly tracked
   if (hasPendingStoreUpdates(product)) {
@@ -128,13 +132,20 @@ export function getMediaDeltaCount(product?: ProductDeltaCheckable | null): numb
 
 /**
  * Formats the visual badge string for pending media deltas.
- * e.g., "+3 new photos", "+1 new photo"
+ * e.g., "+3 new photos", "+1 new photo", "-31 photos"
  */
 export function formatMediaDeltaBadge(deltaCount: number): string {
-  if (deltaCount <= 0) return '';
-  const label = deltaCount === 1 ? 'photo' : 'photos';
-  return `+${deltaCount} new ${label}`;
+  if (deltaCount === 0) return '';
+  if (deltaCount > 0) {
+    const label = deltaCount === 1 ? 'photo' : 'photos';
+    return `+${deltaCount} new ${label}`;
+  }
+  const abs = Math.abs(deltaCount);
+  const label = abs === 1 ? 'photo' : 'photos';
+  return `-${abs} ${label}`;
 }
+
+export const calculateMediaDeltaBadge = formatMediaDeltaBadge;
 
 /**
  * Filters a product list into the dedicated "Publish Updates" queue.
@@ -257,3 +268,105 @@ export function buildDeltaSyncPayload(
     colorGroupUpdates: options?.colorGroupUpdates,
   };
 }
+
+export interface RawPublishMediaItem {
+  id?: string;
+  storagePath?: string;
+  url?: string;
+  [key: string]: any;
+}
+
+/**
+ * Resolves all media items into valid public or internal thumbnail URLs for publishing to Store.
+ * Ensures that all available media items are included and not truncated to the first photo.
+ */
+export function resolvePublishMediaUrls(
+  mediaList?: RawPublishMediaItem[] | null,
+  options?: {
+    urlResolver?: (m: RawPublishMediaItem) => string | null | undefined;
+    fallbackUrl?: string;
+  }
+): string[] {
+  const fallback = options?.fallbackUrl || 'https://picsum.photos/seed/saree/600/800';
+  if (!mediaList || mediaList.length === 0) {
+    return [fallback];
+  }
+
+  const urls: string[] = [];
+  for (const m of mediaList) {
+    if (options?.urlResolver) {
+      const resolved = options.urlResolver(m);
+      if (resolved) {
+        urls.push(resolved);
+        continue;
+      }
+    }
+
+    if (m.url && !m.url.startsWith('https://via.placeholder.com')) {
+      urls.push(m.url);
+      continue;
+    }
+
+    if (m.id && m.id !== '00000000-0000-0000-0000-000000000000') {
+      urls.push(`/api/v1/catalog/media/${m.id}/thumbnail?spec=large`);
+      continue;
+    }
+
+    if (m.storagePath) {
+      urls.push(`/api/v1/catalog/media/thumbnail-by-path?path=${encodeURIComponent(m.storagePath)}&spec=large`);
+      continue;
+    }
+  }
+
+  return urls.length > 0 ? urls : [fallback];
+}
+
+/**
+ * Determines whether a product requires fetching the full product detail because
+ * the preloaded catalog preview list truncated the media items (e.g. catalog limit 15).
+ */
+export function isFullProductFetchNeededForPublish(
+  totalMediaCount?: number,
+  preloadedUrisCount?: number
+): boolean {
+  return (totalMediaCount ?? 0) > (preloadedUrisCount ?? 0);
+}
+
+export interface StorePublishItemInput {
+  vayyariProductId: string;
+  productCode: string;
+  title: string;
+  categoryName?: string;
+  fabric?: string;
+  baseCost?: number;
+  mediaUrls: string[];
+}
+
+/**
+ * Constructs a valid Store.Api publish request item, strictly guaranteeing that all resolved
+ * media URLs are attached.
+ */
+export function buildStorePublishItem(
+  product: {
+    id: string;
+    productCode?: string;
+    title?: string;
+    category?: string;
+    fabric?: string;
+    vendorPrice?: number | string;
+  },
+  resolvedMediaUrls: string[] = []
+): StorePublishItemInput {
+  return {
+    vayyariProductId: product.id,
+    productCode: product.productCode || 'PROD',
+    title: product.title || 'Product',
+    categoryName: product.category || 'Saree',
+    fabric: product.fabric || 'Silk',
+    baseCost: Number(product.vendorPrice) || 8000,
+    mediaUrls: resolvedMediaUrls.length > 0
+      ? resolvedMediaUrls
+      : ['https://picsum.photos/seed/saree/600/800'],
+  };
+}
+

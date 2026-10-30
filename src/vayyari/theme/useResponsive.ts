@@ -1,7 +1,7 @@
 import React, { createContext, useContext } from 'react';
 import { useWindowDimensions } from 'react-native';
-
-export type FormFactor = 'desktop' | 'tablet' | 'mobile';
+import { FormFactor } from './types';
+export type { FormFactor };
 
 export interface FormFactorContextValue {
   factor: FormFactor;

@@ -44,10 +44,10 @@ describe('Shipping Label Workflow & Manifest Rules', () => {
   });
 
   describe('Declared Consignment Value and Weight Calculations', () => {
-    it('sets declared total to exactly 4x groupTotal for transit insurance safety', () => {
+    it('sets declared total to exactly 3x groupTotal for transit insurance safety', () => {
       const groupTotal = 1500;
-      const declaredTotal = (parseFloat(groupTotal as any) || 0) * 4;
-      assert.strictEqual(declaredTotal, 6000);
+      const declaredTotal = (parseFloat(groupTotal as any) || 0) * 3;
+      assert.strictEqual(declaredTotal, 4500);
     });
 
     it('calculates weight at 400g per item with a minimum of 400g', () => {

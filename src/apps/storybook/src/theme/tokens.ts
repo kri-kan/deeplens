@@ -1,6 +1,38 @@
 import { SharedTokens } from './types';
 
 export const sharedTokens: SharedTokens = {
+  layout: {
+    containerMaxWidth: {
+      mobile: '100%',
+      tablet: 768,
+      desktop: 1240,
+    },
+    pagePaddingHorizontal: {
+      mobile: 12,
+      tablet: 20,
+      desktop: 28,
+    },
+    pagePaddingVertical: {
+      mobile: 12,
+      tablet: 16,
+      desktop: 24,
+    },
+    cardPadding: {
+      mobile: 12,
+      tablet: 16,
+      desktop: 20,
+    },
+    gridGutter: {
+      mobile: 8,
+      tablet: 12,
+      desktop: 16,
+    },
+    modalMaxWidth: {
+      mobile: '100%',
+      tablet: 640,
+      desktop: 720,
+    },
+  },
   spacing: {
     xs: 6,
     sm: 10,

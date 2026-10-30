@@ -187,6 +187,7 @@ export interface InstagramPost {
   baselineAvgViews?: number;
   baselineAvgComments?: number;
   curvePoints?: OutlierDataPoint[];
+  deletedOnInstagram?: boolean;
 }
 
 export interface ProfileMetrics {
@@ -451,6 +452,7 @@ export const normalizeData = (data: any): InstagramPost => {
       baselineAvgViews,
       baselineAvgComments,
       curvePoints,
+      deletedOnInstagram: Boolean(data.deletedOnInstagram ?? data.DeletedOnInstagram ?? data.deleted_on_instagram ?? data.deletedoninstagram ?? false),
   };
 };
 
@@ -680,7 +682,7 @@ class InstagramService {
     return searchApiClient.get<InstagramPost>(`/api/v1/Insta/video/${id}`);
   };
 
-  updateVideoStatus = async (id: string, payload: { status?: 'active' | 'suspend' | 'ignore'; suspendDays?: number; lastReviewedAt?: string }): Promise<{ success: boolean }> => {
+  updateVideoStatus = async (id: string, payload: { status?: 'active' | 'suspend' | 'ignore'; suspendDays?: number; lastReviewedAt?: string; deletedOnInstagram?: boolean }): Promise<{ success: boolean }> => {
     return searchApiClient.patch(`/api/v1/Insta/video/${id}`, payload);
   };
 
@@ -1050,6 +1052,43 @@ class InstagramService {
   }> => {
     return searchApiClient.post(API_ROUTES.INSTAGRAM.COLLAB_PLANNER_SYNC_COLLABORATORS, { postId, collaborators, detectedFrom });
   };
+
+  // ── WA Updates (Customer & Reseller Consolidations) ─────────────────────────
+
+  getWhatsAppUpdates = async (params: {
+    target?: 'customer' | 'reseller';
+    channel?: string;
+    includeShared?: boolean;
+    search?: string;
+    sortBy?: string;
+    sortOrder?: string;
+    limit?: number;
+    offset?: number;
+  } = {}): Promise<WhatsAppUpdatesResponse> => {
+    return searchApiClient.get<WhatsAppUpdatesResponse>(API_ROUTES.INSTAGRAM.WA_UPDATES(params));
+  };
+
+  recordWhatsAppShare = async (payload: RecordWhatsAppSharePayload): Promise<{
+    success: boolean;
+    postId: string;
+    target: string;
+    groupName?: string;
+    sharedAt: string;
+  }> => {
+    return searchApiClient.post(API_ROUTES.INSTAGRAM.WA_UPDATES_SHARE, payload);
+  };
+
+  unshareWhatsAppPost = async (payload: {
+    postId: string;
+    target: 'customer' | 'reseller';
+  }): Promise<{
+    success: boolean;
+    postId: string;
+    target: string;
+    unshared: boolean;
+  }> => {
+    return searchApiClient.post(API_ROUTES.INSTAGRAM.WA_UPDATES_UNSHARE, payload);
+  };
 }
 
 export interface UnifiedPlannerItem {
@@ -1249,6 +1288,61 @@ export interface CollabPlannerPostDto {
   ownerDisplayName?: string;
   ownerProfilePicUrl?: string;
   isStarred?: boolean;
+  isBoosted?: boolean;
+  boostedMetrics?: InstagramBoostedMetrics | null;
+}
+
+export interface InstagramBoostedMetrics {
+  organicReach: number;
+  boostedReach: number;
+  totalReach: number;
+  organicImpressions: number;
+  boostedImpressions: number;
+  totalImpressions: number;
+  profileVisits: number;
+  linkClicks: number;
+  follows: number;
+  adSpend?: string;
+  adDurationDays?: number;
+  campaignStatus: 'Active' | 'Completed' | 'Paused' | string;
+}
+
+export interface WhatsAppUpdatePost {
+  id: string;
+  platformVideoId?: string;
+  permalink?: string;
+  caption?: string;
+  mediaType?: string;
+  thumbnailUrl?: string;
+  mediaUrl?: string;
+  storagePath?: string;
+  postedAt: string;
+  likeCount: number;
+  commentCount: number;
+  channelUsername: string;
+  channelDisplayName?: string;
+  channelProfilePicUrl?: string;
+  channelStoragePath?: string;
+  isShared: boolean;
+  sharedAt?: string;
+  sharedGroupName?: string;
+  sharedNotes?: string;
+}
+
+export interface WhatsAppUpdatesResponse {
+  target: 'customer' | 'reseller';
+  customerUnsharedCount: number;
+  resellerUnsharedCount: number;
+  totalCount: number;
+  posts: WhatsAppUpdatePost[];
+}
+
+export interface RecordWhatsAppSharePayload {
+  postId: string;
+  target: 'customer' | 'reseller';
+  groupName?: string;
+  notes?: string;
 }
 
 export const instagramService = new InstagramService();
+

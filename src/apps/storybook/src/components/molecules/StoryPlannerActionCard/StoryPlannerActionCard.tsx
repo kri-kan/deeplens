@@ -7,7 +7,9 @@ import {
   LuHeart,
   LuSparkles,
   LuLayoutGrid,
+  LuHandshake,
 } from 'react-icons/lu';
+import { RiWhatsappFill } from 'react-icons/ri';
 import { useTheme } from '../../../theme';
 import { PlannerAction, PlannerActionId } from '../instagram-explorer.types';
 
@@ -38,6 +40,10 @@ export function StoryPlannerActionCard({
       case 'post_planner':
       case 'incubator':
         return <LuLayoutGrid size={iconSize} color="#7E22CE" />;
+      case 'collab':
+        return <LuHandshake size={iconSize} color="#D946EF" />;
+      case 'wa_updates':
+        return <RiWhatsappFill size={iconSize} color="#25D366" />;
       default:
         return <LuLayoutGrid size={iconSize} color={tokens.accent} />;
     }
@@ -56,6 +62,10 @@ export function StoryPlannerActionCard({
       case 'post_planner':
       case 'incubator':
         return 'rgba(126, 34, 206, 0.08)';
+      case 'collab':
+        return 'rgba(217, 70, 239, 0.08)';
+      case 'wa_updates':
+        return 'rgba(37, 211, 102, 0.1)';
       default:
         return 'rgba(0, 0, 0, 0.04)';
     }

@@ -9,3 +9,5 @@ export * from './campaigns/summer';
 export * from './campaigns/blackfriday';
 export * from './campaigns/ramadan';
 export * from './useResponsive';
+export * from './layout';
+export * from './useResponsiveLayout';

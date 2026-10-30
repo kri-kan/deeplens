@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ScrollView,
   TouchableOpacity,
@@ -99,6 +99,7 @@ export interface AdminProductDetailData {
   mediaUpdatedAt?: string;
   store_publish_updated_at?: string;
   storePublishUpdatedAt?: string;
+  isMediaReviewRequired?: boolean;
   syncedMediaCount?: number;
   unassignedMedia?: MediaSlideItem[];
   colorGroups?: Array<{
@@ -146,12 +147,14 @@ export interface AdminProductDetailPageProps {
   }) => void;
   onOpenWhatsAppListing?: (listing: VendorListingItemData) => void;
   onDownloadMedia?: (media: MediaSlideItem) => void;
+  onToggleMediaReviewRequired?: (isMediaReviewRequired: boolean) => Promise<void> | void;
   isLoading?: boolean;
   disableSafeArea?: boolean;
   initialViewMode?: 'carousel' | 'gallery';
   initialListingSheetOpen?: boolean;
   initialEditSheetOpen?: boolean;
   initialDeleteDialogOpen?: boolean;
+  initialMenuOpen?: boolean;
   initialTaxonomyExpanded?: boolean;
   initialQueueTab?: 'all' | 'publish_updates';
 }
@@ -223,12 +226,14 @@ export function AdminProductDetailPage({
   onSaveMetadata,
   onOpenWhatsAppListing,
   onDownloadMedia,
+  onToggleMediaReviewRequired,
   isLoading = false,
   disableSafeArea = false,
   initialViewMode = 'carousel',
   initialListingSheetOpen = false,
   initialEditSheetOpen = false,
   initialDeleteDialogOpen = false,
+  initialMenuOpen = false,
   initialTaxonomyExpanded = false,
   initialQueueTab = 'all',
   onSyncDelta,
@@ -241,7 +246,7 @@ export function AdminProductDetailPage({
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
   const [viewMode, setViewMode] = useState<'carousel' | 'gallery'>(initialViewMode);
   const [isTaxonomyExpanded, setIsTaxonomyExpanded] = useState(initialTaxonomyExpanded);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(initialMenuOpen);
   const [isEditOpen, setIsEditOpen] = useState(initialEditSheetOpen);
   const [isDeleteOpen, setIsDeleteOpen] = useState(initialDeleteDialogOpen);
   const [previewListing, setPreviewListing] = useState<VendorListingItemData | null>(
@@ -358,10 +363,21 @@ export function AdminProductDetailPage({
   const listings = product?.listings || [];
 
   const totalMedia = product?.mediaCount ?? (product?.media?.length || 0);
-  const needsZoningReview = Boolean(
-    totalMedia > 30 ||
-    product?.tags?.includes('needs-zoning-review')
+  const [isMediaReviewRequired, setIsMediaReviewRequired] = useState(
+    product?.isMediaReviewRequired !== undefined
+      ? Boolean(product.isMediaReviewRequired)
+      : Boolean(totalMedia > 30 || product?.tags?.includes('needs-zoning-review'))
   );
+
+  useEffect(() => {
+    if (product?.isMediaReviewRequired !== undefined) {
+      setIsMediaReviewRequired(Boolean(product.isMediaReviewRequired));
+    } else {
+      setIsMediaReviewRequired(Boolean(totalMedia > 30 || product?.tags?.includes('needs-zoning-review')));
+    }
+  }, [product?.isMediaReviewRequired, totalMedia, product?.tags]);
+
+  const needsZoningReview = isMediaReviewRequired;
 
   if (isLoading) {
     return (
@@ -1463,6 +1479,28 @@ export function AdminProductDetailPage({
                   <LuSparkles size={18} color={tokens.accent} />
                   <Text fontSize={14} fontWeight="700" color={tokens.text}>
                     Re-evaluate with AI
+                  </Text>
+                </XStack>
+              </TouchableOpacity>
+            )}
+
+            {/* Toggle Media Review Status */}
+            {onToggleMediaReviewRequired && (
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Toggle media review status"
+                activeOpacity={0.7}
+                onPress={async () => {
+                  setIsMenuOpen(false);
+                  const nextVal = !isMediaReviewRequired;
+                  setIsMediaReviewRequired(nextVal);
+                  await onToggleMediaReviewRequired(nextVal);
+                }}
+              >
+                <XStack alignItems="center" gap={12} paddingVertical={12}>
+                  <LuTriangleAlert size={18} color={isMediaReviewRequired ? "#f59e0b" : tokens.text} />
+                  <Text fontSize={14} fontWeight="700" color={tokens.text}>
+                    {isMediaReviewRequired ? "Mark Media Review as Complete" : "Flag for Media Review"}
                   </Text>
                 </XStack>
               </TouchableOpacity>

@@ -10,10 +10,32 @@ export default defineConfig({
     host: true,
     strictPort: true,
     allowedHosts: true,
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:5200',
+        changeOrigin: true,
+      },
+      '/ingest': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/ingest/, ''),
+      },
+    },
   },
   preview: {
     port: 8085,
     host: true,
     allowedHosts: true,
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:5200',
+        changeOrigin: true,
+      },
+      '/ingest': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/ingest/, ''),
+      },
+    },
   },
 });

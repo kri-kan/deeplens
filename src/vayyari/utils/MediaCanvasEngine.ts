@@ -73,15 +73,88 @@ export function getLensProofPreset(brandName = 'VAYYARI'): TransformRecipe {
  */
 export function loadHtmlImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
-    if (typeof window === 'undefined') {
+    if (typeof window === 'undefined' || typeof window.Image === 'undefined') {
       return reject(new Error('HTML5 Canvas is only available in a browser environment'));
     }
     const img = new window.Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => resolve(img);
-    img.onerror = (err) => reject(new Error(`Failed to load image from ${url}: ${err}`));
+    img.onerror = () => {
+      // If crossOrigin=anonymous fails due to CORS, retry without crossOrigin so image still loads for display/transforms
+      const fallbackImg = new window.Image();
+      fallbackImg.onload = () => resolve(fallbackImg);
+      fallbackImg.onerror = (err) => reject(new Error(`Failed to load image from ${url}: ${err}`));
+      fallbackImg.src = url;
+    };
     img.src = url;
   });
+}
+
+/**
+ * Pure calculation helper: Computes zoom-to-fit cover crop coordinates for a given aspect ratio,
+ * zoom scale, and normalized pan offset (-1 to +1).
+ * Sacrifices the extra length or width that overflows the frame, allowing repositioning without blank areas.
+ */
+export function computeCoverCrop(
+  origW: number,
+  origH: number,
+  aspectRatio: '1:1' | '4:5' | '3:4' | 'free' = 'free',
+  panNormalized: { x: number; y: number } = { x: 0, y: 0 },
+  zoomScale = 1.0
+): CropRect {
+  const safeW = Math.max(1, origW);
+  const safeH = Math.max(1, origH);
+  const origRatio = safeW / safeH;
+
+  let targetRatio = origRatio;
+  if (aspectRatio === '4:5') targetRatio = 4 / 5;
+  else if (aspectRatio === '1:1') targetRatio = 1 / 1;
+  else if (aspectRatio === '3:4') targetRatio = 3 / 4;
+
+  // Base cover dimensions in source coordinates
+  let baseCropW = safeW;
+  let baseCropH = safeH;
+
+  if (origRatio > targetRatio) {
+    // Source is wider than target ratio -> width overflows and is sacrificed
+    baseCropW = safeH * targetRatio;
+    baseCropH = safeH;
+  } else if (origRatio < targetRatio) {
+    // Source is taller than target ratio -> height overflows and is sacrificed
+    baseCropW = safeW;
+    baseCropH = safeW / targetRatio;
+  }
+
+  // Apply zoom scale
+  const safeZoom = Math.max(1.0, Math.min(3.0, zoomScale));
+  const finalCropW = Math.min(safeW, baseCropW / safeZoom);
+  const finalCropH = Math.min(safeH, baseCropH / safeZoom);
+
+  // Maximum movable slack in source pixels
+  const maxSlackX = Math.max(0, safeW - finalCropW);
+  const maxSlackY = Math.max(0, safeH - finalCropH);
+
+  // Centered position
+  const centerX = (safeW - finalCropW) / 2;
+  const centerY = (safeH - finalCropH) / 2;
+
+  // Clamped pan offsets (-1 to +1)
+  const clampedPanX = Math.max(-1, Math.min(1, panNormalized.x));
+  const clampedPanY = Math.max(-1, Math.min(1, panNormalized.y));
+
+  const offsetX = clampedPanX * (maxSlackX / 2);
+  const offsetY = clampedPanY * (maxSlackY / 2);
+
+  const finalX = Math.max(0, Math.min(safeW - finalCropW, centerX + offsetX));
+  const finalY = Math.max(0, Math.min(safeH - finalCropH, centerY + offsetY));
+
+  return {
+    x: finalX / safeW,
+    y: finalY / safeH,
+    width: finalCropW / safeW,
+    height: finalCropH / safeH,
+    aspectRatio,
+  };
 }
 
 /**
@@ -330,16 +403,64 @@ function roundRect(
  */
 export function canvasToBlob(canvas: HTMLCanvasElement, quality = 0.88): Promise<Blob> {
   return new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => {
-        if (blob) {
-          resolve(blob);
-        } else {
-          reject(new Error('Canvas toBlob conversion failed'));
+    try {
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            resolve(blob);
+          } else {
+            try {
+              const dataUrl = canvas.toDataURL('image/jpeg', quality);
+              const byteString = atob(dataUrl.split(',')[1]);
+              const mimeString = dataUrl.split(',')[0].split(':')[1].split(';')[0];
+              const ab = new ArrayBuffer(byteString.length);
+              const ia = new Uint8Array(ab);
+              for (let i = 0; i < byteString.length; i++) {
+                ia[i] = byteString.charCodeAt(i);
+              }
+              resolve(new Blob([ab], { type: mimeString }));
+            } catch {
+              reject(new Error('Canvas toBlob conversion failed'));
+            }
+          }
+        },
+        'image/webp',
+        quality
+      );
+    } catch {
+      try {
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        const byteString = atob(dataUrl.split(',')[1]);
+        const mimeString = dataUrl.split(',')[0].split(':')[1].split(';')[0];
+        const ab = new ArrayBuffer(byteString.length);
+        const ia = new Uint8Array(ab);
+        for (let i = 0; i < byteString.length; i++) {
+          ia[i] = byteString.charCodeAt(i);
         }
-      },
-      'image/webp',
-      quality
-    );
+        resolve(new Blob([ab], { type: mimeString }));
+      } catch (err) {
+        reject(err);
+      }
+    }
   });
 }
+
+/**
+ * Resolves the active display URI for a media item based on its activeDisplaySource
+ * ('modified' vs 'original') and available URI fields.
+ */
+export function getMediaDisplayUri(item?: {
+  uri?: string;
+  thumbnailUri?: string;
+  originalUri?: string;
+  modifiedUri?: string | null;
+  activeDisplaySource?: 'original' | 'modified';
+} | null): string {
+  if (!item) return '';
+  const uri =
+    item.activeDisplaySource === 'modified' && item.modifiedUri
+      ? item.modifiedUri
+      : (item.originalUri || item.uri || item.thumbnailUri || '');
+  return uri;
+}
+

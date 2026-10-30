@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { PanResponder, View, ScrollView, Image } from 'react-native';
+import { PanResponder, View, ScrollView, Image, Linking } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import { LinearGradient } from 'expo-linear-gradient';
-import { LuChevronLeft, LuChevronRight } from 'react-icons/lu';
+import { LuChevronLeft, LuChevronRight, LuInstagram, LuExternalLink } from 'react-icons/lu';
 import { CarouselDot } from '../../atoms/CarouselDot/CarouselDot';
 import { SwatchTemplateType } from '../../atoms/SwatchDot/CustomSwatchDot';
 import { useTheme, useResponsive } from '../../../theme';
@@ -12,6 +12,9 @@ export type GalleryImage = {
   label: string;
   gradient?: [string, string];
   url?: string;
+  sourcePlatform?: 'instagram' | 'catalog' | 'whatsapp';
+  sourceUrl?: string;
+  sourcePostId?: string;
 };
 
 export type SwatchItem = {
@@ -127,6 +130,18 @@ export function ProductGallery({
     touchStartX.current = null;
   };
 
+  const handleOpenInstagram = (img: GalleryImage, e?: any) => {
+    e?.stopPropagation?.();
+    const url =
+      img.sourceUrl ||
+      (img.sourcePostId ? `https://www.instagram.com/p/${img.sourcePostId}/` : 'https://www.instagram.com');
+    if (typeof window !== 'undefined') {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } else {
+      Linking.openURL(url);
+    }
+  };
+
   // -------------------------------------------------------------
   // MOBILE & TABLET VIEW: Carousel with Circular Swipe + Children Slot Below
   // -------------------------------------------------------------
@@ -165,6 +180,32 @@ export function ProductGallery({
                 style={{ width: '100%', height: '100%' }}
               />
             )}
+
+            {/* Instagram Source Badge & Link-out */}
+            {currentImage.sourcePlatform === 'instagram' ? (
+              <XStack
+                position="absolute"
+                top={12}
+                right={12}
+                backgroundColor="rgba(0, 0, 0, 0.65)"
+                borderRadius={20}
+                paddingHorizontal={10}
+                paddingVertical={5}
+                gap={6}
+                alignItems="center"
+                cursor="pointer"
+                zIndex={15}
+                hoverStyle={{ backgroundColor: 'rgba(0, 0, 0, 0.85)', scale: 1.03 }}
+                pressStyle={{ scale: 0.95 }}
+                onPress={(e) => handleOpenInstagram(currentImage, e)}
+              >
+                <LuInstagram size={14} color="#E1306C" />
+                <Text color="#FFFFFF" fontSize={11} fontWeight="600">
+                  Seen on Instagram
+                </Text>
+                <LuExternalLink size={11} color="rgba(255,255,255,0.7)" />
+              </XStack>
+            ) : null}
 
             {/* Left Chevron Button (Circular Prev Image) */}
             {totalImages > 1 ? (
@@ -282,6 +323,23 @@ export function ProductGallery({
                                 style={{ width: '100%', height: '100%' }}
                               />
                             )}
+
+                            {img.sourcePlatform === 'instagram' ? (
+                              <XStack
+                                position="absolute"
+                                bottom={2}
+                                right={2}
+                                width={14}
+                                height={14}
+                                borderRadius={7}
+                                backgroundColor="rgba(0,0,0,0.75)"
+                                alignItems="center"
+                                justifyContent="center"
+                                zIndex={5}
+                              >
+                                <LuInstagram size={9} color="#E1306C" />
+                              </XStack>
+                            ) : null}
                           </XStack>
                         );
                       })}
@@ -329,6 +387,24 @@ export function ProductGallery({
                   style={{ width: '100%', height: '100%' }}
                 />
               )}
+
+              {img.sourcePlatform === 'instagram' ? (
+                <XStack
+                  position="absolute"
+                  bottom={4}
+                  right={4}
+                  paddingHorizontal={4}
+                  paddingVertical={2}
+                  borderRadius={4}
+                  backgroundColor="rgba(0,0,0,0.75)"
+                  alignItems="center"
+                  gap={3}
+                  zIndex={5}
+                >
+                  <LuInstagram size={10} color="#E1306C" />
+                  <Text color="#FFFFFF" fontSize={9} fontWeight="700">IG</Text>
+                </XStack>
+              ) : null}
             </XStack>
           );
         })}
@@ -358,6 +434,32 @@ export function ProductGallery({
             style={{ width: '100%', height: '100%', minHeight: 580 }}
           />
         )}
+
+        {/* Instagram Source Badge & Link-out */}
+        {currentImage.sourcePlatform === 'instagram' ? (
+          <XStack
+            position="absolute"
+            top={16}
+            right={16}
+            backgroundColor="rgba(0, 0, 0, 0.65)"
+            borderRadius={20}
+            paddingHorizontal={12}
+            paddingVertical={6}
+            gap={8}
+            alignItems="center"
+            cursor="pointer"
+            zIndex={15}
+            hoverStyle={{ backgroundColor: 'rgba(0, 0, 0, 0.85)', scale: 1.03 }}
+            pressStyle={{ scale: 0.95 }}
+            onPress={(e) => handleOpenInstagram(currentImage, e)}
+          >
+            <LuInstagram size={16} color="#E1306C" />
+            <Text color="#FFFFFF" fontSize={12} fontWeight="600">
+              Seen on Instagram
+            </Text>
+            <LuExternalLink size={12} color="rgba(255,255,255,0.7)" />
+          </XStack>
+        ) : null}
 
         {/* Desktop Left / Right Navigation Chevrons */}
         {totalImages > 1 ? (

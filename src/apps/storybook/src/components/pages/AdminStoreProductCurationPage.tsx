@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Pressable,
@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Modal,
   ViewStyle,
+  BackHandler,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YStack, XStack, Text } from 'tamagui';
@@ -36,7 +37,13 @@ import {
   LuShare2,
   LuHeart,
   LuChevronLeft,
+  LuChevronUp,
+  LuChevronDown,
   LuPencil,
+  LuTag,
+  LuBell,
+  LuBox,
+  LuSlidersHorizontal,
   LuSmartphone,
   LuTablet,
   LuMonitor,
@@ -44,13 +51,18 @@ import {
   LuWifi,
   LuLock,
   LuExternalLink,
+  LuShield,
+  LuRotateCcw,
+  LuRotateCw,
+  LuCrop,
+  LuTrash2,
 } from 'react-icons/lu';
 import {
   ColorAssignmentPickerModal,
   getSlotLimits,
   getInitialSlotColors,
 } from '../organisms/StoreCuration/ColorAssignmentPickerModal';
-import { useTheme, useResponsive, FormFactorContext } from '../../theme';
+import { useTheme, useResponsive, useResponsiveLayout, FormFactorContext } from '../../theme';
 import { ProductDetailPage } from './ProductDetailPage';
 import {
   CustomSwatchDot,
@@ -76,6 +88,7 @@ import {
   StoreCurationMediaItem,
   StoreColorGroup,
   StoreProductLifecycleState,
+  StoreSkuItem,
   ProductCurationSpecs,
   DEFAULT_SAREE_SPECS,
   buildSpecsFromUnifiedAttributes,
@@ -85,8 +98,35 @@ import {
   INITIAL_COLOR_GROUPS,
   MOCK_CURATION_MEDIA,
 } from '../organisms/StoreCuration/mockCurationData';
+import {
+  TransformRecipe,
+  DEFAULT_RECIPE,
+  getLensProofPreset,
+  loadHtmlImage,
+  renderCanvasTransform,
+  canvasToBlob,
+  computeCoverCrop,
+} from '@/utils/MediaCanvasEngine';
 
-export type CurationScreen = 'hub' | 'qualify_and_group' | 'metadata';
+const normalizeMediaUrl = (url?: string | null): string => {
+  if (!url) return '';
+  return url
+    .replace(/^https?:\/\/media\.vayyarifashions\.com/, 'http://adminapi.vayyarifashions.com')
+    .replace(/^https?:\/\/localhost:9000/, 'http://adminapi.vayyarifashions.com/store-assets')
+    .replace(/^https?:\/\/127\.0\.0\.1:9000/, 'http://adminapi.vayyarifashions.com/store-assets')
+    .replace(/^https?:\/\/192\.168\.0\.170:9000/, 'http://adminapi.vayyarifashions.com/store-assets');
+};
+
+export const getMediaDisplayUri = (item?: StoreCurationMediaItem | null): string => {
+  if (!item) return '';
+  const uri =
+    item.activeDisplaySource === 'modified' && item.modifiedUri
+      ? item.modifiedUri
+      : (item.uri || item.thumbnailUri || '');
+  return normalizeMediaUrl(uri);
+};
+
+export type CurationScreen = 'hub' | 'qualify_and_group' | 'metadata' | 'manage_skus' | 'anti_lens_studio';
 export type QualifyAndGroupStage = 'qualify' | 'swatches' | 'grouping';
 export type CurationStage = 'qualification' | 'swatch_creation' | 'grouping' | 'metadata' | 'qualify' | 'swatches';
 
@@ -112,6 +152,8 @@ export interface AdminStoreProductCurationPageProps {
   onBack?: () => void;
   onSave?: (curatedPayload: any) => void;
   disableSafeArea?: boolean;
+  isAlreadyInStore?: boolean;
+  initialSkus?: StoreSkuItem[];
 }
 
 const TEMPLATE_OPTIONS: { id: SwatchTemplateType; label: string; desc: string }[] = [
@@ -144,9 +186,18 @@ export function AdminStoreProductCurationPage({
   onBack,
   onSave,
   disableSafeArea = false,
+  isAlreadyInStore = true,
+  initialSkus,
 }: AdminStoreProductCurationPageProps) {
   const { tokens } = useTheme();
   const { factor, isMobile, isTablet, isDesktop } = useResponsive();
+  const {
+    containerMaxWidth,
+    pagePaddingHorizontal,
+    pagePaddingVertical,
+    cardPadding,
+    modalMaxWidth,
+  } = useResponsiveLayout();
   const insets = useSafeAreaInsets();
   const topInset = disableSafeArea ? 0 : insets.top;
   const bottomInset = disableSafeArea ? 0 : insets.bottom;
@@ -214,7 +265,30 @@ export function AdminStoreProductCurationPage({
   const [currentStage, setCurrentStage] = useState<QualifyAndGroupStage>(resolveInitialStage);
   const [showPreview, setShowPreview] = useState<boolean>(initialShowPreview);
   const [previewDevice, setPreviewDevice] = useState<'mobile' | 'tablet' | 'desktop'>('mobile');
-  const [mediaList, setMediaList] = useState<StoreCurationMediaItem[]>(initialMedia);
+  const [mediaList, setMediaList] = useState<StoreCurationMediaItem[]>(() => {
+    return (initialMedia || []).map((m) => ({
+      ...m,
+      uri: normalizeMediaUrl(m.uri),
+      thumbnailUri: normalizeMediaUrl(m.thumbnailUri || m.uri),
+      originalUri: m.originalUri ? normalizeMediaUrl(m.originalUri) : normalizeMediaUrl(m.uri),
+      modifiedUri: m.modifiedUri ? normalizeMediaUrl(m.modifiedUri) : null,
+    }));
+  });
+
+  useEffect(() => {
+    if (initialMedia && initialMedia.length > 0) {
+      setMediaList(
+        initialMedia.map((m) => ({
+          ...m,
+          uri: normalizeMediaUrl(m.uri),
+          thumbnailUri: normalizeMediaUrl(m.thumbnailUri || m.uri),
+          originalUri: m.originalUri ? normalizeMediaUrl(m.originalUri) : normalizeMediaUrl(m.uri),
+          modifiedUri: m.modifiedUri ? normalizeMediaUrl(m.modifiedUri) : null,
+        }))
+      );
+    }
+  }, [initialMedia]);
+
   const [swatchTemplate, setSwatchTemplate] = useState<SwatchTemplateType>('contrast-border');
   const [swatchCount, setSwatchCount] = useState<number>(initialColorGroups.length || 2);
   const [colorGroups, setColorGroups] = useState<StoreColorGroup[]>(() => {
@@ -230,6 +304,36 @@ export function AdminStoreProductCurationPage({
         slotD: initialSlots.length > 3 ? initialSlots[3] : g.slotD,
         colors: initialSlots,
         colorCount: initialSlots.length,
+      };
+    });
+  });
+
+  // ── ITEM-LEVEL SKU MANAGEMENT STATE ──
+  const [skuList, setSkuList] = useState<StoreSkuItem[]>(() => {
+    if (initialSkus && initialSkus.length > 0) {
+      return initialSkus;
+    }
+    const groups = initialColorGroups && initialColorGroups.length > 0 ? initialColorGroups : INITIAL_COLOR_GROUPS;
+    return groups.map((g, idx) => {
+      const num = String(idx + 1).padStart(2, '0');
+      const assignedMedia = (initialMedia || []).find((m) => m.colorGroupId === g.id);
+      const thumb = getMediaDisplayUri(assignedMedia) || getMediaDisplayUri(initialMedia?.[0]);
+      const customPrice = (g as any).price ?? null;
+      const customMrp = (g as any).mrp ?? null;
+      return {
+        id: g.id || `sku-${productCode.toLowerCase()}-${num}`,
+        skuCode: g.colorwayCode || `${productCode}${num}`,
+        colorwayName: g.name || `Colorway ${idx + 1}`,
+        colorHex: g.slotA || (g.colors && g.colors[0]) || '#1B4D3E',
+        secondaryHex: g.slotB || (g.colors && g.colors[1]) || '#D4AF37',
+        colorGroupId: g.id,
+        price: customPrice,
+        mrp: customMrp,
+        isPriceInherited: customPrice == null,
+        stockQuantity: (g as any).stockQuantity ?? (idx === 0 ? 12 : 6),
+        allowWaitlist: (g as any).allowWaitlist !== false,
+        customMessage: (g as any).customMessage ?? (idx === 0 ? '✨ Pure Zari Weave · Varanasi Loom' : '⏳ Limited Artisan Run'),
+        thumbnailUrl: thumb,
       };
     });
   });
@@ -260,6 +364,55 @@ export function AdminStoreProductCurationPage({
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [saveToast, setSaveToast] = useState(false);
 
+  // SKU Management Handlers
+  const handleToggleSkuPriceInheritance = (skuId: string) => {
+    setSkuList((prev) =>
+      prev.map((s) => {
+        if (s.id !== skuId) return s;
+        const newInherited = !s.isPriceInherited;
+        return {
+          ...s,
+          isPriceInherited: newInherited,
+          price: newInherited ? null : Number(salePrice) || initialSalePrice,
+          mrp: newInherited ? null : Number(mrp) || initialMrp,
+        };
+      })
+    );
+  };
+
+  const handleUpdateSkuPrice = (skuId: string, newPriceText: string) => {
+    const val = Number(newPriceText.replace(/[^0-9]/g, ''));
+    setSkuList((prev) =>
+      prev.map((s) => (s.id === skuId ? { ...s, price: val, isPriceInherited: false } : s))
+    );
+  };
+
+  const handleUpdateSkuMrp = (skuId: string, newMrpText: string) => {
+    const val = Number(newMrpText.replace(/[^0-9]/g, ''));
+    setSkuList((prev) =>
+      prev.map((s) => (s.id === skuId ? { ...s, mrp: val, isPriceInherited: false } : s))
+    );
+  };
+
+  const handleUpdateSkuStock = (skuId: string, newQty: number) => {
+    const qty = Math.max(0, newQty);
+    setSkuList((prev) =>
+      prev.map((s) => (s.id === skuId ? { ...s, stockQuantity: qty } : s))
+    );
+  };
+
+  const handleToggleSkuWaitlist = (skuId: string) => {
+    setSkuList((prev) =>
+      prev.map((s) => (s.id === skuId ? { ...s, allowWaitlist: !s.allowWaitlist } : s))
+    );
+  };
+
+  const handleUpdateSkuCustomMessage = (skuId: string, message: string) => {
+    setSkuList((prev) =>
+      prev.map((s) => (s.id === skuId ? { ...s, customMessage: message } : s))
+    );
+  };
+
   React.useEffect(() => {
     if (effectiveUa) {
       const derived = buildSpecsFromUnifiedAttributes(
@@ -278,6 +431,89 @@ export function AdminStoreProductCurationPage({
   const [previewSlideIndex, setPreviewSlideIndex] = useState(0);
   const [previewPlayingVideo, setPreviewPlayingVideo] = useState(false);
   const [previewBufferingVideo, setPreviewBufferingVideo] = useState(false);
+
+  // ── ANTI-LENS MEDIA STUDIO STATE ──
+  const [selectedStudioMediaId, setSelectedStudioMediaId] = useState<string | null>(null);
+  const [studioRecipe, setStudioRecipe] = useState<TransformRecipe>(DEFAULT_RECIPE);
+  const [studioActiveTab, setStudioActiveTab] = useState<'transform' | 'watermark' | 'presets'>('transform');
+  const [savingStudio, setSavingStudio] = useState(false);
+  const [sourceImg, setSourceImg] = useState<HTMLImageElement | null>(null);
+  const [canvasPreviewDataUrl, setCanvasPreviewDataUrl] = useState<string | null>(null);
+  const [studioPanOffset, setStudioPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [studioZoomScale, setStudioZoomScale] = useState<number>(1.0);
+  const [sourceDimensions, setSourceDimensions] = useState<{ width: number; height: number }>({ width: 800, height: 1000 });
+
+  const activeStudioMedia = useMemo(() => {
+    if (selectedStudioMediaId) {
+      return mediaList.find((m) => m.id === selectedStudioMediaId) || null;
+    }
+    const firstImg = mediaList.find((m) => m.mediaType !== 'video');
+    return firstImg || null;
+  }, [mediaList, selectedStudioMediaId]);
+
+  // Load source image and initialize recipe when active studio item changes
+  useEffect(() => {
+    if (currentScreen !== 'anti_lens_studio' || !activeStudioMedia) {
+      setSourceImg(null);
+      setCanvasPreviewDataUrl(null);
+      setStudioPanOffset({ x: 0, y: 0 });
+      setStudioZoomScale(1.0);
+      return;
+    }
+
+    if (activeStudioMedia.transformRecipe && typeof activeStudioMedia.transformRecipe === 'object') {
+      setStudioRecipe({ ...DEFAULT_RECIPE, ...activeStudioMedia.transformRecipe });
+    } else {
+      setStudioRecipe({
+        ...DEFAULT_RECIPE,
+        watermark: {
+          ...DEFAULT_RECIPE.watermark!,
+          text: 'VAYYARI',
+        },
+      });
+    }
+
+    const imgUrl = activeStudioMedia.originalUri || activeStudioMedia.uri;
+
+    // Retrieve natural image dimensions via React Native Image.getSize
+    if (imgUrl) {
+      Image.getSize(
+        imgUrl,
+        (w, h) => {
+          if (w > 0 && h > 0) {
+            setSourceDimensions({ width: w, height: h });
+          }
+        },
+        () => {}
+      );
+    }
+
+    // Only attempt HTML5 canvas image loading in actual browser environments (silently fallback in React Native)
+    if (typeof window !== 'undefined' && typeof window.document !== 'undefined') {
+      loadHtmlImage(imgUrl)
+        .then((img) => {
+          setSourceImg(img);
+          if (img.naturalWidth && img.naturalHeight) {
+            setSourceDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+          }
+        })
+        .catch(() => {
+          // Silently fall back to live React Native GPU transforms without console warnings
+        });
+    }
+  }, [currentScreen, activeStudioMedia?.id]);
+
+  // Update canvas render preview whenever source image or recipe changes
+  useEffect(() => {
+    if (!sourceImg || currentScreen !== 'anti_lens_studio') return;
+    try {
+      const renderedCanvas = renderCanvasTransform(sourceImg, studioRecipe, 1024);
+      const dataUrl = renderedCanvas.toDataURL('image/jpeg', 0.85);
+      setCanvasPreviewDataUrl(dataUrl);
+    } catch (err) {
+      console.warn('Canvas render notice:', err);
+    }
+  }, [sourceImg, studioRecipe, currentScreen]);
 
   // Sync state if props update dynamically
   React.useEffect(() => {
@@ -479,6 +715,19 @@ export function AdminStoreProductCurationPage({
 
   // ── SAVE HANDLER ──
   const handleSaveCuration = () => {
+    const updatedGroups = colorGroups.map((g) => {
+      const match = skuList.find((s) => s.id === g.id || s.colorGroupId === g.id);
+      if (!match) return g;
+      return {
+        ...g,
+        price: match.isPriceInherited ? null : match.price,
+        mrp: match.isPriceInherited ? null : match.mrp,
+        stockQuantity: match.stockQuantity,
+        allowWaitlist: match.allowWaitlist,
+        customMessage: match.customMessage,
+      };
+    });
+
     const payload = {
       productCode,
       title,
@@ -488,11 +737,251 @@ export function AdminStoreProductCurationPage({
       lifecycleState,
       description,
       mediaList,
-      colorGroups,
+      colorGroups: updatedGroups,
+      skus: skuList,
+      tags: skuList.map((s) => s.customMessage).filter(Boolean) as string[],
     };
     onSave?.(payload);
     setSaveToast(true);
     setTimeout(() => setSaveToast(false), 2400);
+  };
+
+  const handleSaveSkus = handleSaveCuration;
+
+  // ── STUDIO ACTION HANDLERS ──
+  const handleToggleActiveSource = (mediaId: string, targetSource: 'original' | 'modified') => {
+    setMediaList((prev) =>
+      prev.map((m) => {
+        if (m.id === mediaId) {
+          const activeUrl = targetSource === 'modified' && m.modifiedUri ? m.modifiedUri : (m.originalUri || m.uri);
+          return {
+            ...m,
+            activeDisplaySource: targetSource,
+            uri: activeUrl,
+          };
+        }
+        return m;
+      })
+    );
+  };
+
+  const handleDeleteModified = (mediaId: string) => {
+    setMediaList((prev) =>
+      prev.map((m) => {
+        if (m.id === mediaId) {
+          return {
+            ...m,
+            uri: m.originalUri || m.uri,
+            modifiedUri: null,
+            activeDisplaySource: 'original',
+            hasModified: false,
+            transformRecipe: null,
+          };
+        }
+        return m;
+      })
+    );
+  };
+
+  const handleApplyLensProofPreset = () => {
+    const preset = getLensProofPreset('VAYYARI');
+    setStudioRecipe(preset);
+  };
+
+  const handleResetRecipe = () => {
+    setStudioRecipe({
+      ...DEFAULT_RECIPE,
+      watermark: {
+        ...DEFAULT_RECIPE.watermark!,
+        text: 'VAYYARI',
+      },
+    });
+  };
+
+  const handleStudioRotate = (delta: number) => {
+    setStudioRecipe((prev) => ({
+      ...prev,
+      rotateDegrees: (prev.rotateDegrees + delta + 360) % 360,
+    }));
+  };
+
+  const handleStudioToggleFlipH = () => {
+    setStudioRecipe((prev) => ({
+      ...prev,
+      flipH: !prev.flipH,
+    }));
+  };
+
+  const handleStudioToggleFlipV = () => {
+    setStudioRecipe((prev) => ({
+      ...prev,
+      flipV: !prev.flipV,
+    }));
+  };
+
+  const getStudioFramingBounds = (
+    ratio = studioRecipe.crop?.aspectRatio || 'free',
+    zoom = studioZoomScale
+  ) => {
+    const maxStageW = 280;
+    const maxStageH = 340;
+
+    let targetRatio = sourceDimensions.width / Math.max(1, sourceDimensions.height);
+    if (ratio === '4:5') targetRatio = 4 / 5;
+    else if (ratio === '1:1') targetRatio = 1 / 1;
+    else if (ratio === '3:4') targetRatio = 3 / 4;
+
+    let w = maxStageW;
+    let h = Math.round(w / targetRatio);
+    if (h > maxStageH) {
+      h = maxStageH;
+      w = Math.round(h * targetRatio);
+    }
+    const frame = { width: Math.round(w), height: Math.round(h) };
+
+    const srcRatio = sourceDimensions.width / Math.max(1, sourceDimensions.height);
+    const frameRatio = frame.width / frame.height;
+
+    let imgW = frame.width;
+    let imgH = frame.height;
+    if (srcRatio > frameRatio) {
+      imgW = frame.height * srcRatio * zoom;
+      imgH = frame.height * zoom;
+    } else {
+      imgW = frame.width * zoom;
+      imgH = (frame.width / srcRatio) * zoom;
+    }
+
+    const maxPanX = Math.max(0, Math.round((imgW - frame.width) / 2));
+    const maxPanY = Math.max(0, Math.round((imgH - frame.height) / 2));
+    return { frame, maxPanX, maxPanY };
+  };
+
+  const handleStudioSetAspectRatio = (ratio: '4:5' | '1:1' | '3:4' | 'free') => {
+    setStudioPanOffset({ x: 0, y: 0 }); // Center image by default
+    const coverCrop = computeCoverCrop(
+      sourceDimensions.width,
+      sourceDimensions.height,
+      ratio,
+      { x: 0, y: 0 },
+      studioZoomScale
+    );
+    setStudioRecipe((prev) => ({ ...prev, crop: coverCrop }));
+  };
+
+  const handleStudioAdjustPan = (dx: number, dy: number) => {
+    const { maxPanX, maxPanY } = getStudioFramingBounds();
+    const newX = maxPanX > 0 ? Math.max(-maxPanX, Math.min(maxPanX, studioPanOffset.x + dx)) : 0;
+    const newY = maxPanY > 0 ? Math.max(-maxPanY, Math.min(maxPanY, studioPanOffset.y + dy)) : 0;
+    setStudioPanOffset({ x: newX, y: newY });
+
+    const normX = maxPanX > 0 ? newX / maxPanX : 0;
+    const normY = maxPanY > 0 ? newY / maxPanY : 0;
+    const coverCrop = computeCoverCrop(
+      sourceDimensions.width,
+      sourceDimensions.height,
+      studioRecipe.crop?.aspectRatio || 'free',
+      { x: normX, y: normY },
+      studioZoomScale
+    );
+    setStudioRecipe((prev) => ({ ...prev, crop: coverCrop }));
+  };
+
+  const handleStudioSetFocusPreset = (focus: 'top' | 'center' | 'bottom' | 'left' | 'right') => {
+    const { maxPanX, maxPanY } = getStudioFramingBounds();
+    let newX = 0;
+    let newY = 0;
+    if (focus === 'top') newY = -maxPanY;
+    else if (focus === 'bottom') newY = maxPanY;
+    else if (focus === 'left') newX = -maxPanX;
+    else if (focus === 'right') newX = maxPanX;
+
+    setStudioPanOffset({ x: newX, y: newY });
+
+    const normX = maxPanX > 0 ? newX / maxPanX : 0;
+    const normY = maxPanY > 0 ? newY / maxPanY : 0;
+    const coverCrop = computeCoverCrop(
+      sourceDimensions.width,
+      sourceDimensions.height,
+      studioRecipe.crop?.aspectRatio || 'free',
+      { x: normX, y: normY },
+      studioZoomScale
+    );
+    setStudioRecipe((prev) => ({ ...prev, crop: coverCrop }));
+  };
+
+  const handleStudioAdjustZoom = (delta: number) => {
+    const newZoom = Math.max(1.0, Math.min(2.5, Math.round((studioZoomScale + delta) * 10) / 10));
+    setStudioZoomScale(newZoom);
+
+    const { maxPanX, maxPanY } = getStudioFramingBounds(studioRecipe.crop?.aspectRatio, newZoom);
+    const clampedX = maxPanX > 0 ? Math.max(-maxPanX, Math.min(maxPanX, studioPanOffset.x)) : 0;
+    const clampedY = maxPanY > 0 ? Math.max(-maxPanY, Math.min(maxPanY, studioPanOffset.y)) : 0;
+    setStudioPanOffset({ x: clampedX, y: clampedY });
+
+    const normX = maxPanX > 0 ? clampedX / maxPanX : 0;
+    const normY = maxPanY > 0 ? clampedY / maxPanY : 0;
+    const coverCrop = computeCoverCrop(
+      sourceDimensions.width,
+      sourceDimensions.height,
+      studioRecipe.crop?.aspectRatio || 'free',
+      { x: normX, y: normY },
+      newZoom
+    );
+    setStudioRecipe((prev) => ({ ...prev, crop: coverCrop }));
+  };
+
+  const handleApplyAndSaveStudio = async () => {
+    if (!activeStudioMedia) return;
+    const mediaId = activeStudioMedia.id;
+    setSavingStudio(true);
+
+    try {
+      const originalUrl = activeStudioMedia.originalUri || activeStudioMedia.uri;
+
+      let blob: Blob | null = null;
+      if (sourceImg) {
+        try {
+          const fullCanvas = renderCanvasTransform(sourceImg, studioRecipe, 2048);
+          blob = await canvasToBlob(fullCanvas, 0.88);
+        } catch (canvasErr) {
+          console.warn('Canvas export notice:', canvasErr);
+        }
+      }
+
+      if (!blob) {
+        blob = new Blob([JSON.stringify(studioRecipe)], { type: 'application/json' });
+      }
+
+      let localUrl = originalUrl;
+      if (blob && blob.type && blob.type.startsWith('image/') && typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+        try {
+          localUrl = URL.createObjectURL(blob);
+        } catch {
+          localUrl = canvasPreviewDataUrl || originalUrl;
+        }
+      } else if (canvasPreviewDataUrl) {
+        localUrl = canvasPreviewDataUrl;
+      }
+
+      const updatedItem: StoreCurationMediaItem = {
+        ...activeStudioMedia,
+        originalUri: originalUrl,
+        modifiedUri: localUrl,
+        activeDisplaySource: 'modified',
+        hasModified: true,
+        transformRecipe: studioRecipe,
+        uri: localUrl,
+      };
+
+      setMediaList((prev) => prev.map((m) => (m.id === mediaId ? updatedItem : m)));
+      setSaveToast(true);
+      setTimeout(() => setSaveToast(false), 3000);
+    } catch (err) {
+      console.error('Failed to save transformed media:', err);
+    } finally {
+      setSavingStudio(false);
+    }
   };
 
   // ── PREVIEW FILTERED MEDIA ──
@@ -670,6 +1159,51 @@ export function AdminStoreProductCurationPage({
     mediaList,
     specs,
   ]);
+
+  // ── BACK NAVIGATION HANDLER (MODALS -> SCREEN WIZARD -> STORE CURATION HUB -> INVENTORY) ──
+  const handleBackNavigation = useCallback(() => {
+    if (showPreview) {
+      setShowPreview(false);
+      return true;
+    }
+    if (colorPickerModalGroupId) {
+      setColorPickerModalGroupId(null);
+      return true;
+    }
+    if (currentScreen === 'anti_lens_studio') {
+      setCurrentScreen('qualify_and_group');
+      setCurrentStage('qualify');
+      return true;
+    }
+    if (selectedStudioMediaId) {
+      setSelectedStudioMediaId(null);
+      return true;
+    }
+    if (currentScreen !== 'hub') {
+      setCurrentScreen('hub');
+      return true;
+    }
+    if (onBack) {
+      onBack();
+      return true;
+    }
+    return false;
+  }, [
+    showPreview,
+    colorPickerModalGroupId,
+    currentScreen,
+    selectedStudioMediaId,
+    onBack,
+  ]);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      return handleBackNavigation();
+    };
+
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [handleBackNavigation]);
 
   if (showPreview) {
     return (
@@ -1059,7 +1593,7 @@ export function AdminStoreProductCurationPage({
     <YStack
       flex={1}
       width="100%"
-      maxWidth={isMobile ? '100%' : isTablet ? 768 : 1240}
+      maxWidth={containerMaxWidth}
       alignSelf="center"
       backgroundColor={tokens.background}
       position="relative"
@@ -1070,24 +1604,18 @@ export function AdminStoreProductCurationPage({
         backgroundColor={tokens.surface}
         borderBottomWidth={1}
         borderBottomColor={tokens.border}
-        paddingHorizontal={isMobile ? 10 : isTablet ? 20 : 28}
+        paddingHorizontal={pagePaddingHorizontal}
         paddingTop={topInset + 8}
         paddingBottom={10}
         alignItems="center"
         justifyContent="space-between"
       >
         <XStack alignItems="center" gap={isMobile ? 8 : 12} flex={1}>
-          {currentScreen === 'hub' ? (
-            onBack ? (
-              <Pressable onPress={onBack} hitSlop={8} style={styles.topIconBtn}>
-                <LuArrowLeft size={18} color={tokens.text} />
-              </Pressable>
-            ) : null
-          ) : (
-            <Pressable onPress={() => setCurrentScreen('hub')} hitSlop={8} style={styles.topIconBtn}>
+          {(currentScreen !== 'hub' || onBack) ? (
+            <Pressable onPress={handleBackNavigation} hitSlop={8} style={styles.topIconBtn}>
               <LuArrowLeft size={18} color={tokens.text} />
             </Pressable>
-          )}
+          ) : null}
           <YStack flex={1} marginRight={6}>
             <XStack alignItems="center" gap={6} flexWrap="wrap">
               <LuStore size={isMobile ? 15 : 18} color={tokens.accent} />
@@ -1096,7 +1624,11 @@ export function AdminStoreProductCurationPage({
                   ? 'Store Curation'
                   : currentScreen === 'qualify_and_group'
                   ? 'Qualify & Group'
-                  : 'Product Metadata'}
+                  : currentScreen === 'metadata'
+                  ? 'Product Metadata'
+                  : currentScreen === 'anti_lens_studio'
+                  ? 'Anti-Lens Media Studio'
+                  : 'Manage SKUs'}
               </Text>
               {!isMobile && (
                 <View style={[styles.codePill, { backgroundColor: `${tokens.accent}14`, marginLeft: 4 }]}>
@@ -1111,7 +1643,11 @@ export function AdminStoreProductCurationPage({
                 ? `${productCode} · ${title} · ${fabric}`
                 : currentScreen === 'qualify_and_group'
                 ? `Stage ${currentStageIndex + 1} of 3 · ${productCode} · ${title}`
-                : `Story, AI & Commercial Margins · ${productCode} · ${title}`}
+                : currentScreen === 'metadata'
+                ? `Story, AI & Commercial Margins · ${productCode} · ${title}`
+                : currentScreen === 'anti_lens_studio'
+                ? `Slide #${activeStudioMedia?.sortOrder || 1} · Image Studio & Protection · ${productCode}`
+                : `${skuList.length} Variations · ${productCode}`}
             </Text>
           </YStack>
         </XStack>
@@ -1178,7 +1714,7 @@ export function AdminStoreProductCurationPage({
           borderBottomWidth={1}
           borderBottomColor={tokens.border}
           paddingVertical={10}
-          paddingHorizontal={isMobile ? 12 : 24}
+          paddingHorizontal={pagePaddingHorizontal}
         >
           <XStack
             alignItems="center"
@@ -1250,8 +1786,8 @@ export function AdminStoreProductCurationPage({
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
-          paddingHorizontal: currentScreen === 'metadata' ? (isMobile ? 0 : isTablet ? 8 : 16) : (isMobile ? 12 : isTablet ? 20 : 28),
-          paddingTop: isMobile ? 8 : 14,
+          paddingHorizontal: currentScreen === 'metadata' ? (isMobile ? 0 : isTablet ? 8 : 16) : pagePaddingHorizontal,
+          paddingTop: pagePaddingVertical,
           paddingBottom: currentScreen === 'hub' ? Math.max(bottomInset + 16, 24) : 90 + bottomInset,
         }}
       >
@@ -1267,7 +1803,7 @@ export function AdminStoreProductCurationPage({
             <View style={[styles.hubProductCard, !isMobile && styles.hubProductCardWide]}>
               <XStack alignItems="center" gap={isMobile ? 12 : 18}>
                 <Image
-                  source={{ uri: mediaList[0]?.thumbnailUri || mediaList[0]?.uri }}
+                  source={{ uri: getMediaDisplayUri(mediaList[0]) }}
                   style={isMobile ? styles.hubProductThumb : isTablet ? styles.hubProductThumbTablet : styles.hubProductThumbDesktop}
                   resizeMode="cover"
                 />
@@ -1389,6 +1925,51 @@ export function AdminStoreProductCurationPage({
                 onPress={() => setCurrentScreen('metadata')}
               />
             </XStack>
+
+            {/* Tile 3: Manage SKUs (Item Pricing, Inventory Qty, Restock Waitlist & Highlighted Tags) */}
+            {isAlreadyInStore && (
+              <CurationHubTile
+                title="Manage SKUs"
+                icon={<LuLayers size={isMobile ? 16 : 22} color="#2563EB" />}
+                iconBg="#EFF6FF"
+                minHeight={isMobile ? 84 : isTablet ? 104 : 120}
+                metrics={[
+                  {
+                    icon: <LuBox size={isMobile ? 11 : 14} color="#2563EB" />,
+                    label: `${skuList.reduce((acc, s) => acc + (s.stockQuantity || 0), 0)} Stock`,
+                    fontWeight: '800',
+                    color: tokens.text,
+                    fontSize: isMobile ? 11 : 13,
+                  },
+                  {
+                    icon: <LuSlidersHorizontal size={isMobile ? 11 : 14} color={tokens.accent} />,
+                    label: skuList.filter((s) => !s.isPriceInherited && s.price != null).length > 0
+                      ? `${skuList.filter((s) => !s.isPriceInherited && s.price != null).length} Overridden`
+                      : `Inherits ₹${Number(salePrice).toLocaleString('en-IN')}`,
+                    fontWeight: '800',
+                    color: tokens.accent,
+                    fontSize: isMobile ? 11 : 13,
+                  },
+                  {
+                    icon: <LuBell size={isMobile ? 11 : 14} color="#D97706" />,
+                    label: `${skuList.filter((s) => s.allowWaitlist).length} Waitlist`,
+                    fontWeight: '800',
+                    color: '#D97706',
+                    fontSize: isMobile ? 11 : 13,
+                  },
+                  ...(skuList.some((s) => !!s.customMessage)
+                    ? [{
+                        icon: <LuTag size={isMobile ? 11 : 14} color="#16A34A" />,
+                        label: `${skuList.filter((s) => !!s.customMessage).length} Tags`,
+                        fontWeight: '800' as const,
+                        color: '#16A34A',
+                        fontSize: isMobile ? 11 : 13,
+                      }]
+                    : []),
+                ]}
+                onPress={() => setCurrentScreen('manage_skus')}
+              />
+            )}
           </YStack>
         )}
 
@@ -1432,7 +2013,7 @@ export function AdminStoreProductCurationPage({
                     ]}
                   >
                     <Image
-                      source={{ uri: item.thumbnailUri || item.uri }}
+                      source={{ uri: getMediaDisplayUri(item) }}
                       style={styles.tileImage}
                       resizeMode="cover"
                     />
@@ -1462,6 +2043,37 @@ export function AdminStoreProductCurationPage({
                           {item.durationSeconds ? `0:${item.durationSeconds}` : 'VIDEO'}
                         </Text>
                       </View>
+                    )}
+
+                    {/* Anti-Lens Status Badge (If Image) */}
+                    {item.mediaType !== 'video' && (
+                      <View
+                        style={[
+                          styles.tileLensBadge,
+                          {
+                            backgroundColor: item.hasModified ? '#8B5CF6' : 'rgba(15, 23, 42, 0.75)',
+                          },
+                        ]}
+                      >
+                        <Text fontSize={8} fontWeight="800" color="#FFFFFF">
+                          {item.hasModified ? '✦ MOD' : 'RAW'}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Anti-Lens Studio Trigger Button (Opens dedicated studio page) */}
+                    {item.mediaType !== 'video' && (
+                      <Pressable
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setSelectedStudioMediaId(item.id);
+                          setCurrentScreen('anti_lens_studio');
+                        }}
+                        style={styles.tileStackTriggerBtn}
+                        hitSlop={6}
+                      >
+                        <LuShield size={11} color="#FFFFFF" />
+                      </Pressable>
                     )}
 
                     {/* Order Badge */}
@@ -1759,7 +2371,7 @@ export function AdminStoreProductCurationPage({
               >
                 {qualifiedMedia.map((m) => (
                   <View key={m.id} style={[styles.miniRefTile, mediaTileStyle]}>
-                    <Image source={{ uri: m.thumbnailUri || m.uri }} style={styles.tileImage} resizeMode="cover" />
+                    <Image source={{ uri: getMediaDisplayUri(m) }} style={styles.tileImage} resizeMode="cover" />
                     {m.mediaType === 'video' && (
                       <View style={styles.tileVideoBadge}>
                         <LuVideo size={8} color="#fff" />
@@ -1938,7 +2550,7 @@ export function AdminStoreProductCurationPage({
                       },
                     ]}
                   >
-                    <Image source={{ uri: m.thumbnailUri || m.uri }} style={styles.tileImage} resizeMode="cover" />
+                    <Image source={{ uri: getMediaDisplayUri(m) }} style={styles.tileImage} resizeMode="cover" />
 
                     {/* Common Star Badge if marked common */}
                     {m.isCommon && (
@@ -2001,6 +2613,1373 @@ export function AdminStoreProductCurationPage({
               onChangeSalePrice={setSalePrice}
               onChangeSpecs={setSpecs}
             />
+          </YStack>
+        )}
+
+        {/* =========================================================================
+            SCREEN: MANAGE SKUS (ITEM PRICING, AVAILABILITY, RESTOCK WAITLIST & TAGS)
+           ========================================================================= */}
+        {currentScreen === 'manage_skus' && (
+          <YStack gap={14}>
+            {/* Header info card with Parent Product Defaults */}
+            <YStack
+              backgroundColor={tokens.surface}
+              borderRadius={tokens.radius.md}
+              borderWidth={1}
+              borderColor={tokens.border}
+              padding={14}
+              gap={8}
+            >
+              <XStack alignItems="center" justifyContent="space-between">
+                <XStack alignItems="center" gap={6}>
+                  <LuStore size={14} color={tokens.accent} />
+                  <Text fontSize={12} fontWeight="800" color={tokens.text}>
+                    Parent Product Reference
+                  </Text>
+                </XStack>
+                <View style={styles.codePill}>
+                  <Text fontSize={10} fontWeight="800" color={tokens.textMuted}>
+                    {productCode}
+                  </Text>
+                </View>
+              </XStack>
+              <XStack alignItems="center" gap={8} flexWrap="wrap">
+                <View style={styles.hubMetricChip}>
+                  <Text fontSize={10} color={tokens.textMuted}>
+                    Parent Sale Price:
+                  </Text>
+                  <Text fontSize={10} fontWeight="800" color="#16A34A">
+                    ₹{Number(salePrice).toLocaleString('en-IN')}
+                  </Text>
+                </View>
+                <View style={styles.hubMetricChip}>
+                  <Text fontSize={10} color={tokens.textMuted}>
+                    Parent MRP:
+                  </Text>
+                  <Text fontSize={10} fontWeight="800" color={tokens.text}>
+                    ₹{Number(mrp).toLocaleString('en-IN')}
+                  </Text>
+                </View>
+                <View style={styles.hubMetricChip}>
+                  <Text fontSize={10} color={tokens.textMuted}>
+                    Base Cost:
+                  </Text>
+                  <Text fontSize={10} fontWeight="800" color={tokens.text}>
+                    ₹{Number(baseCostPrice).toLocaleString('en-IN')}
+                  </Text>
+                </View>
+              </XStack>
+            </YStack>
+
+            {/* List of SKU Cards */}
+            {skuList.map((sku, index) => {
+              const effectiveSkuSale = !sku.isPriceInherited && sku.price != null ? sku.price : Number(salePrice) || parsedSalePrice;
+              const effectiveSkuMrp = !sku.isPriceInherited && sku.mrp != null ? sku.mrp : Number(mrp) || parsedMrp;
+              const skuMargin = effectiveSkuSale > 0 && baseCostPrice > 0
+                ? Math.round(((effectiveSkuSale - baseCostPrice) / effectiveSkuSale) * 100)
+                : marginPercent;
+              const skuDiscount = effectiveSkuMrp > effectiveSkuSale && effectiveSkuMrp > 0
+                ? Math.round(((effectiveSkuMrp - effectiveSkuSale) / effectiveSkuMrp) * 100)
+                : discountPercent;
+
+              return (
+                <YStack
+                  key={sku.id || index}
+                  backgroundColor={tokens.surface}
+                  borderRadius={tokens.radius.md}
+                  borderWidth={1}
+                  borderColor={tokens.border}
+                  padding={14}
+                  gap={12}
+                >
+                  {/* SKU Header: Swatch + SKU Code + Colorway Name + Stock Pill */}
+                  <XStack alignItems="center" justifyContent="space-between">
+                    <XStack alignItems="center" gap={8} flex={1}>
+                      {/* Mini Swatch Dot */}
+                      <View
+                        style={{
+                          width: 22,
+                          height: 22,
+                          borderRadius: 11,
+                          backgroundColor: sku.colorHex,
+                          borderWidth: 2,
+                          borderColor: sku.secondaryHex || '#E2E8F0',
+                        }}
+                      />
+                      <YStack gap={1}>
+                        <XStack alignItems="center" gap={5}>
+                          <Text fontSize={12} fontWeight="900" color={tokens.text} fontFamily="$mono">
+                            {sku.skuCode}
+                          </Text>
+                        </XStack>
+                        <Text fontSize={11} color={tokens.textMuted} fontWeight="600">
+                          {sku.colorwayName}
+                        </Text>
+                      </YStack>
+                    </XStack>
+
+                    {/* Stock status badge */}
+                    <View
+                      style={[
+                        styles.statusPill,
+                        {
+                          backgroundColor:
+                            sku.stockQuantity > 5
+                              ? '#DCFCE7'
+                              : sku.stockQuantity > 0
+                              ? '#FEF3C7'
+                              : '#FEE2E2',
+                        },
+                      ]}
+                    >
+                      <Text
+                        fontSize={10}
+                        fontWeight="800"
+                        color={
+                          sku.stockQuantity > 5
+                            ? '#15803D'
+                            : sku.stockQuantity > 0
+                            ? '#B45309'
+                            : '#DC2626'
+                        }
+                      >
+                        {sku.stockQuantity > 5
+                          ? `${sku.stockQuantity} in stock`
+                          : sku.stockQuantity > 0
+                          ? `Low: ${sku.stockQuantity} left`
+                          : 'Out of Stock'}
+                      </Text>
+                    </View>
+                  </XStack>
+
+                  {/* ── 1. Pricing Per SKU ── */}
+                  <YStack
+                    backgroundColor={sku.isPriceInherited ? `${tokens.surfaceRaised}` : `${tokens.accent}06`}
+                    padding={10}
+                    borderRadius={8}
+                    borderWidth={1}
+                    borderColor={sku.isPriceInherited ? tokens.border : `${tokens.accent}30`}
+                    gap={8}
+                  >
+                    <XStack alignItems="center" justifyContent="space-between">
+                      <YStack gap={1} flex={1}>
+                        <Text fontSize={11} fontWeight="800" color={tokens.text}>
+                          Price per SKU
+                        </Text>
+                        <Text fontSize={10} color={tokens.textMuted}>
+                          {sku.isPriceInherited
+                            ? 'Naturally inherits parent product price'
+                            : 'Custom item-level price override active'}
+                        </Text>
+                      </YStack>
+
+                      <Pressable
+                        onPress={() => handleToggleSkuPriceInheritance(sku.id)}
+                        style={[
+                          styles.standardPillBtn,
+                          {
+                            backgroundColor: sku.isPriceInherited ? '#F1F5F9' : tokens.accent,
+                            borderColor: sku.isPriceInherited ? '#CBD5E1' : tokens.accent,
+                          },
+                        ]}
+                      >
+                        <Text
+                          fontSize={11}
+                          fontWeight="700"
+                          color={sku.isPriceInherited ? tokens.text : tokens.accentForeground}
+                        >
+                          {sku.isPriceInherited ? 'Customize Price' : 'Inherit Parent'}
+                        </Text>
+                      </Pressable>
+                    </XStack>
+
+                    {sku.isPriceInherited ? (
+                      <XStack alignItems="center" gap={8} marginTop={2}>
+                        <Text fontSize={13} fontWeight="800" color={tokens.text}>
+                          ₹{Number(salePrice).toLocaleString('en-IN')}
+                        </Text>
+                        <Text fontSize={11} color={tokens.textMuted} textDecorationLine="line-through">
+                          ₹{Number(mrp).toLocaleString('en-IN')}
+                        </Text>
+                        <View style={[styles.hubTileBadge, { backgroundColor: '#DCFCE7' }]}>
+                          <Text fontSize={9} fontWeight="800" color="#15803D">
+                            {discountPercent}% OFF · {marginPercent}% Margin
+                          </Text>
+                        </View>
+                      </XStack>
+                    ) : (
+                      <YStack gap={8} marginTop={4}>
+                        <XStack gap={8}>
+                          <YStack flex={1} gap={4}>
+                            <Text fontSize={11} fontWeight="700" color={tokens.textMuted}>
+                              Item Sale Price (₹)
+                            </Text>
+                            <XStack alignItems="center" style={styles.skuCurrencyBox}>
+                              <Text fontSize={14} fontWeight="700" color={tokens.textMuted}>
+                                ₹
+                              </Text>
+                              <TextInput
+                                value={sku.price != null ? sku.price.toString() : ''}
+                                onChangeText={(val) => handleUpdateSkuPrice(sku.id, val)}
+                                keyboardType="numeric"
+                                placeholder={salePrice}
+                                placeholderTextColor={tokens.textMuted}
+                                style={styles.skuPriceTextInput}
+                              />
+                            </XStack>
+                          </YStack>
+                          <YStack flex={1} gap={4}>
+                            <Text fontSize={11} fontWeight="700" color={tokens.textMuted}>
+                              Item MRP (₹)
+                            </Text>
+                            <XStack alignItems="center" style={styles.skuCurrencyBox}>
+                              <Text fontSize={14} fontWeight="700" color={tokens.textMuted}>
+                                ₹
+                              </Text>
+                              <TextInput
+                                value={sku.mrp != null ? sku.mrp.toString() : ''}
+                                onChangeText={(val) => handleUpdateSkuMrp(sku.id, val)}
+                                keyboardType="numeric"
+                                placeholder={mrp}
+                                placeholderTextColor={tokens.textMuted}
+                                style={styles.skuPriceTextInput}
+                              />
+                            </XStack>
+                          </YStack>
+                        </XStack>
+                        <XStack alignItems="center" gap={6}>
+                          <View style={[styles.hubTileBadge, { backgroundColor: '#DCFCE7' }]}>
+                            <Text fontSize={9} fontWeight="800" color="#15803D">
+                              {skuDiscount}% OFF
+                            </Text>
+                          </View>
+                          <View style={[styles.hubTileBadge, { backgroundColor: '#FEF3C7' }]}>
+                            <Text fontSize={9} fontWeight="800" color="#B45309">
+                              {skuMargin}% Margin
+                            </Text>
+                          </View>
+                        </XStack>
+                      </YStack>
+                    )}
+                  </YStack>
+
+                  {/* ── 2. Availability Qty ── */}
+                  <YStack gap={6}>
+                    <Text fontSize={11} fontWeight="800" color={tokens.text}>
+                      Availability Quantity
+                    </Text>
+                    <XStack alignItems="center" gap={8}>
+                      <Pressable
+                        onPress={() => handleUpdateSkuStock(sku.id, (sku.stockQuantity || 0) - 1)}
+                        style={styles.qtyStepperBtn}
+                        hitSlop={6}
+                      >
+                        <LuMinus size={14} color={tokens.text} />
+                      </Pressable>
+
+                      <TextInput
+                        value={sku.stockQuantity.toString()}
+                        onChangeText={(val) => handleUpdateSkuStock(sku.id, Number(val.replace(/[^0-9]/g, '')))}
+                        keyboardType="numeric"
+                        style={styles.qtyInput}
+                      />
+
+                      <Pressable
+                        onPress={() => handleUpdateSkuStock(sku.id, (sku.stockQuantity || 0) + 1)}
+                        style={styles.qtyStepperBtn}
+                        hitSlop={6}
+                      >
+                        <LuPlus size={14} color={tokens.text} />
+                      </Pressable>
+
+                      {/* Quick Presets */}
+                      <XStack gap={6} marginLeft={4}>
+                        {[0, 5, 10, 20].map((preset) => (
+                          <Pressable
+                            key={preset}
+                            onPress={() => handleUpdateSkuStock(sku.id, preset)}
+                            style={[
+                              styles.qtyPresetBtn,
+                              {
+                                backgroundColor: sku.stockQuantity === preset ? tokens.accent : '#F1F5F9',
+                                borderColor: sku.stockQuantity === preset ? tokens.accent : '#E2E8F0',
+                              },
+                            ]}
+                          >
+                            <Text
+                              fontSize={11}
+                              fontWeight="700"
+                              color={sku.stockQuantity === preset ? tokens.accentForeground : tokens.text}
+                            >
+                              {preset === 0 ? 'Out' : preset}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </XStack>
+                    </XStack>
+                  </YStack>
+
+                  {/* ── 3. Join Waitlist Toggle ── */}
+                  <YStack
+                    padding={10}
+                    borderRadius={8}
+                    backgroundColor={sku.allowWaitlist ? '#F0FDF4' : '#F8FAFC'}
+                    borderWidth={1}
+                    borderColor={sku.allowWaitlist ? '#BBF7D0' : tokens.border}
+                    gap={4}
+                  >
+                    <XStack alignItems="center" justifyContent="space-between">
+                      <XStack alignItems="center" gap={6} flex={1}>
+                        <LuBell size={14} color={sku.allowWaitlist ? '#15803D' : tokens.textMuted} />
+                        <YStack flex={1}>
+                          <Text fontSize={11} fontWeight="800" color={tokens.text}>
+                            Join Waitlist when Out of Stock
+                          </Text>
+                          <Text fontSize={9} color={tokens.textMuted} lineHeight={13}>
+                            Shows '🔔 Join Waitlist' button on PDP for skus that have probability of restocking.
+                          </Text>
+                        </YStack>
+                      </XStack>
+
+                      <Pressable
+                        onPress={() => handleToggleSkuWaitlist(sku.id)}
+                        style={[
+                          styles.standardPillBtn,
+                          {
+                            backgroundColor: sku.allowWaitlist ? '#15803D' : '#94A3B8',
+                            borderColor: sku.allowWaitlist ? '#15803D' : '#94A3B8',
+                          },
+                        ]}
+                      >
+                        <Text fontSize={11} fontWeight="800" color="#FFFFFF">
+                          {sku.allowWaitlist ? 'Enabled ✓' : 'Disabled'}
+                        </Text>
+                      </Pressable>
+                    </XStack>
+                  </YStack>
+
+                  {/* ── 4. Custom Message Field (Highlighted PDP Tag) ── */}
+                  <YStack gap={6}>
+                    <XStack alignItems="center" justifyContent="space-between">
+                      <XStack alignItems="center" gap={4}>
+                        <LuTag size={12} color={tokens.accent} />
+                        <Text fontSize={11} fontWeight="800" color={tokens.text}>
+                          Custom Message (Highlighted PDP Tag)
+                        </Text>
+                      </XStack>
+                      {sku.customMessage ? (
+                        <Pressable onPress={() => handleUpdateSkuCustomMessage(sku.id, '')}>
+                          <Text fontSize={10} color="#DC2626" fontWeight="700">
+                            Clear
+                          </Text>
+                        </Pressable>
+                      ) : null}
+                    </XStack>
+
+                    <XStack alignItems="center" style={styles.customMessageBox}>
+                      <TextInput
+                        value={sku.customMessage || ''}
+                        onChangeText={(val) => handleUpdateSkuCustomMessage(sku.id, val)}
+                        placeholder="e.g. Pure Zari Weave · Varanasi Loom"
+                        placeholderTextColor={tokens.textMuted}
+                        style={styles.customMessageTextInput}
+                      />
+                    </XStack>
+
+                    {/* Quick Suggestions */}
+                    <XStack gap={6} flexWrap="wrap">
+                      {[
+                        '✨ Pure Silk Mark',
+                        '🔥 Selling Fast',
+                        '⏳ Limited Weave',
+                        '⚡ Ships Tomorrow',
+                        '🌿 Natural Dyes',
+                      ].map((preset) => (
+                        <Pressable
+                          key={preset}
+                          onPress={() => handleUpdateSkuCustomMessage(sku.id, preset)}
+                          style={styles.suggestionChip}
+                        >
+                          <Text fontSize={10} fontWeight="600" color={tokens.text}>
+                            {preset}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </XStack>
+
+                    {/* Live PDP Tag Preview */}
+                    {sku.customMessage ? (
+                      <XStack alignItems="center" gap={6} marginTop={2}>
+                        <Text fontSize={9} fontWeight="700" color={tokens.textMuted} textTransform="uppercase">
+                          PDP Badge Preview:
+                        </Text>
+                        <XStack
+                          backgroundColor="#FEF3C7"
+                          borderColor="#F59E0B"
+                          borderWidth={1}
+                          paddingHorizontal={8}
+                          paddingVertical={3}
+                          borderRadius={5}
+                          alignItems="center"
+                          gap={4}
+                        >
+                          <LuSparkles size={10} color="#B45309" />
+                          <Text fontSize={10} fontWeight="800" color="#92400E">
+                            {sku.customMessage}
+                          </Text>
+                        </XStack>
+                      </XStack>
+                    ) : null}
+                  </YStack>
+                </YStack>
+              );
+            })}
+          </YStack>
+        )}
+
+        {/* =========================================================================
+            SCREEN 5: DEDICATED ANTI-LENS MEDIA STUDIO PAGE
+           ========================================================================= */}
+        {currentScreen === 'anti_lens_studio' && (
+          <YStack gap={16} paddingBottom={40}>
+            {!activeStudioMedia ? (
+              <YStack padding={30} alignItems="center" justifyContent="center">
+                <Text fontSize={14} color={tokens.textMuted} marginBottom={14}>
+                  No photo selected for Anti-Lens Studio.
+                </Text>
+                <Pressable
+                  onPress={() => {
+                    setCurrentScreen('qualify_and_group');
+                    setCurrentStage('qualify');
+                  }}
+                  style={[styles.standardPillBtn, { backgroundColor: tokens.accent, borderColor: tokens.accent }]}
+                >
+                  <Text fontSize={12} fontWeight="800" color="#FFFFFF">
+                    Return to Qualify Media
+                  </Text>
+                </Pressable>
+              </YStack>
+            ) : (() => {
+              const originalUrl = activeStudioMedia.originalUri || activeStudioMedia.uri;
+              const modifiedUrl = activeStudioMedia.modifiedUri;
+              const hasModified = !!activeStudioMedia.hasModified && !!modifiedUrl;
+              const activeSource = activeStudioMedia.activeDisplaySource || (hasModified ? 'modified' : 'original');
+              const isOriginalActive = activeSource === 'original';
+              const isModifiedActive = activeSource === 'modified';
+
+              const getStudioAspectRatioCropStyle = (ratio?: string) => {
+                const maxStageW = 280;
+                const maxStageH = 340;
+
+                let targetRatio = sourceDimensions.width / Math.max(1, sourceDimensions.height);
+                if (ratio === '4:5') targetRatio = 4 / 5;
+                else if (ratio === '1:1') targetRatio = 1 / 1;
+                else if (ratio === '3:4') targetRatio = 3 / 4;
+
+                let w = maxStageW;
+                let h = Math.round(w / targetRatio);
+                if (h > maxStageH) {
+                  h = maxStageH;
+                  w = Math.round(h * targetRatio);
+                }
+                return { width: Math.round(w), height: Math.round(h) };
+              };
+
+              const getWatermarkPositionStyle = (preset?: string) => {
+                switch (preset) {
+                  case 'corner-bottom-left':
+                    return { bottom: 12, left: 12 };
+                  case 'center-emboss':
+                    return {
+                      alignSelf: 'center' as const,
+                      top: '42%' as any,
+                      transform: [{ rotate: '-20deg' }],
+                    };
+                  case 'diagonal-tile':
+                    return {
+                      alignSelf: 'center' as const,
+                      top: '35%' as any,
+                      transform: [{ rotate: '-30deg' }],
+                    };
+                  case 'corner-bottom-right':
+                  default:
+                    return { bottom: 12, right: 12 };
+                }
+              };
+
+              return (
+                <YStack gap={16}>
+                  {/* ── 1. HORIZONTAL MEDIA SELECTOR STRIP ── */}
+                  <YStack gap={6}>
+                    <XStack alignItems="center" justifyContent="space-between">
+                      <XStack alignItems="center" gap={6}>
+                        <LuImage size={14} color={tokens.accent} />
+                        <Text fontSize={11} fontWeight="800" color={tokens.text} textTransform="uppercase">
+                          Select Photo to Transform
+                        </Text>
+                      </XStack>
+                      <Text fontSize={10} color={tokens.textMuted}>
+                        Slide #{activeStudioMedia.sortOrder} of {mediaList.filter((m) => m.mediaType !== 'video').length}
+                      </Text>
+                    </XStack>
+
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.studioThumbScrollContent}
+                    >
+                      {mediaList
+                        .filter((m) => m.mediaType !== 'video')
+                        .map((m) => {
+                          const isSelected = m.id === activeStudioMedia.id;
+                          const thumbSrc = m.thumbnailUri || m.modifiedUri || m.originalUri || m.uri;
+                          return (
+                            <Pressable
+                              key={m.id}
+                              onPress={() => setSelectedStudioMediaId(m.id)}
+                              style={[
+                                styles.studioThumbTile,
+                                {
+                                  borderColor: isSelected ? tokens.accent : tokens.border,
+                                  borderWidth: isSelected ? 2.5 : 1,
+                                  backgroundColor: tokens.surface,
+                                },
+                              ]}
+                            >
+                              <Image source={{ uri: thumbSrc }} style={styles.studioThumbImg} resizeMode="cover" />
+                              <View style={styles.studioThumbOrderBadge}>
+                                <Text fontSize={8} fontWeight="800" color="#FFFFFF">
+                                  #{m.sortOrder}
+                                </Text>
+                              </View>
+                              {m.hasModified && (
+                                <View style={[styles.studioThumbModBadge, { backgroundColor: '#8B5CF6' }]}>
+                                  <Text fontSize={7} fontWeight="900" color="#FFFFFF">
+                                    MOD
+                                  </Text>
+                                </View>
+                              )}
+                            </Pressable>
+                          );
+                        })}
+                    </ScrollView>
+                  </YStack>
+
+                  {/* ── 2. DUAL-VERSION STATUS & LIVE STORE CONTROL ── */}
+                  <YStack gap={8}>
+                    <Text fontSize={11} fontWeight="800" color={tokens.text} textTransform="uppercase">
+                      Storefront Versioning Status
+                    </Text>
+
+                    <XStack gap={10} flexWrap="wrap">
+                      {/* CARD 1: ORIGINAL MASTER */}
+                      <View
+                        style={[
+                          styles.studioVersionCard,
+                          {
+                            borderColor: isOriginalActive ? tokens.accent : tokens.border,
+                            borderWidth: isOriginalActive ? 2 : 1,
+                            backgroundColor: tokens.surface,
+                          },
+                        ]}
+                      >
+                        <XStack alignItems="center" justifyContent="space-between" marginBottom={8}>
+                          <Text fontSize={11} fontWeight="800" color={isOriginalActive ? tokens.accent : tokens.textMuted}>
+                            ORIGINAL MASTER
+                          </Text>
+                          {isOriginalActive && (
+                            <View style={[styles.studioLiveTag, { backgroundColor: tokens.accent }]}>
+                              <LuCheck size={9} color="#FFFFFF" strokeWidth={3} />
+                              <Text fontSize={8} fontWeight="900" color="#FFFFFF">
+                                LIVE ON STORE
+                              </Text>
+                            </View>
+                          )}
+                        </XStack>
+
+                        <Text fontSize={10} color={tokens.textMuted} marginBottom={10} numberOfLines={1}>
+                          Raw supplier photo • Pristine high-res master
+                        </Text>
+
+                        <Pressable
+                          onPress={() => handleToggleActiveSource(activeStudioMedia.id, 'original')}
+                          style={[
+                            styles.studioRadioBtn,
+                            {
+                              borderColor: isOriginalActive ? tokens.accent : tokens.border,
+                              backgroundColor: isOriginalActive ? `${tokens.accent}14` : 'transparent',
+                            },
+                          ]}
+                        >
+                          <View style={[styles.radioCircle, { borderColor: isOriginalActive ? tokens.accent : tokens.textMuted }]}>
+                            {isOriginalActive && <View style={[styles.radioDot, { backgroundColor: tokens.accent }]} />}
+                          </View>
+                          <Text fontSize={10} fontWeight={isOriginalActive ? '800' : '600'} color={isOriginalActive ? tokens.accent : tokens.text}>
+                            {isOriginalActive ? 'Currently Live on Store' : 'Show Original on Store'}
+                          </Text>
+                        </Pressable>
+                      </View>
+
+                      {/* CARD 2: LENS-PROOF MODIFIED */}
+                      <View
+                        style={[
+                          styles.studioVersionCard,
+                          {
+                            borderColor: isModifiedActive ? '#8B5CF6' : tokens.border,
+                            borderWidth: isModifiedActive ? 2 : 1,
+                            backgroundColor: tokens.surface,
+                          },
+                        ]}
+                      >
+                        <XStack alignItems="center" justifyContent="space-between" marginBottom={8}>
+                          <XStack alignItems="center" gap={4}>
+                            <LuSparkles size={11} color="#8B5CF6" />
+                            <Text fontSize={11} fontWeight="800" color={isModifiedActive ? '#8B5CF6' : tokens.textMuted}>
+                              LENS-PROOF MODIFIED
+                            </Text>
+                          </XStack>
+                          {isModifiedActive && (
+                            <View style={[styles.studioLiveTag, { backgroundColor: '#8B5CF6' }]}>
+                              <LuCheck size={9} color="#FFFFFF" strokeWidth={3} />
+                              <Text fontSize={8} fontWeight="900" color="#FFFFFF">
+                                LIVE ON STORE
+                              </Text>
+                            </View>
+                          )}
+                        </XStack>
+
+                        <Text fontSize={10} color={tokens.textMuted} marginBottom={10} numberOfLines={1}>
+                          {hasModified ? 'WebP • Flipped, tilted & brand watermarked' : 'No modified version yet'}
+                        </Text>
+
+                        {hasModified ? (
+                          <XStack gap={6} alignItems="center">
+                            <Pressable
+                              onPress={() => handleToggleActiveSource(activeStudioMedia.id, 'modified')}
+                              style={[
+                                styles.studioRadioBtn,
+                                {
+                                  flex: 1,
+                                  borderColor: isModifiedActive ? '#8B5CF6' : tokens.border,
+                                  backgroundColor: isModifiedActive ? '#8B5CF618' : 'transparent',
+                                },
+                              ]}
+                            >
+                              <View style={[styles.radioCircle, { borderColor: isModifiedActive ? '#8B5CF6' : tokens.textMuted }]}>
+                                {isModifiedActive && <View style={[styles.radioDot, { backgroundColor: '#8B5CF6' }]} />}
+                              </View>
+                              <Text fontSize={10} fontWeight={isModifiedActive ? '800' : '600'} color={isModifiedActive ? '#8B5CF6' : tokens.text}>
+                                {isModifiedActive ? 'Currently Live on Store' : 'Show Modified on Store'}
+                              </Text>
+                            </Pressable>
+                            <Pressable
+                              onPress={() => handleDeleteModified(activeStudioMedia.id)}
+                              hitSlop={8}
+                              style={styles.studioTrashBtn}
+                            >
+                              <LuTrash2 size={13} color="#EF4444" />
+                            </Pressable>
+                          </XStack>
+                        ) : (
+                          <View style={styles.studioNotCreatedBox}>
+                            <Text fontSize={9} color={tokens.textMuted}>
+                              Apply transforms below to generate
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    </XStack>
+                  </YStack>
+
+                  {/* ── 3. INTERACTIVE LIVE CANVAS PREVIEW STAGE ── */}
+                  <YStack gap={8}>
+                    <XStack alignItems="center" justifyContent="space-between">
+                      <XStack alignItems="center" gap={6}>
+                        <LuSparkles size={13} color={tokens.accent} />
+                        <Text fontSize={11} fontWeight="800" color={tokens.text} textTransform="uppercase">
+                          Interactive Visual Canvas
+                        </Text>
+                      </XStack>
+
+                      <XStack gap={8}>
+                        <Pressable
+                          onPress={handleResetRecipe}
+                          style={[styles.studioHeaderActionBtn, { borderColor: tokens.border, backgroundColor: tokens.surface }]}
+                        >
+                          <LuRotateCcw size={11} color={tokens.text} />
+                          <Text fontSize={10} fontWeight="700" color={tokens.text}>
+                            Reset
+                          </Text>
+                        </Pressable>
+
+                        <Pressable
+                          onPress={handleApplyLensProofPreset}
+                          style={[styles.studioHeaderActionBtn, { backgroundColor: '#F59E0B', borderColor: '#D97706' }]}
+                        >
+                          <LuSparkles size={11} color="#FFFFFF" />
+                          <Text fontSize={10} fontWeight="900" color="#FFFFFF">
+                            Lens-Proof (1-Tap)
+                          </Text>
+                        </Pressable>
+                      </XStack>
+                    </XStack>
+
+                    <View style={styles.studioPreviewStage}>
+                      <View
+                        style={[
+                          styles.studioPreviewCropBox,
+                          getStudioAspectRatioCropStyle(studioRecipe.crop?.aspectRatio),
+                        ]}
+                      >
+                        <Image
+                          source={{
+                            uri:
+                              activeStudioMedia.originalUri ||
+                              activeStudioMedia.uri ||
+                              '',
+                          }}
+                          style={[
+                            styles.studioPreviewImg,
+                            {
+                              transform: [
+                                { translateX: studioPanOffset.x },
+                                { translateY: studioPanOffset.y },
+                                {
+                                  scale:
+                                    studioZoomScale *
+                                    (studioRecipe.rotateDegrees === 90 || studioRecipe.rotateDegrees === 270
+                                      ? Math.max(
+                                          getStudioAspectRatioCropStyle(studioRecipe.crop?.aspectRatio).width /
+                                            getStudioAspectRatioCropStyle(studioRecipe.crop?.aspectRatio).height,
+                                          getStudioAspectRatioCropStyle(studioRecipe.crop?.aspectRatio).height /
+                                            getStudioAspectRatioCropStyle(studioRecipe.crop?.aspectRatio).width
+                                        )
+                                      : 1.0),
+                                },
+                                { rotate: `${studioRecipe.rotateDegrees}deg` },
+                                { scaleX: studioRecipe.flipH ? -1 : 1 },
+                                { scaleY: studioRecipe.flipV ? -1 : 1 },
+                                { skewX: `${studioRecipe.tiltAngleX}deg` },
+                                { skewY: `${studioRecipe.tiltAngleY}deg` },
+                              ],
+                            },
+                          ]}
+                          resizeMode="cover"
+                        />
+
+                        {/* Live Watermark Overlay (anchored strictly inside the image frame) */}
+                        {studioRecipe.watermark?.enabled && studioRecipe.watermark.text ? (
+                          <View
+                            style={[
+                              styles.studioWatermarkBadge,
+                              getWatermarkPositionStyle(studioRecipe.watermark.preset),
+                              { opacity: studioRecipe.watermark.opacity || 0.65 },
+                            ]}
+                          >
+                            <Text fontSize={10} fontWeight="900" color={studioRecipe.watermark.color || '#FFFFFF'}>
+                              ✦ {studioRecipe.watermark.text} ✦
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+
+                      {/* Real-time Applied Formula Badges */}
+                      <XStack position="absolute" top={10} left={10} gap={6} flexWrap="wrap">
+                        {studioRecipe.flipH && (
+                          <View style={styles.studioAppliedBadge}>
+                            <Text fontSize={9} fontWeight="800" color="#FFFFFF">
+                              ⇄ Flipped H
+                            </Text>
+                          </View>
+                        )}
+                        {studioRecipe.flipV && (
+                          <View style={styles.studioAppliedBadge}>
+                            <Text fontSize={9} fontWeight="800" color="#FFFFFF">
+                              ⇅ Flipped V
+                            </Text>
+                          </View>
+                        )}
+                        {(studioRecipe.tiltAngleX !== 0 || studioRecipe.tiltAngleY !== 0) && (
+                          <View style={[styles.studioAppliedBadge, { backgroundColor: '#8B5CF6' }]}>
+                            <Text fontSize={9} fontWeight="800" color="#FFFFFF">
+                              📐 Tilt {studioRecipe.tiltAngleX > 0 ? `+${studioRecipe.tiltAngleX}°` : `${studioRecipe.tiltAngleX}°`}
+                            </Text>
+                          </View>
+                        )}
+                        {studioRecipe.rotateDegrees !== 0 && (
+                          <View style={[styles.studioAppliedBadge, { backgroundColor: '#0284C7' }]}>
+                            <Text fontSize={9} fontWeight="800" color="#FFFFFF">
+                              ↻ {studioRecipe.rotateDegrees}°
+                            </Text>
+                          </View>
+                        )}
+                        {studioRecipe.watermark?.enabled && (
+                          <View style={[styles.studioAppliedBadge, { backgroundColor: '#D4AF37' }]}>
+                            <Text fontSize={9} fontWeight="800" color="#000000">
+                              ✦ Watermarked
+                            </Text>
+                          </View>
+                        )}
+                      </XStack>
+                    </View>
+                  </YStack>
+
+                  {/* ── 4. TRANSFORMATION CONTROLS (TABS) ── */}
+                  <YStack gap={12}>
+                    {/* Category Selector Tabs */}
+                    <XStack
+                      backgroundColor={tokens.background}
+                      borderRadius={10}
+                      padding={4}
+                      gap={4}
+                    >
+                      <Pressable
+                        onPress={() => setStudioActiveTab('transform')}
+                        style={[
+                          styles.studioTabBtn,
+                          studioActiveTab === 'transform' && { backgroundColor: tokens.surface, elevation: 1 },
+                        ]}
+                      >
+                        <LuCrop size={14} color={studioActiveTab === 'transform' ? tokens.accent : tokens.textMuted} />
+                        <Text
+                          fontSize={11}
+                          fontWeight={studioActiveTab === 'transform' ? '800' : '600'}
+                          color={studioActiveTab === 'transform' ? tokens.text : tokens.textMuted}
+                        >
+                          Transform &amp; Crop
+                        </Text>
+                      </Pressable>
+
+                      <Pressable
+                        onPress={() => setStudioActiveTab('watermark')}
+                        style={[
+                          styles.studioTabBtn,
+                          studioActiveTab === 'watermark' && { backgroundColor: tokens.surface, elevation: 1 },
+                        ]}
+                      >
+                        <LuLayers size={14} color={studioActiveTab === 'watermark' ? tokens.accent : tokens.textMuted} />
+                        <Text
+                          fontSize={11}
+                          fontWeight={studioActiveTab === 'watermark' ? '800' : '600'}
+                          color={studioActiveTab === 'watermark' ? tokens.text : tokens.textMuted}
+                        >
+                          Brand Watermark
+                        </Text>
+                      </Pressable>
+
+                      <Pressable
+                        onPress={() => setStudioActiveTab('presets')}
+                        style={[
+                          styles.studioTabBtn,
+                          studioActiveTab === 'presets' && { backgroundColor: tokens.surface, elevation: 1 },
+                        ]}
+                      >
+                        <LuSlidersHorizontal size={14} color={studioActiveTab === 'presets' ? tokens.accent : tokens.textMuted} />
+                        <Text
+                          fontSize={11}
+                          fontWeight={studioActiveTab === 'presets' ? '800' : '600'}
+                          color={studioActiveTab === 'presets' ? tokens.text : tokens.textMuted}
+                        >
+                          Fine Tilt (Anti-Lens)
+                        </Text>
+                      </Pressable>
+                    </XStack>
+
+                    {/* TAB 1: TRANSFORM & CROP */}
+                    {studioActiveTab === 'transform' && (
+                      <YStack gap={12} backgroundColor={tokens.surface} padding={14} borderRadius={10} borderWidth={1} borderColor={tokens.border}>
+                        {/* Rotate & Flip Actions */}
+                        <YStack gap={6}>
+                          <Text fontSize={10} fontWeight="800" color={tokens.textMuted} textTransform="uppercase">
+                            Rotation &amp; Directional Flipping
+                          </Text>
+                          <XStack gap={8} flexWrap="wrap">
+                            <Pressable
+                              onPress={() => handleStudioRotate(-90)}
+                              style={[styles.studioToolBtn, { borderColor: tokens.border, backgroundColor: tokens.background }]}
+                            >
+                              <LuRotateCcw size={14} color={tokens.text} />
+                              <Text fontSize={11} fontWeight="700" color={tokens.text}>
+                                Rotate -90°
+                              </Text>
+                            </Pressable>
+
+                            <Pressable
+                              onPress={() => handleStudioRotate(90)}
+                              style={[styles.studioToolBtn, { borderColor: tokens.border, backgroundColor: tokens.background }]}
+                            >
+                              <LuRotateCw size={14} color={tokens.text} />
+                              <Text fontSize={11} fontWeight="700" color={tokens.text}>
+                                Rotate +90°
+                              </Text>
+                            </Pressable>
+
+                            <Pressable
+                              onPress={handleStudioToggleFlipH}
+                              style={[
+                                styles.studioToolBtn,
+                                {
+                                  borderColor: studioRecipe.flipH ? tokens.accent : tokens.border,
+                                  backgroundColor: studioRecipe.flipH ? `${tokens.accent}14` : tokens.background,
+                                },
+                              ]}
+                            >
+                              <Text fontSize={13} color={studioRecipe.flipH ? tokens.accent : tokens.text}>
+                                ⇄
+                              </Text>
+                              <Text fontSize={11} fontWeight="700" color={studioRecipe.flipH ? tokens.accent : tokens.text}>
+                                Flip Horizontal
+                              </Text>
+                            </Pressable>
+
+                            <Pressable
+                              onPress={handleStudioToggleFlipV}
+                              style={[
+                                styles.studioToolBtn,
+                                {
+                                  borderColor: studioRecipe.flipV ? tokens.accent : tokens.border,
+                                  backgroundColor: studioRecipe.flipV ? `${tokens.accent}14` : tokens.background,
+                                },
+                              ]}
+                            >
+                              <Text fontSize={13} color={studioRecipe.flipV ? tokens.accent : tokens.text}>
+                                ⇅
+                              </Text>
+                              <Text fontSize={11} fontWeight="700" color={studioRecipe.flipV ? tokens.accent : tokens.text}>
+                                Flip Vertical
+                              </Text>
+                            </Pressable>
+                          </XStack>
+                        </YStack>
+
+                        {/* Storefront Crop Ratio Options */}
+                        <YStack gap={6} marginTop={4}>
+                          <Text fontSize={10} fontWeight="800" color={tokens.textMuted} textTransform="uppercase">
+                            Storefront Aspect Ratio
+                          </Text>
+                          <XStack gap={8} flexWrap="wrap">
+                            {[
+                              { id: '4:5', label: '4:5 Portrait (Store Standard)' },
+                              { id: '1:1', label: '1:1 Square (Instagram/Grid)' },
+                              { id: '3:4', label: '3:4 Catalog' },
+                              { id: 'free', label: 'Unconstrained' },
+                            ].map((opt) => {
+                              const isSelected = (studioRecipe.crop?.aspectRatio || 'free') === opt.id;
+                              return (
+                                <Pressable
+                                  key={opt.id}
+                                  onPress={() => handleStudioSetAspectRatio(opt.id as any)}
+                                  style={[
+                                    styles.studioChipBtn,
+                                    {
+                                      borderColor: isSelected ? tokens.accent : tokens.border,
+                                      backgroundColor: isSelected ? `${tokens.accent}14` : tokens.background,
+                                    },
+                                  ]}
+                                >
+                                  <Text
+                                    fontSize={11}
+                                    fontWeight={isSelected ? '800' : '600'}
+                                    color={isSelected ? tokens.accent : tokens.text}
+                                  >
+                                    {opt.label}
+                                  </Text>
+                                </Pressable>
+                              );
+                            })}
+                          </XStack>
+                        </YStack>
+
+                        {/* Framing & Pan Position Controls */}
+                        <YStack gap={8} marginTop={6} paddingTop={8} borderTopWidth={1} borderTopColor={tokens.border}>
+                          <XStack alignItems="center" justifyContent="space-between">
+                            <YStack gap={2}>
+                              <Text fontSize={10} fontWeight="800" color={tokens.textMuted} textTransform="uppercase">
+                                Frame Position &amp; Zoom
+                              </Text>
+                              <Text fontSize={9} color={tokens.textMuted}>
+                                Pan and zoom to fill frame without blank borders
+                              </Text>
+                            </YStack>
+                            <XStack gap={6} alignItems="center">
+                              <View style={[styles.studioAppliedBadge, { backgroundColor: tokens.background, borderColor: tokens.border }]}>
+                                <Text fontSize={9} fontWeight="700" color={tokens.text}>
+                                  {Math.round(studioZoomScale * 100)}% · X: {studioPanOffset.x} Y: {studioPanOffset.y}
+                                </Text>
+                              </View>
+                              {(studioPanOffset.x !== 0 || studioPanOffset.y !== 0 || studioZoomScale !== 1.0) && (
+                                <Pressable
+                                  onPress={() => {
+                                    setStudioPanOffset({ x: 0, y: 0 });
+                                    setStudioZoomScale(1.0);
+                                  }}
+                                  style={[styles.studioChipBtn, { paddingVertical: 2, paddingHorizontal: 6, borderColor: tokens.border }]}
+                                >
+                                  <Text fontSize={9} fontWeight="700" color={tokens.accent}>
+                                    Center Reset
+                                  </Text>
+                                </Pressable>
+                              )}
+                            </XStack>
+                          </XStack>
+
+                          <XStack gap={10} alignItems="center" justifyContent="space-between" flexWrap="wrap">
+                            {/* Directional D-Pad */}
+                            <XStack alignItems="center" gap={4}>
+                              <Pressable
+                                onPress={() => handleStudioAdjustPan(-15, 0)}
+                                style={[styles.studioToolBtn, { paddingHorizontal: 10, paddingVertical: 6, borderColor: tokens.border, backgroundColor: tokens.background }]}
+                                hitSlop={6}
+                              >
+                                <LuChevronLeft size={13} color={tokens.text} />
+                                <Text fontSize={10} fontWeight="700" color={tokens.text}>Left</Text>
+                              </Pressable>
+
+                              <YStack gap={4}>
+                                <Pressable
+                                  onPress={() => handleStudioAdjustPan(0, -15)}
+                                  style={[styles.studioToolBtn, { paddingHorizontal: 10, paddingVertical: 4, borderColor: tokens.border, backgroundColor: tokens.background }]}
+                                  hitSlop={6}
+                                >
+                                  <LuChevronUp size={13} color={tokens.text} />
+                                </Pressable>
+                                <Pressable
+                                  onPress={() => handleStudioAdjustPan(0, 15)}
+                                  style={[styles.studioToolBtn, { paddingHorizontal: 10, paddingVertical: 4, borderColor: tokens.border, backgroundColor: tokens.background }]}
+                                  hitSlop={6}
+                                >
+                                  <LuChevronDown size={13} color={tokens.text} />
+                                </Pressable>
+                              </YStack>
+
+                              <Pressable
+                                onPress={() => handleStudioAdjustPan(15, 0)}
+                                style={[styles.studioToolBtn, { paddingHorizontal: 10, paddingVertical: 6, borderColor: tokens.border, backgroundColor: tokens.background }]}
+                                hitSlop={6}
+                              >
+                                <Text fontSize={10} fontWeight="700" color={tokens.text}>Right</Text>
+                                <LuChevronRight size={13} color={tokens.text} />
+                              </Pressable>
+                            </XStack>
+
+                            {/* Zoom In / Zoom Out Stepper */}
+                            <XStack alignItems="center" gap={6}>
+                              <Pressable
+                                onPress={() => handleStudioAdjustZoom(-0.1)}
+                                disabled={studioZoomScale <= 1.0}
+                                style={[
+                                  styles.studioToolBtn,
+                                  {
+                                    paddingHorizontal: 8,
+                                    paddingVertical: 6,
+                                    borderColor: tokens.border,
+                                    backgroundColor: tokens.background,
+                                    opacity: studioZoomScale <= 1.0 ? 0.4 : 1,
+                                  },
+                                ]}
+                                hitSlop={6}
+                              >
+                                <LuMinus size={12} color={tokens.text} />
+                                <Text fontSize={10} fontWeight="700" color={tokens.text}>Zoom Out</Text>
+                              </Pressable>
+
+                              <Pressable
+                                onPress={() => handleStudioAdjustZoom(0.1)}
+                                disabled={studioZoomScale >= 2.5}
+                                style={[
+                                  styles.studioToolBtn,
+                                  {
+                                    paddingHorizontal: 8,
+                                    paddingVertical: 6,
+                                    borderColor: tokens.border,
+                                    backgroundColor: tokens.background,
+                                    opacity: studioZoomScale >= 2.5 ? 0.4 : 1,
+                                  },
+                                ]}
+                                hitSlop={6}
+                              >
+                                <LuPlus size={12} color={tokens.text} />
+                                <Text fontSize={10} fontWeight="700" color={tokens.text}>Zoom In</Text>
+                              </Pressable>
+                            </XStack>
+                          </XStack>
+
+                          {/* Quick 1-Tap Framing Focus Alignment */}
+                          <XStack gap={6} alignItems="center" flexWrap="wrap" marginTop={2}>
+                            <Text fontSize={9} fontWeight="700" color={tokens.textMuted}>
+                              Focus:
+                            </Text>
+                            <Pressable
+                              onPress={() => handleStudioSetFocusPreset('top')}
+                              style={[styles.studioChipBtn, { paddingVertical: 3, paddingHorizontal: 8, borderColor: tokens.border, backgroundColor: tokens.background }]}
+                            >
+                              <Text fontSize={9} fontWeight="700" color={tokens.text}>
+                                Top Focus
+                              </Text>
+                            </Pressable>
+                            <Pressable
+                              onPress={() => handleStudioSetFocusPreset('center')}
+                              style={[styles.studioChipBtn, { paddingVertical: 3, paddingHorizontal: 8, borderColor: tokens.border, backgroundColor: tokens.background }]}
+                            >
+                              <Text fontSize={9} fontWeight="700" color={tokens.text}>
+                                Center
+                              </Text>
+                            </Pressable>
+                            <Pressable
+                              onPress={() => handleStudioSetFocusPreset('bottom')}
+                              style={[styles.studioChipBtn, { paddingVertical: 3, paddingHorizontal: 8, borderColor: tokens.border, backgroundColor: tokens.background }]}
+                            >
+                              <Text fontSize={9} fontWeight="700" color={tokens.text}>
+                                Bottom Focus
+                              </Text>
+                            </Pressable>
+                            <Pressable
+                              onPress={() => handleStudioSetFocusPreset('left')}
+                              style={[styles.studioChipBtn, { paddingVertical: 3, paddingHorizontal: 8, borderColor: tokens.border, backgroundColor: tokens.background }]}
+                            >
+                              <Text fontSize={9} fontWeight="700" color={tokens.text}>
+                                Left
+                              </Text>
+                            </Pressable>
+                            <Pressable
+                              onPress={() => handleStudioSetFocusPreset('right')}
+                              style={[styles.studioChipBtn, { paddingVertical: 3, paddingHorizontal: 8, borderColor: tokens.border, backgroundColor: tokens.background }]}
+                            >
+                              <Text fontSize={9} fontWeight="700" color={tokens.text}>
+                                Right
+                              </Text>
+                            </Pressable>
+                          </XStack>
+                        </YStack>
+                      </YStack>
+                    )}
+
+                    {/* TAB 2: BRAND WATERMARK */}
+                    {studioActiveTab === 'watermark' && (
+                      <YStack gap={12} backgroundColor={tokens.surface} padding={14} borderRadius={10} borderWidth={1} borderColor={tokens.border}>
+                        <XStack alignItems="center" justifyContent="space-between">
+                          <YStack gap={2}>
+                            <Text fontSize={12} fontWeight="800" color={tokens.text}>
+                              Brand Watermark Overlay
+                            </Text>
+                            <Text fontSize={10} color={tokens.textMuted}>
+                              Protects proprietary catalog photos from competitor scraping.
+                            </Text>
+                          </YStack>
+
+                          <Pressable
+                            onPress={() =>
+                              setStudioRecipe((prev) => ({
+                                ...prev,
+                                watermark: {
+                                  ...prev.watermark!,
+                                  enabled: !prev.watermark?.enabled,
+                                },
+                              }))
+                            }
+                            style={[
+                              styles.studioTogglePill,
+                              {
+                                backgroundColor: studioRecipe.watermark?.enabled ? tokens.accent : '#94A3B8',
+                              },
+                            ]}
+                          >
+                            <Text fontSize={10} fontWeight="900" color="#FFFFFF">
+                              {studioRecipe.watermark?.enabled ? 'ACTIVE' : 'OFF'}
+                            </Text>
+                          </Pressable>
+                        </XStack>
+
+                        {studioRecipe.watermark?.enabled && (
+                          <YStack gap={10}>
+                            {/* Brand Text Input */}
+                            <YStack gap={4}>
+                              <Text fontSize={10} fontWeight="700" color={tokens.textMuted}>
+                                Watermark Brand Text
+                              </Text>
+                              <TextInput
+                                value={studioRecipe.watermark.text}
+                                onChangeText={(t) =>
+                                  setStudioRecipe((prev) => ({
+                                    ...prev,
+                                    watermark: { ...prev.watermark!, text: t },
+                                  }))
+                                }
+                                placeholder="e.g. VAYYARI"
+                                placeholderTextColor={tokens.textMuted}
+                                style={[
+                                  styles.studioTextInput,
+                                  { borderColor: tokens.border, color: tokens.text, backgroundColor: tokens.background },
+                                ]}
+                              />
+                            </YStack>
+
+                            {/* Placement Presets */}
+                            <YStack gap={4}>
+                              <Text fontSize={10} fontWeight="700" color={tokens.textMuted}>
+                                Placement Style
+                              </Text>
+                              <XStack gap={6} flexWrap="wrap">
+                                {[
+                                  { id: 'corner-bottom-right', label: 'Bottom-Right Emblem' },
+                                  { id: 'corner-bottom-left', label: 'Bottom-Left Emblem' },
+                                  { id: 'center-emboss', label: 'Center Subtle Stamp' },
+                                  { id: 'diagonal-tile', label: 'Diagonal Tiled Stamp' },
+                                ].map((p) => {
+                                  const isSel = studioRecipe.watermark?.preset === p.id;
+                                  return (
+                                    <Pressable
+                                      key={p.id}
+                                      onPress={() =>
+                                        setStudioRecipe((prev) => ({
+                                          ...prev,
+                                          watermark: { ...prev.watermark!, preset: p.id as any },
+                                        }))
+                                      }
+                                      style={[
+                                        styles.studioChipBtn,
+                                        {
+                                          borderColor: isSel ? tokens.accent : tokens.border,
+                                          backgroundColor: isSel ? `${tokens.accent}14` : tokens.background,
+                                        },
+                                      ]}
+                                    >
+                                      <Text
+                                        fontSize={11}
+                                        fontWeight={isSel ? '800' : '600'}
+                                        color={isSel ? tokens.accent : tokens.text}
+                                      >
+                                        {p.label}
+                                      </Text>
+                                    </Pressable>
+                                  );
+                                })}
+                              </XStack>
+                            </YStack>
+
+                            {/* Opacity Selector */}
+                            <YStack gap={4}>
+                              <Text fontSize={10} fontWeight="700" color={tokens.textMuted}>
+                                Watermark Opacity: {Math.round((studioRecipe.watermark?.opacity || 0.65) * 100)}%
+                              </Text>
+                              <XStack gap={6}>
+                                {[0.35, 0.5, 0.65, 0.8, 0.95].map((op) => {
+                                  const isSel = Math.abs((studioRecipe.watermark?.opacity || 0.65) - op) < 0.05;
+                                  return (
+                                    <Pressable
+                                      key={op}
+                                      onPress={() =>
+                                        setStudioRecipe((prev) => ({
+                                          ...prev,
+                                          watermark: { ...prev.watermark!, opacity: op },
+                                        }))
+                                      }
+                                      style={[
+                                        styles.studioChipBtn,
+                                        {
+                                          borderColor: isSel ? tokens.accent : tokens.border,
+                                          backgroundColor: isSel ? `${tokens.accent}14` : tokens.background,
+                                        },
+                                      ]}
+                                    >
+                                      <Text
+                                        fontSize={10}
+                                        fontWeight={isSel ? '800' : '600'}
+                                        color={isSel ? tokens.accent : tokens.text}
+                                      >
+                                        {Math.round(op * 100)}%
+                                      </Text>
+                                    </Pressable>
+                                  );
+                                })}
+                              </XStack>
+                            </YStack>
+                          </YStack>
+                        )}
+                      </YStack>
+                    )}
+
+                    {/* TAB 3: FINE TILT (ANTI-LENS FORMULA) */}
+                    {studioActiveTab === 'presets' && (
+                      <YStack gap={12} backgroundColor={tokens.surface} padding={14} borderRadius={10} borderWidth={1} borderColor={tokens.border}>
+                        <View style={[styles.studioInfoBanner, { backgroundColor: '#FDF4FF', borderColor: '#E879F9' }]}>
+                          <LuSparkles size={16} color="#A855F7" />
+                          <Text fontSize={11} color="#6B21A8" flex={1} lineHeight={16}>
+                            Perspective shear alters the geometric distance matrix of visual keypoints. A 3.5° tilt makes it statistically impossible for Google Lens to match the original supplier photo.
+                          </Text>
+                        </View>
+
+                        {/* Tilt X Angle */}
+                        <YStack gap={4}>
+                          <Text fontSize={11} fontWeight="800" color={tokens.text}>
+                            Perspective Tilt X: {studioRecipe.tiltAngleX > 0 ? `+${studioRecipe.tiltAngleX}°` : `${studioRecipe.tiltAngleX}°`}
+                          </Text>
+                          <XStack gap={6} flexWrap="wrap">
+                            {[-6, -3.5, 0, 3.5, 6].map((deg) => {
+                              const isSel = studioRecipe.tiltAngleX === deg;
+                              return (
+                                <Pressable
+                                  key={deg}
+                                  onPress={() => setStudioRecipe((prev) => ({ ...prev, tiltAngleX: deg }))}
+                                  style={[
+                                    styles.studioChipBtn,
+                                    {
+                                      borderColor: isSel ? tokens.accent : tokens.border,
+                                      backgroundColor: isSel ? `${tokens.accent}14` : tokens.background,
+                                    },
+                                  ]}
+                                >
+                                  <Text
+                                    fontSize={11}
+                                    fontWeight={isSel ? '800' : '600'}
+                                    color={isSel ? tokens.accent : tokens.text}
+                                  >
+                                    {deg === 0 ? '0° (Flat)' : `${deg > 0 ? `+${deg}` : deg}°`}
+                                  </Text>
+                                </Pressable>
+                              );
+                            })}
+                          </XStack>
+                        </YStack>
+
+                        {/* Tilt Y Angle */}
+                        <YStack gap={4}>
+                          <Text fontSize={11} fontWeight="800" color={tokens.text}>
+                            Perspective Tilt Y: {studioRecipe.tiltAngleY > 0 ? `+${studioRecipe.tiltAngleY}°` : `${studioRecipe.tiltAngleY}°`}
+                          </Text>
+                          <XStack gap={6} flexWrap="wrap">
+                            {[-4, -2, 0, 2, 4].map((deg) => {
+                              const isSel = studioRecipe.tiltAngleY === deg;
+                              return (
+                                <Pressable
+                                  key={deg}
+                                  onPress={() => setStudioRecipe((prev) => ({ ...prev, tiltAngleY: deg }))}
+                                  style={[
+                                    styles.studioChipBtn,
+                                    {
+                                      borderColor: isSel ? tokens.accent : tokens.border,
+                                      backgroundColor: isSel ? `${tokens.accent}14` : tokens.background,
+                                    },
+                                  ]}
+                                >
+                                  <Text
+                                    fontSize={11}
+                                    fontWeight={isSel ? '800' : '600'}
+                                    color={isSel ? tokens.accent : tokens.text}
+                                  >
+                                    {deg === 0 ? '0° (Flat)' : `${deg > 0 ? `+${deg}` : deg}°`}
+                                  </Text>
+                                </Pressable>
+                              );
+                            })}
+                          </XStack>
+                        </YStack>
+                      </YStack>
+                    )}
+                  </YStack>
+                </YStack>
+              );
+            })()}
           </YStack>
         )}
       </ScrollView>
@@ -2152,6 +4131,106 @@ export function AdminStoreProductCurationPage({
                 Save Metadata
               </Text>
               <LuCheck size={20} color="#15803D" strokeWidth={3} />
+            </Pressable>
+          </XStack>
+        </View>
+      )}
+
+      {/* ── FIXED BOTTOM BAR FOR MANAGE SKUS SCREEN ── */}
+      {currentScreen === 'manage_skus' && (
+        <View
+          style={[
+            styles.fixedBottomBar,
+            {
+              backgroundColor: tokens.surface,
+              borderTopColor: tokens.border,
+              paddingBottom: Math.max(bottomInset, 12),
+              paddingHorizontal: isMobile ? 14 : isTablet ? 20 : 28,
+            },
+          ]}
+        >
+          <XStack alignItems="center" justifyContent="space-between" width="100%">
+            <Pressable
+              onPress={() => setCurrentScreen('hub')}
+              hitSlop={12}
+              style={({ pressed }) => [
+                styles.bottomNavTextLink,
+                { opacity: pressed ? 0.6 : 1 },
+              ]}
+            >
+              <LuChevronLeft size={22} color={tokens.textMuted} strokeWidth={2.5} />
+              <Text fontSize={14} fontWeight="700" color={tokens.textMuted}>
+                Store Curation
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={handleSaveSkus}
+              hitSlop={12}
+              style={({ pressed }) => [
+                styles.bottomNavTextLink,
+                { opacity: pressed ? 0.6 : 1 },
+              ]}
+            >
+              <Text fontSize={15} fontWeight="800" color="#15803D">
+                Save SKUs
+              </Text>
+              <LuCheck size={20} color="#15803D" strokeWidth={3} />
+            </Pressable>
+          </XStack>
+        </View>
+      )}
+
+      {/* ── FIXED BOTTOM BAR FOR ANTI-LENS STUDIO SCREEN ── */}
+      {currentScreen === 'anti_lens_studio' && (
+        <View
+          style={[
+            styles.fixedBottomBar,
+            {
+              backgroundColor: tokens.surface,
+              borderTopColor: tokens.border,
+              paddingBottom: Math.max(bottomInset, 12),
+              paddingHorizontal: isMobile ? 14 : isTablet ? 20 : 28,
+            },
+          ]}
+        >
+          <XStack alignItems="center" justifyContent="space-between" width="100%">
+            <Pressable
+              onPress={() => {
+                setCurrentScreen('qualify_and_group');
+                setCurrentStage('qualify');
+              }}
+              hitSlop={12}
+              style={({ pressed }) => [
+                styles.bottomNavTextLink,
+                { opacity: pressed ? 0.6 : 1 },
+              ]}
+            >
+              <LuChevronLeft size={22} color={tokens.textMuted} strokeWidth={2.5} />
+              <Text fontSize={14} fontWeight="700" color={tokens.textMuted}>
+                Qualify Media
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={handleApplyAndSaveStudio}
+              disabled={savingStudio}
+              hitSlop={12}
+              style={({ pressed }) => [
+                styles.bottomNavTextLink,
+                { opacity: pressed || savingStudio ? 0.6 : 1 },
+              ]}
+            >
+              {savingStudio ? (
+                <ActivityIndicator size="small" color="#15803D" />
+              ) : (
+                <>
+                  <Text fontSize={15} fontWeight="800" color="#15803D">
+                    Apply &amp; Save
+                  </Text>
+                  <LuCheck size={20} color="#15803D" strokeWidth={3} />
+                </>
+              )}
             </Pressable>
           </XStack>
         </View>
@@ -2737,5 +4816,315 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
+  },
+  skuCurrencyBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    height: 40,
+    gap: 4,
+  },
+  skuPriceTextInput: {
+    flex: 1,
+    height: '100%',
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    textAlignVertical: 'center',
+    includeFontPadding: false,
+    outlineStyle: 'none' as any,
+  },
+  qtyStepperBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    cursor: 'pointer',
+  },
+  qtyInput: {
+    width: 52,
+    height: 38,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+    paddingVertical: 0,
+    paddingHorizontal: 4,
+    textAlignVertical: 'center',
+    includeFontPadding: false,
+    outlineStyle: 'none' as any,
+  },
+  qtyPresetBtn: {
+    height: 38,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    cursor: 'pointer',
+  },
+  standardPillBtn: {
+    height: 32,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    cursor: 'pointer',
+  },
+  customMessageBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    height: 42,
+  },
+  customMessageTextInput: {
+    flex: 1,
+    height: '100%',
+    fontSize: 13,
+    color: '#0F172A',
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    textAlignVertical: 'center',
+    includeFontPadding: false,
+    outlineStyle: 'none' as any,
+  },
+  suggestionChip: {
+    height: 30,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+  },
+  tileLensBadge: {
+    position: 'absolute',
+    bottom: 6,
+    left: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 4,
+    zIndex: 10,
+  },
+  tileStackTriggerBtn: {
+    position: 'absolute',
+    bottom: 6,
+    right: 26,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#8B5CF6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  studioThumbScrollContent: {
+    paddingVertical: 4,
+    gap: 8,
+  },
+  studioThumbTile: {
+    width: 58,
+    height: 72,
+    borderRadius: 8,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  studioThumbImg: {
+    width: '100%',
+    height: '100%',
+  },
+  studioThumbOrderBadge: {
+    position: 'absolute',
+    top: 3,
+    left: 3,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    borderRadius: 3,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  studioThumbModBadge: {
+    position: 'absolute',
+    bottom: 3,
+    right: 3,
+    borderRadius: 3,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  studioVersionCard: {
+    flex: 1,
+    minWidth: 260,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+  },
+  studioLiveTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  studioRadioBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  radioCircle: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  studioTrashBtn: {
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    backgroundColor: '#FEF2F2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  studioNotCreatedBox: {
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F8FAFC',
+  },
+  studioHeaderActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  studioPreviewStage: {
+    width: '100%',
+    minHeight: 310,
+    backgroundColor: '#0F172A',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    position: 'relative',
+    padding: 12,
+  },
+  studioPreviewCropBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    position: 'relative',
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: '#000000',
+  },
+  studioPreviewImg: {
+    width: '100%',
+    height: '100%',
+  },
+  studioWatermarkBadge: {
+    position: 'absolute',
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.8)',
+  },
+  studioAppliedBadge: {
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  studioTabBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  studioToolBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  studioChipBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  studioTogglePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  studioTextInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    fontSize: 13,
+  },
+  studioInfoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
   },
 });
