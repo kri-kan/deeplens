@@ -191,9 +191,9 @@ public class GenerateGroupLabelCommandHandler : IRequestHandler<GenerateGroupLab
                 ? (request.CodAmount ?? order.CodBalance ?? order.TotalAmount ?? 0m)
                 : 0m;
 
-            // Total Amount: 4 times actual amount for declared consignment value per user specification
+            // Total Amount: 3 times actual amount for declared consignment value per user specification
             var actualAmount = group.Items?.Sum(i => i.Subtotal) ?? (order.TotalAmount ?? 0m);
-            var totalAmountVal = request.TotalAmount ?? (actualAmount * 4m);
+            var totalAmountVal = request.TotalAmount ?? (actualAmount * 3m);
 
             var effectiveOrder = !string.IsNullOrWhiteSpace(request.OrderId) ? request.OrderId : group.OrderGrpId;
             var productDesc = !string.IsNullOrWhiteSpace(request.ProductsDesc) ? request.ProductsDesc : $"{group.VendorName ?? "Apparel"} ({totalItemsCount} items)";
@@ -222,22 +222,26 @@ public class GenerateGroupLabelCommandHandler : IRequestHandler<GenerateGroupLab
                 }
             }
 
-            // Determine Seller Address: default to "" empty string so Delhivery does not print physical warehouse street address under Seller
+            // Determine Seller Address: default to "Hyderabad" so Delhivery does not print physical warehouse street address under Seller
             var hasExplicitSellerAddress = !string.IsNullOrWhiteSpace(request.SellerAddress);
-            var sellerAddress = hasExplicitSellerAddress ? request.SellerAddress!.Trim() : string.Empty;
+            var sellerAddress = hasExplicitSellerAddress ? request.SellerAddress!.Trim() : "Hyderabad";
 
-            // If seller address is suppressed, suppress it across shipment seller_add, return_add, and pickup_location
-            // NOTE: Delhivery auto-populates seller address / return address if return_city, return_pin, or pickup_location address fields are passed.
-            var effectivePickupAddress = hasExplicitSellerAddress ? pickupAddress : null;
-            var effectivePickupCity = hasExplicitSellerAddress ? pickupCity : null;
-            var effectivePickupPin = hasExplicitSellerAddress ? pickupPin : null;
-            var effectivePickupPhone = hasExplicitSellerAddress ? pickupPhone : null;
+            var cleanPickupAddress = pickupAddress
+                .Replace("krcr Sri ganesh residency, ", "")
+                .Replace("Sri ganesh residency, ", "")
+                .Replace("Sri ganesh residency", "")
+                .Trim();
 
-            var effectiveReturnAddress = hasExplicitSellerAddress ? pickupAddress : null;
-            var effectiveReturnCity = hasExplicitSellerAddress ? pickupCity : null;
-            var effectiveReturnState = hasExplicitSellerAddress ? (resolvedWarehouse?.State) : null;
-            var effectiveReturnPin = hasExplicitSellerAddress ? pickupPin : null;
-            var effectiveReturnPhone = hasExplicitSellerAddress ? pickupPhone : null;
+            var effectivePickupAddress = cleanPickupAddress;
+            var effectivePickupCity = pickupCity;
+            var effectivePickupPin = pickupPin;
+            var effectivePickupPhone = pickupPhone;
+
+            var effectiveReturnAddress = cleanPickupAddress;
+            var effectiveReturnCity = pickupCity;
+            var effectiveReturnState = resolvedWarehouse?.State ?? "Telangana";
+            var effectiveReturnPin = pickupPin;
+            var effectiveReturnPhone = pickupPhone;
             var effectiveReturnName = !string.IsNullOrWhiteSpace(sellerName) ? sellerName : null;
 
             // Resolve Recipient Details: prioritize explicit request overrides edited in the manifestation form

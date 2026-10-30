@@ -30,6 +30,7 @@ public interface IProductService
     Task<int> UnarchiveProductsAsync(List<Guid> productIds);
     Task<int> PurgeAllArchivedProductsMediaAsync();
     Task<bool> StarProductAsync(Guid productId, bool isStarred, CancellationToken ct = default);
+    Task<bool> ToggleMediaReviewRequiredAsync(Guid productId, bool isMediaReviewRequired, CancellationToken ct = default);
     Task<bool> StarMediaAsync(Guid productId, Guid mediaId);
     Task<bool> SetDefaultMediaAsync(Guid productId, Guid mediaId, CancellationToken ct = default);
     Task<bool> ReorderMediaAsync(Guid productId, List<Guid> mediaIds);
@@ -46,6 +47,7 @@ public interface IProductService
     Task<ProductShareLogDto> RecordShareAsync(Guid productId, string platform, string? descriptionUsed, CancellationToken ct = default);
     Task<string> GenerateShareDescriptionAsync(Guid productId, string? targetPlatform, CancellationToken ct = default);
     Task<ProductPublishEventDto> RecordPublishEventAsync(ProductPublishEventDto dto, CancellationToken ct = default);
+    Task<int> RecordStorePublishAsync(IEnumerable<Guid> productIds, DateTime? publishedAt = null, CancellationToken ct = default);
     Task<IEnumerable<ProductPublishEventDto>> GetPublishEventsAsync(Guid productId, CancellationToken ct = default);
     Task<IEnumerable<InstagramAccountOptionDto>> GetPublishingInstagramAccountsAsync(CancellationToken ct = default);
     Task<bool> UpdateProductMetadataAsync(Guid productId, ProductCorrectionDto dto);
@@ -172,6 +174,15 @@ public class ProductCatalogFilter
 
     [JsonPropertyName("isStarred")]
     public bool? IsStarred { get; set; }
+
+    [JsonPropertyName("isMediaReviewRequired")]
+    public bool? IsMediaReviewRequired { get; set; }
+
+    [JsonPropertyName("isPublished")]
+    public bool? IsPublished { get; set; }
+
+    [JsonPropertyName("productIds")]
+    public Guid[]? ProductIds { get; set; }
 }
 
 public class ProductFilterOptions

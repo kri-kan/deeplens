@@ -73,7 +73,13 @@ store-apk-both:
 test: test-dotnet test-ts
 
 test-dotnet:
-	dotnet test tests/Store.Api.Tests/Store.Api.Tests.csproj --no-restore
+	dotnet test tests/DeepLens.ArchitectureTests/DeepLens.ArchitectureTests.csproj
+	dotnet test tests/DeepLens.Application.Tests/DeepLens.Application.Tests.csproj
+	dotnet test tests/DeepLens.SearchApi.Tests/DeepLens.SearchApi.Tests.csproj
+	dotnet test tests/DeepLens.Infrastructure.Tests/DeepLens.Infrastructure.Tests.csproj
+	dotnet test tests/DeepLens.Domain.Tests/DeepLens.Domain.Tests.csproj
+	dotnet test tests/DeepLens.Catalog.Tests/DeepLens.Catalog.Tests.csproj
+	dotnet test tests/Store.Api.Tests/Store.Api.Tests.csproj
 
 test-ts:
 	cd src/vayyari && npm test

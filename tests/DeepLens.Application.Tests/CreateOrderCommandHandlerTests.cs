@@ -62,7 +62,9 @@ public class CreateOrderCommandHandlerTests
             It.IsAny<string?>(),
             It.IsAny<string?>(),
             It.IsAny<string?>(),
-            It.IsAny<Guid?>()), Times.Once);
+            It.IsAny<Guid?>(),
+            It.IsAny<DeepLens.Domain.Enums.OrderStatus>(),
+            It.IsAny<bool>()), Times.Once);
     }
 
     [Test]

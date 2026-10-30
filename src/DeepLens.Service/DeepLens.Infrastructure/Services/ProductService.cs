@@ -52,6 +52,11 @@ public class ProductService : IProductService
 
     public async Task<VendorProduct> CreateProductAsync(ProductIngestionDto data, List<MediaFileDto> mediaFiles)
     {
+        if (mediaFiles == null || mediaFiles.Count == 0)
+        {
+            throw new ArgumentException("At least one media file is required to create a product.", nameof(mediaFiles));
+        }
+
         using var connection = GetConnection();
         connection.Open();
         using var transaction = connection.BeginTransaction();
@@ -94,9 +99,10 @@ public class ProductService : IProductService
 
             // 1. Create Product (Master)
             var masterId = Guid.NewGuid();
+            var isMediaReviewRequired = mediaFiles != null && mediaFiles.Count > 30;
             const string masterSql = @"
-                INSERT INTO products (id, category_id, title, base_sku, tags, sequence_id, created_at, fabric, stitch_type, work_heaviness, description)
-                VALUES (@Id, @CategoryId, @Title, @Sku, @Tags, @SeqId, @CreatedAt, @Fabric, @Stitch, @Work, @Description)
+                INSERT INTO products (id, category_id, title, base_sku, tags, sequence_id, created_at, fabric, stitch_type, work_heaviness, description, is_media_review_required)
+                VALUES (@Id, @CategoryId, @Title, @Sku, @Tags, @SeqId, @CreatedAt, @Fabric, @Stitch, @Work, @Description, @IsMediaReviewRequired)
                 RETURNING id";
             
             // Auto-tag with subcategory for catalog filtering
@@ -105,6 +111,10 @@ public class ProductService : IProductService
             {
                 var tag = data.SubCategory.ToLowerInvariant();
                 if (!tags.Contains(tag)) tags.Add(tag);
+            }
+            if (isMediaReviewRequired && !tags.Contains("needs-zoning-review"))
+            {
+                tags.Add("needs-zoning-review");
             }
 
             await connection.ExecuteAsync(masterSql, new {
@@ -118,7 +128,8 @@ public class ProductService : IProductService
                 Fabric = data.Fabric,
                 Stitch = data.StitchType,
                 Work = data.WorkHeaviness,
-                Description = data.Description
+                Description = data.Description,
+                IsMediaReviewRequired = isMediaReviewRequired
             }, transaction);
 
             // 2. Create Listing (Vendor Product)
@@ -276,22 +287,21 @@ public class ProductService : IProductService
                 p.stitch_type as ""StitchType"",
                 p.work_heaviness as ""WorkHeaviness"",
                 p.unified_attributes::text as ""UnifiedAttributesJson"",
-                COALESCE((SELECT last_message_at FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1), (SELECT to_timestamp(m.timestamp) AT TIME ZONE 'UTC' FROM wa.messages m JOIN vendor_listings vl2 ON vl2.source_group_id = m.group_id WHERE vl2.product_id = p.id LIMIT 1), p.created_at) as ""CreatedAt"",
+                COALESCE((SELECT last_message_at FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1), (SELECT mg.last_message_at FROM vendor_listings vl2 JOIN wa.message_groups mg ON mg.group_id = vl2.source_group_id WHERE vl2.product_id = p.id LIMIT 1), (SELECT to_timestamp(m.timestamp) AT TIME ZONE 'UTC' FROM wa.messages m JOIN vendor_listings vl2 ON vl2.source_group_id = m.group_id WHERE vl2.product_id = p.id LIMIT 1), p.created_at) as ""CreatedAt"",
                 p.is_starred as ""IsStarred"",
+                p.is_media_review_required as ""IsMediaReviewRequired"",
                 p.description as ""Description"",
                 c.name as ""Category"",
                 (SELECT current_price FROM vendor_listings WHERE product_id = p.id LIMIT 1) as ""VendorPrice"",
                 COALESCE((SELECT description FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1), (SELECT description FROM vendor_listings WHERE product_id = p.id LIMIT 1)) as ""VendorDescription"",
                 COALESCE(
                     (SELECT jid FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1),
+                    (SELECT mg.jid FROM vendor_listings vl2 JOIN wa.message_groups mg ON mg.group_id = vl2.source_group_id WHERE vl2.product_id = p.id AND vl2.source_group_id IS NOT NULL LIMIT 1),
                     (SELECT jid FROM wa.messages m JOIN vendor_listings vl2 ON vl2.source_group_id = m.group_id WHERE vl2.product_id = p.id LIMIT 1),
                     (SELECT jid FROM wa.message_groups mg WHERE mg.group_id = (SELECT substring(m.storage_path from 'general/([^/]+)/') FROM media m JOIN media_links ml ON ml.media_id = m.id WHERE ml.entity_id = p.id AND m.storage_path LIKE 'general/product_%' LIMIT 1) LIMIT 1),
                     (SELECT jid FROM wa.messages msg WHERE msg.group_id = (SELECT substring(m.storage_path from 'general/([^/]+)/') FROM media m JOIN media_links ml ON ml.media_id = m.id WHERE ml.entity_id = p.id AND m.storage_path LIKE 'general/product_%' LIMIT 1) LIMIT 1)
                 ) as ""SourceJid"",
                 COALESCE(
-                    (SELECT mg.group_id FROM wa.message_groups mg JOIN wa.messages m ON m.group_id = mg.group_id WHERE mg.deeplens_product_id = p.id LIMIT 1),
-                    (SELECT m.group_id FROM wa.messages m JOIN media med ON split_part(m.media_url, '/', 5) = med.original_filename JOIN media_links ml ON ml.media_id = med.id WHERE ml.entity_id = p.id AND m.group_id IS NOT NULL LIMIT 1),
-                    (SELECT vl2.source_group_id FROM vendor_listings vl2 JOIN wa.messages m ON m.group_id = vl2.source_group_id WHERE vl2.product_id = p.id LIMIT 1),
                     (SELECT group_id FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1),
                     (SELECT source_group_id FROM vendor_listings WHERE product_id = p.id AND source_group_id IS NOT NULL LIMIT 1),
                     (SELECT substring(m.storage_path from 'general/([^/]+)/') FROM media m JOIN media_links ml ON ml.media_id = m.id WHERE ml.entity_id = p.id AND m.storage_path LIKE 'general/product_%' LIMIT 1)
@@ -313,7 +323,10 @@ public class ProductService : IProductService
                     ) sub
                 ), '[]'::json)::text as ""MediaJson"",
                 (SELECT COUNT(*) FROM public.vendor_listings WHERE product_id = p.id AND is_active = true) as ""ListingCount"",
-                (SELECT COUNT(*) FROM public.media_links WHERE entity_id = p.id AND entity_type = 'product') as ""MediaCount""
+                (SELECT COUNT(*) FROM public.media_links WHERE entity_id = p.id AND entity_type = 'product') as ""MediaCount"",
+                COALESCE(p.is_published, FALSE) as ""IsPublished"",
+                p.media_updated_at as ""MediaUpdatedAt"",
+                p.store_publish_updated_at as ""StorePublishUpdatedAt""
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id";
 
@@ -351,6 +364,27 @@ public class ProductService : IProductService
             whereClause += " AND (p.is_starred = false OR p.is_starred IS NULL)";
         }
 
+        if (filter.IsMediaReviewRequired == true)
+        {
+            whereClause += " AND p.is_media_review_required = true";
+        }
+        else if (filter.IsMediaReviewRequired == false)
+        {
+            whereClause += " AND (p.is_media_review_required = false OR p.is_media_review_required IS NULL)";
+        }
+
+        if (filter.IsPublished.HasValue)
+        {
+            whereClause += " AND COALESCE(p.is_published, FALSE) = @IsPublished";
+            parameters.Add("IsPublished", filter.IsPublished.Value);
+        }
+
+        if (filter.ProductIds != null && filter.ProductIds.Length > 0)
+        {
+            whereClause += " AND p.id = ANY(@ProductIds)";
+            parameters.Add("ProductIds", filter.ProductIds);
+        }
+
         if (!string.IsNullOrEmpty(filter.Query))
         {
             whereClause += @" AND (
@@ -358,14 +392,18 @@ public class ProductService : IProductService
                 OR p.base_sku ILIKE @SearchQuery 
                 OR p.tags::text ILIKE @SearchQuery 
                 OR p.description ILIKE @SearchQuery
+                OR word_similarity(@RawQuery, p.title) > 0.35
+                OR word_similarity(@RawQuery, COALESCE(p.description, '')) > 0.35
+                OR word_similarity(@RawQuery, COALESCE(p.fabric, '')) > 0.35
                 OR EXISTS (
                     SELECT 1 
                     FROM product_merges pm 
                     JOIN products pm_src ON pm.source_id = pm_src.id 
-                    WHERE pm.target_id = p.id AND pm_src.base_sku ILIKE @SearchQuery
+                    WHERE pm.target_id = p.id AND (pm_src.base_sku ILIKE @SearchQuery OR word_similarity(@RawQuery, pm_src.base_sku) > 0.35)
                 )
             )";
             parameters.Add("SearchQuery", $"%{filter.Query}%");
+            parameters.Add("RawQuery", filter.Query.Trim());
         }
 
         if (!string.IsNullOrEmpty(filter.Category))
@@ -494,6 +532,10 @@ public class ProductService : IProductService
                 MediaCount = r.MediaCount,
                 Tags = r.Tags != null ? r.Tags.ToList() : new List<string>(),
                 IsStarred = r.IsStarred,
+                IsMediaReviewRequired = r.IsMediaReviewRequired,
+                IsPublished = r.IsPublished,
+                MediaUpdatedAt = r.MediaUpdatedAt,
+                StorePublishUpdatedAt = r.StorePublishUpdatedAt,
                 SourceJid = r.SourceJid,
                 SourceGroupId = r.SourceGroupId
             };
@@ -1089,6 +1131,20 @@ public class ProductService : IProductService
         }
     }
 
+    public async Task<bool> ToggleMediaReviewRequiredAsync(Guid productId, bool isMediaReviewRequired, CancellationToken ct = default)
+    {
+        using var activity = DeepLensActivitySource.StartActivity("ToggleMediaReviewRequiredAsync");
+        try
+        {
+            return await _productRepository.UpdateProductMediaReviewRequiredStatusAsync(productId, isMediaReviewRequired, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to toggle media review required status for product {ProductId}", productId);
+            return false;
+        }
+    }
+
     public async Task<bool> SetDefaultMediaAsync(Guid productId, Guid mediaId, CancellationToken ct = default)
     {
         using var activity = DeepLensActivitySource.StartActivity("SetDefaultMediaAsync");
@@ -1166,6 +1222,7 @@ public class ProductService : IProductService
                 COALESCE((SELECT description FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1), (SELECT description FROM vendor_listings WHERE product_id = p.id LIMIT 1)) as ""VendorDescription"",
                 COALESCE((SELECT last_message_at FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1), (SELECT to_timestamp(m.timestamp) AT TIME ZONE 'UTC' FROM wa.messages m JOIN vendor_listings vl2 ON vl2.source_group_id = m.group_id WHERE vl2.product_id = p.id LIMIT 1), p.created_at) as ""CreatedAt"",
                 p.is_starred as ""IsStarred"",
+                p.is_media_review_required as ""IsMediaReviewRequired"",
                 COALESCE(
                     (SELECT jid FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1),
                     (SELECT jid FROM wa.messages m JOIN vendor_listings vl2 ON vl2.source_group_id = m.group_id WHERE vl2.product_id = p.id LIMIT 1),
@@ -1196,6 +1253,9 @@ public class ProductService : IProductService
                     ) sub
                 ), '[]'::json)::text as ""MediaJson"",
                 (SELECT COUNT(*) FROM public.media_links WHERE entity_id = p.id AND entity_type = 'product') as ""MediaCount"",
+                COALESCE(p.is_published, FALSE) as ""IsPublished"",
+                p.media_updated_at as ""MediaUpdatedAt"",
+                p.store_publish_updated_at as ""StorePublishUpdatedAt"",
                 COALESCE((
                     SELECT json_agg(json_build_object(
                         'id',            vl.id,
@@ -1208,6 +1268,7 @@ public class ProductService : IProductService
                         'isActive',      vl.is_active,
                         'updatedAt',     vl.updated_at,
                         'sourceGroupId', COALESCE(
+                            (SELECT mg.group_id FROM wa.message_groups mg WHERE mg.deeplens_listing_id = vl.id LIMIT 1),
                             (SELECT mg.group_id FROM wa.message_groups mg JOIN wa.messages m ON m.group_id = mg.group_id WHERE mg.group_id = vl.source_group_id LIMIT 1),
                             (SELECT m.group_id FROM wa.messages m JOIN media med ON split_part(m.media_url, '/', 5) = med.original_filename JOIN media_links ml ON ml.media_id = med.id WHERE ml.entity_id = p.id AND m.group_id IS NOT NULL LIMIT 1),
                             vl.source_group_id, 
@@ -1215,8 +1276,10 @@ public class ProductService : IProductService
                             (SELECT substring(m.storage_path from 'general/([^/]+)/') FROM media m JOIN media_links ml ON ml.media_id = m.id WHERE ml.entity_id = p.id AND m.storage_path LIKE 'general/product_%' LIMIT 1)
                         ),
                         'sourceJid',     COALESCE(
+                            (SELECT mg.jid FROM wa.message_groups mg WHERE mg.deeplens_listing_id = vl.id LIMIT 1),
                             (SELECT jid FROM wa.message_groups WHERE group_id = vl.source_group_id LIMIT 1), 
                             (SELECT jid FROM wa.messages WHERE group_id = vl.source_group_id LIMIT 1), 
+                            (SELECT c.jid FROM wa.chats c WHERE c.vendor_id = vl.vendor_id::text LIMIT 1),
                             (SELECT jid FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1),
                             (SELECT jid FROM wa.message_groups mg WHERE mg.group_id = (SELECT substring(m.storage_path from 'general/([^/]+)/') FROM media m JOIN media_links ml ON ml.media_id = m.id WHERE ml.entity_id = p.id AND m.storage_path LIKE 'general/product_%' LIMIT 1) LIMIT 1),
                             (SELECT jid FROM wa.messages msg WHERE msg.group_id = (SELECT substring(m.storage_path from 'general/([^/]+)/') FROM media m JOIN media_links ml ON ml.media_id = m.id WHERE ml.entity_id = p.id AND m.storage_path LIKE 'general/product_%' LIMIT 1) LIMIT 1)
@@ -1250,7 +1313,11 @@ public class ProductService : IProductService
             SourceGroupId = r.SourceGroupId,
             MediaCount = r.MediaCount,
             Tags = r.Tags != null ? r.Tags.ToList() : new List<string>(),
-            IsStarred = r.IsStarred
+            IsStarred = r.IsStarred,
+            IsMediaReviewRequired = r.IsMediaReviewRequired,
+            IsPublished = r.IsPublished,
+            MediaUpdatedAt = r.MediaUpdatedAt,
+            StorePublishUpdatedAt = r.StorePublishUpdatedAt
         };
 
         PopulateUnifiedAttributes(vp, r.UnifiedAttributesJson, r.MasterProductId);
@@ -1513,6 +1580,19 @@ public class ProductService : IProductService
 
             // 3. Propagate all media (including carousels/videos)
             await PropagateMediaLinksAsync(connection, postId, masterId, transaction);
+
+            var igMediaCount = await connection.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM public.media_links WHERE entity_id = @MasterId AND entity_type = 'product'",
+                new { MasterId = masterId }, transaction);
+            if (igMediaCount > 30)
+            {
+                await connection.ExecuteAsync(
+                    @"UPDATE public.products 
+                      SET is_media_review_required = TRUE,
+                          tags = array_append(COALESCE(tags, ARRAY[]::text[]), 'needs-zoning-review')
+                      WHERE id = @MasterId AND NOT ('needs-zoning-review' = ANY(COALESCE(tags, ARRAY[]::text[])))",
+                    new { MasterId = masterId }, transaction);
+            }
 
             // 4. Create semantic link
             await connection.ExecuteAsync(@"
@@ -1979,6 +2059,7 @@ public class ProductService : IProductService
         public string? UnifiedAttributesJson { get; set; }
         public DateTime CreatedAt { get; init; }
         public bool IsStarred { get; init; }
+        public bool IsMediaReviewRequired { get; init; }
         public string? Description { get; init; }
         public string? Category { get; init; }
         public decimal? VendorPrice { get; init; }
@@ -1989,6 +2070,9 @@ public class ProductService : IProductService
         public string? SourceGroupId { get; init; }
         public int ListingCount { get; init; }
         public int MediaCount { get; init; }
+        public bool IsPublished { get; init; }
+        public DateTime? MediaUpdatedAt { get; init; }
+        public DateTime? StorePublishUpdatedAt { get; init; }
     }
 
     private void PopulateUnifiedAttributes(VendorProduct vp, string? unifiedAttributesJson, Guid productId)
@@ -2156,9 +2240,41 @@ public class ProductService : IProductService
             CreatedAt = dto.CreatedAt == default ? DateTime.UtcNow : dto.CreatedAt
         });
 
+        if (string.Equals(dto.Platform, "store", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(dto.Platform, "vayyari_store", StringComparison.OrdinalIgnoreCase))
+        {
+            const string updateProductSql = @"
+                UPDATE products 
+                SET is_published = TRUE, 
+                    store_publish_updated_at = @PublishedAt,
+                    updated_at = NOW()
+                WHERE id = @ProductId";
+            await db.ExecuteAsync(updateProductSql, new { ProductId = dto.ProductId, PublishedAt = result.PublishedAt });
+        }
+
         _logger.LogInformation("Recorded product publish event for ProductId {ProductId}, Platform {Platform}, Account {Account}", 
             dto.ProductId, dto.Platform, dto.AccountName);
         return result;
+    }
+
+    public async Task<int> RecordStorePublishAsync(IEnumerable<Guid> productIds, DateTime? publishedAt = null, CancellationToken ct = default)
+    {
+        var ids = productIds.Distinct().ToArray();
+        if (ids.Length == 0) return 0;
+
+        using var db = GetConnection();
+        db.Open();
+
+        const string sql = @"
+            UPDATE products 
+            SET is_published = TRUE, 
+                store_publish_updated_at = COALESCE(@PublishedAt, NOW()),
+                updated_at = NOW()
+            WHERE id = ANY(@Ids)";
+
+        var count = await db.ExecuteAsync(sql, new { Ids = ids, PublishedAt = publishedAt ?? DateTime.UtcNow });
+        _logger.LogInformation("Marked {Count} products as published to store with timestamp {Timestamp}", count, publishedAt ?? DateTime.UtcNow);
+        return count;
     }
 
     public async Task<IEnumerable<ProductPublishEventDto>> GetPublishEventsAsync(Guid productId, CancellationToken ct = default)

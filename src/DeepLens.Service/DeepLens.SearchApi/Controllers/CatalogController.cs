@@ -70,9 +70,24 @@ public class CatalogController : ControllerBase
     [ProducesResponseType(404)]
     public async Task<IActionResult> StarProduct(Guid id, [FromBody] DeepLens.Contracts.Catalog.StarProductRequest request, CancellationToken ct)
     {
+        _logger.LogInformation("Toggling star status for product {ProductId} to {IsStarred}", id, request.IsStarred);
         var success = await _productService.StarProductAsync(id, request.IsStarred, ct);
         if (!success) return NotFound();
         return Ok();
+    }
+
+    /// <summary>
+    /// Toggles the media review required status of a product.
+    /// </summary>
+    [HttpPatch("products/{id}/media-review-required")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> ToggleMediaReviewRequired(Guid id, [FromBody] DeepLens.Contracts.Catalog.ToggleMediaReviewRequiredRequest request, CancellationToken ct)
+    {
+        _logger.LogInformation("Toggling media review required status for product {ProductId} to {IsMediaReviewRequired}", id, request.IsMediaReviewRequired);
+        var success = await _productService.ToggleMediaReviewRequiredAsync(id, request.IsMediaReviewRequired, ct);
+        if (!success) return NotFound();
+        return Ok(new { id, isMediaReviewRequired = request.IsMediaReviewRequired });
     }
 
     /// <summary>

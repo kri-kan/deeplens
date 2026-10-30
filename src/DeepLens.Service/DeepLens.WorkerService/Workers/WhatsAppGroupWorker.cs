@@ -229,6 +229,28 @@ public class WhatsAppGroupWorker : BackgroundService
             }
         }
 
+        // Fast-fail if incoming payload lacks minimum required media files (saves AI extraction, DB connections, and sequence churn)
+        if (evt.MediaFiles == null || evt.MediaFiles.Count < 2)
+        {
+            _logger.LogWarning("GroupId {GroupId} has insufficient media files in event payload ({Count} < 2). Aborting.", evt.GroupId, evt.MediaFiles?.Count ?? 0);
+            using var connAbort = new NpgsqlConnection(_connectionString);
+            await connAbort.OpenAsync(ct);
+            await connAbort.ExecuteAsync(
+                @"UPDATE wa.message_groups 
+                  SET status = 'media_missing', 
+                      error_detail = @ErrorDetail,
+                      updated_at = NOW() 
+                  WHERE group_id = @GroupId",
+                new 
+                { 
+                    ErrorDetail = $"Insufficient media files in event payload (found {evt.MediaFiles?.Count ?? 0}, required >= 2)",
+                    GroupId = evt.GroupId 
+                }
+            );
+            await LogGroupAudit(connAbort, evt.GroupId, "product_creation_aborted_insufficient_media", "system", null, new { successful_media_count = evt.MediaFiles?.Count ?? 0, required = 2 });
+            return;
+        }
+
         using var scope = _serviceProvider.CreateScope();
         var aiService = scope.ServiceProvider.GetRequiredService<IAiService>();
         var storage = scope.ServiceProvider.GetRequiredService<IStorageService>();
@@ -360,8 +382,15 @@ public class WhatsAppGroupWorker : BackgroundService
             );
 
             Guid productId;
-            Guid listingId;
+            Guid listingId = Guid.NewGuid();
             bool isAutoMerge = false;
+            bool isNewProduct = false;
+            string newProductTitle = "";
+            Guid? newProductCategoryId = null;
+            string newProductUnifiedAttributes = "";
+            bool isReviewCandidate = false;
+            Guid reviewSourceProductId = Guid.Empty;
+            int matchDistance = int.MaxValue;
 
             if (existingGroup != null && existingGroup.deeplens_product_id != null)
             {
@@ -372,9 +401,6 @@ public class WhatsAppGroupWorker : BackgroundService
             else
             {
                 productId = Guid.NewGuid();
-                bool isReviewCandidate = false;
-                Guid reviewSourceProductId = Guid.Empty;
-                int matchDistance = int.MaxValue;
 
                 // ── Any-to-any visual duplicate check with hardened auto-merge criteria ──
                 var incomingPhashes = await ComputeIncomingPhashesAsync(evt.MediaFiles, storage, ct);
@@ -606,12 +632,11 @@ public class WhatsAppGroupWorker : BackgroundService
                 }
                 else
                 {
-                    var nextVal = await conn.QuerySingleAsync<long>("SELECT nextval('productid_id_seq')", null, trans);
-                    var sku = $"VF{nextVal:X3}";
+                    isNewProduct = true;
 
                     // Build a clean title: strip emojis + collapse whitespace + trim
                     string cleanRawDesc = !string.IsNullOrEmpty(rawDesc) ? Regex.Replace(rawDesc, @"[*~_`]", "") : "";
-                    string title = !string.IsNullOrEmpty(extracted.Title) && extracted.Title != "New Product"
+                    newProductTitle = !string.IsNullOrEmpty(extracted.Title) && extracted.Title != "New Product"
                         ? extracted.Title
                         : (!string.IsNullOrEmpty(cleanRawDesc)
                             ? StripEmojis(cleanRawDesc).Replace("\n", " ").Replace("\r", " ")
@@ -621,13 +646,13 @@ public class WhatsAppGroupWorker : BackgroundService
 
                     // Strip placeholder-only titles
                     var placeholders = new[] { "[image]", "[video]", "[photo]", "[sticker]" };
-                    if (title.Split(' ').All(t => placeholders.Contains(t.ToLower())))
+                    if (newProductTitle.Split(' ').All(t => placeholders.Contains(t.ToLower())))
                     {
-                        title = "New Product";
+                        newProductTitle = "New Product";
                     }
 
                     // Deterministic auto-classification using title and full raw description
-                    var (classifiedName, classifiedSlug) = CategoryClassifier.Classify(title, rawDesc);
+                    var (classifiedName, classifiedSlug) = CategoryClassifier.Classify(newProductTitle, rawDesc);
                     if (classifiedSlug != "general" && classifiedSlug != "others")
                     {
                         extracted.Category = classifiedName;
@@ -637,9 +662,9 @@ public class WhatsAppGroupWorker : BackgroundService
                         extracted.Category = "Others";
                     }
 
-                    Guid? categoryId = await ResolveCategoryId(conn, extracted.Category, trans);
+                    newProductCategoryId = await ResolveCategoryId(conn, extracted.Category, trans);
 
-                    var unifiedAttributes = JsonSerializer.Serialize(new
+                    newProductUnifiedAttributes = JsonSerializer.Serialize(new
                     {
                         fabric = extracted.Fabric,
                         stitch_type = extracted.StitchType,
@@ -648,104 +673,6 @@ public class WhatsAppGroupWorker : BackgroundService
                         color = extracted.Color,
                         sizes = extracted.Sizes
                     });
-
-                    const string productSql = @"
-                        INSERT INTO public.products (id, category_id, base_sku, title, fabric, stitch_type, tags, unified_attributes, sequence_id, created_at)
-                        VALUES (@Id, @CategoryId, @Sku, @Title, @Fabric, @StitchType, @Tags, @UnifiedAttributes::jsonb, @SeqId, NOW())";
-
-                    await conn.ExecuteAsync(productSql, new
-                    {
-                        Id = productId,
-                        CategoryId = categoryId,
-                        Sku = sku,
-                        Title = title,
-                        Fabric = extracted.Fabric,
-                        StitchType = extracted.StitchType,
-                        Tags = extracted.Tags,
-                        UnifiedAttributes = unifiedAttributes,
-                        SeqId = (int)nextVal
-                    }, trans);
-
-                    listingId = Guid.NewGuid();
-                    const string listingSql = @"
-                        INSERT INTO public.vendor_listings (id, product_id, vendor_id, current_price, currency, is_plus_shipping, description, is_active, updated_at, source_group_id)
-                        VALUES (@Id, @ProductId, @VendorId, @Price, @Currency, @IsPlusShipping, @Description, true, NOW(), @SourceGroupId)";
-
-                    await conn.ExecuteAsync(listingSql, new
-                    {
-                        Id = listingId,
-                        ProductId = productId,
-                        VendorId = evt.VendorId,
-                        Price = extracted.Price,
-                        Currency = "INR",
-                        IsPlusShipping = extracted.IsPlusShipping,
-                        Description = evt.Description,
-                        SourceGroupId = evt.GroupId
-                    }, trans);
-
-                    if (existingGroup != null)
-                    {
-                        await conn.ExecuteAsync(
-                            @"UPDATE wa.message_groups 
-                              SET status = 'product_created', deeplens_product_id = @ProductId, deeplens_listing_id = @ListingId,
-                                  category = @Category, sub_category = @SubCategory, detected_price = @Price, is_plus_shipping = @IsPlusShipping,
-                                  product_created_at = NOW(), updated_at = NOW()
-                              WHERE group_id = @GroupId",
-                            new
-                            {
-                                ProductId = productId,
-                                ListingId = listingId,
-                                Category = extracted.Category,
-                                SubCategory = "General",
-                                Price = extracted.Price,
-                                IsPlusShipping = extracted.IsPlusShipping,
-                                GroupId = evt.GroupId
-                            },
-                            trans
-                        );
-                    }
-                    else
-                    {
-                        await conn.ExecuteAsync(
-                            @"INSERT INTO wa.message_groups 
-                              (group_id, jid, status, process_as_product, description, media_count, text_count, deeplens_product_id, deeplens_listing_id, category, sub_category, detected_price, is_plus_shipping, last_message_at, product_created_at, created_at, updated_at)
-                              VALUES (@GroupId, @Jid, 'product_created', true, @Description, @MediaCount, @TextCount, @ProductId, @ListingId, @Category, @SubCategory, @Price, @IsPlusShipping, NOW(), NOW(), NOW(), NOW())",
-                            new
-                            {
-                                GroupId = evt.GroupId,
-                                Jid = evt.Jid,
-                                Description = evt.Description,
-                                MediaCount = evt.MediaFiles.Count,
-                                TextCount = 1,
-                                ProductId = productId,
-                                ListingId = listingId,
-                                Category = extracted.Category,
-                                SubCategory = "General",
-                                Price = extracted.Price,
-                                IsPlusShipping = extracted.IsPlusShipping
-                            },
-                            trans
-                        );
-                    }
-
-                    await LogGroupAudit(conn, evt.GroupId, "product_created", "system", null, new { product_id = productId, listing_id = listingId }, trans);
-
-                    if (isReviewCandidate)
-                    {
-                        // similarity_score stored as Hamming distance (lower = more similar)
-                        await conn.ExecuteAsync(@"
-                            INSERT INTO public.product_merge_candidates (product_a_id, product_b_id, similarity_score, status, detected_at)
-                            VALUES (@ProductAId, @ProductBId, @SimilarityScore, 'pending', NOW())
-                            ON CONFLICT (product_a_id, product_b_id) DO NOTHING",
-                            new
-                            {
-                                ProductAId = reviewSourceProductId,
-                                ProductBId = productId,
-                                SimilarityScore = (double)matchDistance
-                            }, trans);
-                        
-                        await LogGroupAudit(conn, evt.GroupId, "review_candidate_enqueued", "system", null, new { canonical_product_id = reviewSourceProductId, new_product_id = productId, distance = matchDistance }, trans);
-                    }
                 }
             }
 
@@ -767,6 +694,8 @@ public class WhatsAppGroupWorker : BackgroundService
             }
 
             int successfulMediaCount = 0;
+
+            var videosToEmit = new List<(Guid Id, string Path, string FileName, long Size, string MimeType, string Category, string SubCategory)>();
 
             foreach (var mediaFile in evt.MediaFiles)
             {
@@ -939,6 +868,11 @@ public class WhatsAppGroupWorker : BackgroundService
                             SubCategory = CleanBucketName(extracted.SubCategory),
                             Phash = phash
                         }, trans);
+
+                        if (mediaType == 2)
+                        {
+                            videosToEmit.Add((mediaId, targetPath, fileName, uploadFileSize, uploadMimeType, cleanCategory, CleanBucketName(extracted.SubCategory)));
+                        }
                     }
                     else
                     {
@@ -1065,6 +999,109 @@ public class WhatsAppGroupWorker : BackgroundService
                 return;
             }
 
+            if (isNewProduct)
+            {
+                var nextVal = await conn.QuerySingleAsync<long>("SELECT nextval('productid_id_seq')", null, trans);
+                var sku = $"VF{nextVal:X3}";
+
+                const string productSql = @"
+                    INSERT INTO public.products (id, category_id, base_sku, title, fabric, stitch_type, tags, unified_attributes, sequence_id, created_at)
+                    VALUES (@Id, @CategoryId, @Sku, @Title, @Fabric, @StitchType, @Tags, @UnifiedAttributes::jsonb, @SeqId, NOW())";
+
+                await conn.ExecuteAsync(productSql, new
+                {
+                    Id = productId,
+                    CategoryId = newProductCategoryId,
+                    Sku = sku,
+                    Title = newProductTitle,
+                    Fabric = extracted.Fabric,
+                    StitchType = extracted.StitchType,
+                    Tags = extracted.Tags,
+                    UnifiedAttributes = newProductUnifiedAttributes,
+                    SeqId = (int)nextVal
+                }, trans);
+
+                const string listingSql = @"
+                    INSERT INTO public.vendor_listings (id, product_id, vendor_id, current_price, currency, is_plus_shipping, description, is_active, updated_at, source_group_id)
+                    VALUES (@Id, @ProductId, @VendorId, @Price, @Currency, @IsPlusShipping, @Description, true, NOW(), @SourceGroupId)";
+
+                await conn.ExecuteAsync(listingSql, new
+                {
+                    Id = listingId,
+                    ProductId = productId,
+                    VendorId = evt.VendorId,
+                    Price = extracted.Price,
+                    Currency = "INR",
+                    IsPlusShipping = extracted.IsPlusShipping,
+                    Description = evt.Description,
+                    SourceGroupId = evt.GroupId
+                }, trans);
+
+                if (existingGroup != null)
+                {
+                    await conn.ExecuteAsync(
+                        @"UPDATE wa.message_groups 
+                          SET status = 'product_created', deeplens_product_id = @ProductId, deeplens_listing_id = @ListingId,
+                              category = @Category, sub_category = @SubCategory, detected_price = @Price, is_plus_shipping = @IsPlusShipping,
+                              product_created_at = NOW(), updated_at = NOW()
+                          WHERE group_id = @GroupId",
+                        new
+                        {
+                            ProductId = productId,
+                            ListingId = listingId,
+                            Category = extracted.Category,
+                            SubCategory = "General",
+                            Price = extracted.Price,
+                            IsPlusShipping = extracted.IsPlusShipping,
+                            GroupId = evt.GroupId
+                        },
+                        trans
+                    );
+                }
+                else
+                {
+                    await conn.ExecuteAsync(
+                        @"INSERT INTO wa.message_groups 
+                          (group_id, jid, status, process_as_product, description, media_count, text_count, deeplens_product_id, deeplens_listing_id, category, sub_category, detected_price, is_plus_shipping, last_message_at, product_created_at, created_at, updated_at)
+                          VALUES (@GroupId, @Jid, 'product_created', true, @Description, @MediaCount, @TextCount, @ProductId, @ListingId, @Category, @SubCategory, @Price, @IsPlusShipping, NOW(), NOW(), NOW(), NOW())",
+                        new
+                        {
+                            GroupId = evt.GroupId,
+                            Jid = evt.Jid,
+                            Description = evt.Description,
+                            MediaCount = evt.MediaFiles.Count,
+                            TextCount = 1,
+                            ProductId = productId,
+                            ListingId = listingId,
+                            Category = extracted.Category,
+                            SubCategory = "General",
+                            Price = extracted.Price,
+                            IsPlusShipping = extracted.IsPlusShipping
+                        },
+                        trans
+                    );
+                }
+
+                await LogGroupAudit(conn, evt.GroupId, "product_created", "system", null, new { product_id = productId, listing_id = listingId }, trans);
+
+                if (isReviewCandidate)
+                {
+                    // similarity_score stored as Hamming distance (lower = more similar)
+                    await conn.ExecuteAsync(@"
+                        INSERT INTO public.product_merge_candidates (product_a_id, product_b_id, similarity_score, status, detected_at)
+                        VALUES (@ProductAId, @ProductBId, @SimilarityScore, 'pending', NOW())
+                        ON CONFLICT (product_a_id, product_b_id) DO NOTHING",
+                        new
+                        {
+                            ProductAId = reviewSourceProductId,
+                            ProductBId = productId,
+                            SimilarityScore = (double)matchDistance
+                        }, trans);
+                    
+                    await LogGroupAudit(conn, evt.GroupId, "review_candidate_enqueued", "system", null, new { canonical_product_id = reviewSourceProductId, new_product_id = productId, distance = matchDistance }, trans);
+                }
+            }
+
             const int HIGH_MEDIA_THRESHOLD = 30;
             if (successfulMediaCount > HIGH_MEDIA_THRESHOLD)
             {
@@ -1085,8 +1122,12 @@ public class WhatsAppGroupWorker : BackgroundService
 
                 await conn.ExecuteAsync(
                     @"UPDATE public.products 
-                      SET tags = array_append(COALESCE(tags, ARRAY[]::text[]), 'needs-zoning-review') 
-                      WHERE id = @ProductId AND NOT ('needs-zoning-review' = ANY(COALESCE(tags, ARRAY[]::text[])))",
+                      SET is_media_review_required = TRUE,
+                          tags = CASE 
+                              WHEN 'needs-zoning-review' = ANY(COALESCE(tags, ARRAY[]::text[])) THEN tags 
+                              ELSE array_append(COALESCE(tags, ARRAY[]::text[]), 'needs-zoning-review') 
+                          END 
+                      WHERE id = @ProductId",
                     new { ProductId = productId }, trans);
 
                 await LogGroupAudit(conn, evt.GroupId, "high_media_review_enqueued", "system", null, 
@@ -1094,6 +1135,19 @@ public class WhatsAppGroupWorker : BackgroundService
             }
 
             await trans.CommitAsync(ct);
+
+            // Emit video upload events for on-demand/background thumbnail generation
+            foreach (var v in videosToEmit)
+            {
+                try
+                {
+                    await EmitVideoUploadedEvent(v.Id, v.Path, v.FileName, v.Size, v.MimeType, v.Category, v.SubCategory, evt.GroupId, ct);
+                }
+                catch (Exception vEx)
+                {
+                    _logger.LogWarning(vEx, "Failed to emit VideoUploadedEvent for video {MediaId}", v.Id);
+                }
+            }
 
             // 4. Emit write-back event
             await EmitProductCreatedWriteBack(evt.GroupId, productId, listingId, extracted.Category, extracted.SubCategory, ct);
@@ -1188,6 +1242,7 @@ public class WhatsAppGroupWorker : BackgroundService
             string category = group.category ?? "Others";
             string subCategory = group.sub_category ?? "General";
             string cleanCategory = "general";
+            var addedVideosToEmit = new List<(Guid Id, string Path, string FileName, long Size, string MimeType, string Category, string SubCategory)>();
 
             foreach (var mediaFile in evt.MediaFiles)
             {
@@ -1319,6 +1374,11 @@ public class WhatsAppGroupWorker : BackgroundService
                         Phash = phash
                     }, trans);
 
+                    if (mediaType == 2)
+                    {
+                        addedVideosToEmit.Add((mediaId, targetPath, fileName, uploadFileSize, uploadMimeType, cleanCategory, CleanBucketName(subCategory)));
+                    }
+
                     await LinkMedia(conn, mediaId, productId, "product", false, trans);
                     await LinkMedia(conn, mediaId, listingId, "vendor_listing", false, trans);
 
@@ -1347,6 +1407,19 @@ public class WhatsAppGroupWorker : BackgroundService
             await LogGroupAudit(conn, evt.GroupId, "media_added", "system", null, new { media_count = evt.MediaFiles.Count }, trans);
 
             await trans.CommitAsync(ct);
+
+            // Emit video upload events for on-demand/background thumbnail generation
+            foreach (var v in addedVideosToEmit)
+            {
+                try
+                {
+                    await EmitVideoUploadedEvent(v.Id, v.Path, v.FileName, v.Size, v.MimeType, v.Category, v.SubCategory, evt.GroupId, ct);
+                }
+                catch (Exception vEx)
+                {
+                    _logger.LogWarning(vEx, "Failed to emit VideoUploadedEvent for added video {MediaId}", v.Id);
+                }
+            }
 
             // ── Post-commit: cross-product any-to-any check for the newly added media ──
             // Now that all new media are in the cache, check whether this product as a whole
@@ -1430,6 +1503,14 @@ public class WhatsAppGroupWorker : BackgroundService
                         new { ProductId = productId, GroupId = evt.GroupId },
                         trans
                     );
+
+                    await conn.ExecuteAsync(
+                        @"UPDATE public.products 
+                          SET updated_at = NOW(), media_updated_at = NOW() 
+                          WHERE id = @ProductId",
+                        new { ProductId = productId },
+                        trans
+                    );
                 }
 
                 await LogGroupAudit(conn, evt.GroupId, "split_reprocess", "system", null, new { message = "Split cleanup complete" }, trans);
@@ -1499,13 +1580,78 @@ public class WhatsAppGroupWorker : BackgroundService
                           SET media_count = (SELECT COUNT(*) FROM public.media_links WHERE entity_id = @TargetProductId AND entity_type = 'product'),
                               updated_at = NOW()
                           WHERE group_id = @GroupId",
+                        new { TargetProductId = targetProductId, GroupId = evt.TargetGroupId },
+                        trans
+                    );
+
+                    await conn.ExecuteAsync(
+                        @"UPDATE public.products 
+                          SET updated_at = NOW(), media_updated_at = NOW() 
+                          WHERE id = @ProductId",
+                        new { ProductId = targetProductId },
+                        trans
+                    );
+
+                }
+                else if (targetGroup != null && targetGroup.deeplens_product_id != null && 
+                         (sourceGroup == null || sourceGroup.deeplens_product_id == null))
+                {
+                    Guid targetProductId = targetGroup.deeplens_product_id;
+                    _logger.LogInformation("Merged messages absorbed into existing product {ProductId} for TargetGroup {TargetGroupId}", targetProductId, evt.TargetGroupId);
+
+                    await conn.ExecuteAsync(
+                        @"UPDATE wa.message_groups 
+                          SET media_count = (SELECT COUNT(*) FROM public.media_links WHERE entity_id = @ProductId AND entity_type = 'product'),
+                              updated_at = NOW()
+                          WHERE group_id = @GroupId",
                         new { ProductId = targetProductId, GroupId = evt.TargetGroupId },
+                        trans
+                    );
+
+                    await conn.ExecuteAsync(
+                        @"UPDATE public.products 
+                          SET updated_at = NOW(), media_updated_at = NOW() 
+                          WHERE id = @ProductId",
+                        new { ProductId = targetProductId },
                         trans
                     );
 
                     await conn.ExecuteAsync(
                         "UPDATE wa.message_groups SET status = 'ignored', error_detail = 'Merged into ' || @TargetGroupId, updated_at = NOW() WHERE group_id = @GroupId",
                         new { TargetGroupId = evt.TargetGroupId, GroupId = evt.GroupId },
+                        trans
+                    );
+                }
+                else if (sourceGroup != null && sourceGroup.deeplens_product_id != null && 
+                         (targetGroup == null || targetGroup.deeplens_product_id == null))
+                {
+                    Guid sourceProductId = sourceGroup.deeplens_product_id;
+                    Guid sourceListingId = sourceGroup.deeplens_listing_id;
+                    _logger.LogInformation("Transferring product {ProductId} from source group {Source} to target group {Target}", sourceProductId, evt.GroupId, evt.TargetGroupId);
+
+                    await conn.ExecuteAsync(
+                        @"UPDATE wa.message_groups 
+                          SET deeplens_product_id = @ProductId, 
+                              deeplens_listing_id = @ListingId,
+                              status = 'product_created',
+                              media_count = (SELECT COUNT(*) FROM public.media_links WHERE entity_id = @ProductId AND entity_type = 'product'),
+                              updated_at = NOW() 
+                          WHERE group_id = @TargetGroupId",
+                        new { ProductId = sourceProductId, ListingId = sourceListingId, TargetGroupId = evt.TargetGroupId },
+                        trans
+                    );
+
+                    await conn.ExecuteAsync(
+                        "UPDATE wa.message_groups SET status = 'ignored', error_detail = 'Merged into ' || @TargetGroupId, updated_at = NOW() WHERE group_id = @GroupId",
+                        new { TargetGroupId = evt.TargetGroupId, GroupId = evt.GroupId },
+                        trans
+                    );
+
+                    await conn.ExecuteAsync(
+                        @"UPDATE public.products 
+                          SET updated_at = NOW(), media_updated_at = NOW() 
+                          WHERE id = @ProductId",
+                        new { ProductId = sourceProductId },
                         trans
                     );
                 }
@@ -1621,6 +1767,44 @@ public class WhatsAppGroupWorker : BackgroundService
             Key = chatJid,
             Value = JsonSerializer.Serialize(uploadEvent)
         }, ct);
+    }
+
+    private async Task EmitVideoUploadedEvent(Guid mediaId, string filePath, string fileName, long fileSize, string contentType, string category, string subCategory, string chatJid, CancellationToken ct)
+    {
+        var uploadEvent = new VideoUploadedEvent
+        {
+            EventId = Guid.NewGuid(),
+            EventType = "video.uploaded",
+            EventVersion = "1.0",
+            Timestamp = DateTime.UtcNow,
+            TenantId = "SINGLE_TENANT",
+            Data = new VideoUploadedData
+            {
+                VideoId = mediaId,
+                FileName = fileName,
+                FilePath = filePath,
+                FileSize = fileSize,
+                ContentType = contentType,
+                Category = category,
+                SubCategory = subCategory,
+                UploadedBy = "whatsapp-processor"
+            },
+            ProcessingOptions = new ProcessingOptions
+            {
+                TargetThumbnailSizes = new[] { "icon", "medium", "large" },
+                ThumbnailFormat = "webp",
+                ThumbnailQuality = 80,
+                Retention = "days180"
+            }
+        };
+
+        await _producer.ProduceAsync(KafkaTopics.VideoUploaded, new Message<string, string>
+        {
+            Key = mediaId.ToString(),
+            Value = JsonSerializer.Serialize(uploadEvent)
+        }, ct);
+
+        _logger.LogInformation("Dispatched VideoUploadedEvent to Kafka for WhatsApp video {MediaId} ({Path})", mediaId, filePath);
     }
 
     private async Task EmitProductCreatedWriteBack(string groupId, Guid productId, Guid listingId, string category, string subCategory, CancellationToken ct)
@@ -2196,6 +2380,23 @@ public class WhatsAppGroupWorker : BackgroundService
         using var trans = await conn.BeginTransactionAsync(ct);
         try
         {
+            // Verify neither product is soft-deleted or archived
+            var sourceStatus = await conn.QuerySingleOrDefaultAsync<(bool IsDeleted, bool IsArchived)?>(
+                new CommandDefinition("SELECT COALESCE(is_deleted, false) as IsDeleted, COALESCE(is_archived, false) as IsArchived FROM public.products WHERE id = @Id",
+                new { Id = sourceProductId }, transaction: trans, cancellationToken: ct));
+
+            var targetStatus = await conn.QuerySingleOrDefaultAsync<(bool IsDeleted, bool IsArchived)?>(
+                new CommandDefinition("SELECT COALESCE(is_deleted, false) as IsDeleted, COALESCE(is_archived, false) as IsArchived FROM public.products WHERE id = @Id",
+                new { Id = targetProductId }, transaction: trans, cancellationToken: ct));
+
+            if (!sourceStatus.HasValue || sourceStatus.Value.IsDeleted || sourceStatus.Value.IsArchived ||
+                !targetStatus.HasValue || targetStatus.Value.IsDeleted || targetStatus.Value.IsArchived)
+            {
+                _logger.LogWarning("ExecuteAutoMergeAsync aborted: Source {SourceId} or Target {TargetId} is soft-deleted or archived.", sourceProductId, targetProductId);
+                await trans.RollbackAsync(ct);
+                return false;
+            }
+
             // 0. Price Guard Check
             var sourcePrice = await GetProductPriceAsync(conn, sourceProductId, trans);
             var targetPrice = await GetProductPriceAsync(conn, targetProductId, trans);

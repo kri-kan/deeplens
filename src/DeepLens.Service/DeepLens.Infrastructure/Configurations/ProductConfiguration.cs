@@ -11,5 +11,9 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.Property(x => x.IsStarred)
             .HasColumnName("is_starred")
             .HasDefaultValue(false);
+
+        builder.Property(x => x.IsMediaReviewRequired)
+            .HasColumnName("is_media_review_required")
+            .HasDefaultValue(false);
     }
 }

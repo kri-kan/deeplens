@@ -201,6 +201,9 @@ public class MetaPost
     [JsonPropertyName("status")]
     public string Status { get; set; } = "active";
 
+    [JsonPropertyName("deletedOnInstagram")]
+    public bool DeletedOnInstagram { get; set; }
+
     [JsonPropertyName("suspendUntil")]
     public DateTime? SuspendUntil { get; set; }
 

@@ -31,12 +31,18 @@ public class SequencedIdGeneratorFormattingTests
         result.Should().Be(expected);
     }
 
-    [Test]
-    public void HexFormatting_FormatsProductIdHex()
+    [TestCase(7L, "007")]
+    [TestCase(255L, "0FF")]
+    [TestCase(4095L, "FFF")]
+    [TestCase(4096L, "1000")]
+    [TestCase(65535L, "FFFF")]
+    [TestCase(65536L, "10000")]
+    [TestCase(130243L, "1FCC3")]
+    [TestCase(1048575L, "FFFFF")]
+    [TestCase(1048576L, "100000")]
+    public void HexFormatting_FormatsProductIdHex_ExpandsBeyondThreeDigitsWithoutTruncation(long val, string expectedHex)
     {
-        long val = 255;
         string hex = val.ToString("X3");
-
-        hex.Should().Be("0FF");
+        hex.Should().Be(expectedHex);
     }
 }

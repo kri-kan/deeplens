@@ -246,18 +246,22 @@ public class ShipmentService : IShipmentService
         }
 
         var hasExplicitSellerAddress = !string.IsNullOrWhiteSpace(request.SellerAddress);
-        var sellerAddress = hasExplicitSellerAddress ? request.SellerAddress!.Trim() : string.Empty;
-        var defaultWarehouseAddress = warehouse?.AddressLine1 ?? "Plot 42, Vayyari Logistics Park";
-        var effectivePickupAddress = hasExplicitSellerAddress ? defaultWarehouseAddress : null;
-        var effectivePickupCity = hasExplicitSellerAddress ? (warehouse?.City ?? "Surat") : null;
-        var effectivePickupPin = hasExplicitSellerAddress ? (warehouse?.Pincode ?? "395002") : null;
-        var effectivePickupPhone = hasExplicitSellerAddress ? (warehouse?.Phone ?? "+91-9876543210") : null;
+        var sellerAddress = hasExplicitSellerAddress ? request.SellerAddress!.Trim() : "Hyderabad";
+        var defaultWarehouseAddress = (warehouse?.AddressLine1 ?? "Plot 42, Vayyari Logistics Park")
+            .Replace("krcr Sri ganesh residency, ", "")
+            .Replace("Sri ganesh residency, ", "")
+            .Replace("Sri ganesh residency", "")
+            .Trim();
+        var effectivePickupAddress = defaultWarehouseAddress;
+        var effectivePickupCity = warehouse?.City ?? "Hyderabad";
+        var effectivePickupPin = warehouse?.Pincode ?? "502325";
+        var effectivePickupPhone = warehouse?.Phone ?? "+91-9876543210";
 
-        var effectiveReturnAddress = hasExplicitSellerAddress ? defaultWarehouseAddress : null;
-        var effectiveReturnCity = hasExplicitSellerAddress ? (warehouse?.City ?? "Surat") : null;
-        var effectiveReturnState = hasExplicitSellerAddress ? warehouse?.State : null;
-        var effectiveReturnPin = hasExplicitSellerAddress ? (warehouse?.Pincode ?? "395002") : null;
-        var effectiveReturnPhone = hasExplicitSellerAddress ? (warehouse?.Phone ?? "+91-9876543210") : null;
+        var effectiveReturnAddress = defaultWarehouseAddress;
+        var effectiveReturnCity = warehouse?.City ?? "Hyderabad";
+        var effectiveReturnState = warehouse?.State ?? "Telangana";
+        var effectiveReturnPin = warehouse?.Pincode ?? "502325";
+        var effectiveReturnPhone = warehouse?.Phone ?? "+91-9876543210";
         var effectiveReturnName = !string.IsNullOrWhiteSpace(sellerName) ? sellerName : null;
 
         // Build CMU Payload

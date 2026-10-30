@@ -23,7 +23,7 @@ public class SequencedIdGenerator : ISequencedIdGenerator
     public async Task<string> GetNextProductIdAsync()
     {
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
-        var nextValue = await connection.QuerySingleAsync<long>("SELECT nextval('\"productId_id_seq\"')");
+        var nextValue = await connection.QuerySingleAsync<long>("SELECT nextval('productid_id_seq')");
         
         return nextValue.ToString("X3");
     }

@@ -18,13 +18,32 @@ public class ProductRepository : IProductRepository
 
     public async Task<bool> UpdateProductStarredStatusAsync(Guid productId, bool isStarred, CancellationToken ct = default)
     {
+        var rawRows = await _dbContext.Database.ExecuteSqlInterpolatedAsync(
+            $"UPDATE public.products SET is_starred = {isStarred}, updated_at = NOW() WHERE id = {productId}", ct);
+
         var product = await _dbContext.Products.FindAsync(new object[] { productId }, ct);
-        if (product == null) return false;
-        
-        product.IsStarred = isStarred;
-        int rowsAffected = await _dbContext.SaveChangesAsync(ct);
-            
-        return rowsAffected > 0;
+        if (product != null)
+        {
+            product.IsStarred = isStarred;
+            await _dbContext.SaveChangesAsync(ct);
+        }
+
+        return rawRows > 0 || product != null;
+    }
+
+    public async Task<bool> UpdateProductMediaReviewRequiredStatusAsync(Guid productId, bool isMediaReviewRequired, CancellationToken ct = default)
+    {
+        var rawRows = await _dbContext.Database.ExecuteSqlInterpolatedAsync(
+            $"UPDATE public.products SET is_media_review_required = {isMediaReviewRequired}, updated_at = NOW() WHERE id = {productId}", ct);
+
+        var product = await _dbContext.Products.FindAsync(new object[] { productId }, ct);
+        if (product != null)
+        {
+            product.IsMediaReviewRequired = isMediaReviewRequired;
+            await _dbContext.SaveChangesAsync(ct);
+        }
+
+        return rawRows > 0 || product != null;
     }
 
     public async Task<bool> SetDefaultMediaAsync(Guid productId, Guid mediaId, CancellationToken ct = default)

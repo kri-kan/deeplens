@@ -86,6 +86,24 @@ public class WhatsAppProductController : ControllerBase
 
         try
         {
+            // 0. Verify both products exist, and neither is soft-deleted or archived
+            var sourceProduct = await conn.QuerySingleOrDefaultAsync<(Guid Id, string BaseSku, bool IsDeleted, bool IsArchived)?>(
+                new CommandDefinition("SELECT id, base_sku, COALESCE(is_deleted, false) as IsDeleted, COALESCE(is_archived, false) as IsArchived FROM public.products WHERE id = @ProductBId",
+                new { ProductBId = request.ProductBId }, transaction: trans, cancellationToken: ct)
+            );
+
+            var targetProduct = await conn.QuerySingleOrDefaultAsync<(Guid Id, string BaseSku, bool IsDeleted, bool IsArchived)?>(
+                new CommandDefinition("SELECT id, base_sku, COALESCE(is_deleted, false) as IsDeleted, COALESCE(is_archived, false) as IsArchived FROM public.products WHERE id = @ProductAId",
+                new { ProductAId = request.ProductAId }, transaction: trans, cancellationToken: ct)
+            );
+
+            if (!sourceProduct.HasValue || sourceProduct.Value.IsDeleted || sourceProduct.Value.IsArchived ||
+                !targetProduct.HasValue || targetProduct.Value.IsDeleted || targetProduct.Value.IsArchived)
+            {
+                await trans.RollbackAsync();
+                return BadRequest(new { success = false, message = "Cannot merge with soft-deleted or archived products." });
+            }
+
             // 1. Fetch vendor listing IDs and source SKU
             var sourceListingId = await conn.QuerySingleOrDefaultAsync<Guid?>(
                 new CommandDefinition("SELECT id FROM public.vendor_listings WHERE product_id = @ProductBId LIMIT 1",

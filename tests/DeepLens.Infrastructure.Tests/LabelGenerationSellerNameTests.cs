@@ -236,7 +236,7 @@ public class LabelGenerationSellerNameTests
         capturedPayload.Should().NotBeNull();
         capturedPayload!.Shipments.Should().HaveCount(1);
         capturedPayload.Shipments[0].SellerName.Should().Be("From: Sita Collections");
-        capturedPayload.Shipments[0].SellerAddress.Should().Be(string.Empty);
+        capturedPayload.Shipments[0].SellerAddress.Should().Be("Hyderabad");
     }
 
     [Test]
@@ -292,7 +292,7 @@ public class LabelGenerationSellerNameTests
     }
 
     [Test]
-    public async Task SellerAddress_DefaultsToEmptyStringWhenNull()
+    public async Task SellerAddress_DefaultsToHyderabadWhenNull()
     {
         // Arrange
         var orderId = "ORD-006";
@@ -330,11 +330,11 @@ public class LabelGenerationSellerNameTests
         var command = new GenerateGroupLabelCommand(OrderGrpId: grpId);
         var result = await _handler.Handle(command, CancellationToken.None);
 
-        // Assert - seller_add, return_add, and pickup_location.add must all be suppressed as "" (empty string)
+        // Assert - seller_add must default to "Hyderabad", while return_add and pickup_location.add retain warehouse address
         result.IsSuccess.Should().BeTrue();
         capturedPayload.Should().NotBeNull();
-        capturedPayload!.Shipments[0].SellerAddress.Should().Be(string.Empty);
-        capturedPayload.Shipments[0].ReturnAddress.Should().Be(string.Empty);
-        capturedPayload.PickupLocation!.Address.Should().Be(string.Empty);
+        capturedPayload!.Shipments[0].SellerAddress.Should().Be("Hyderabad");
+        capturedPayload.Shipments[0].ReturnAddress.Should().Be("Central Fulfillment Hub");
+        capturedPayload.PickupLocation!.Address.Should().Be("Central Fulfillment Hub");
     }
 }

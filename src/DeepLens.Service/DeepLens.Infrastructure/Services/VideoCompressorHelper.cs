@@ -129,4 +129,64 @@ public static class VideoCompressorHelper
             try { if (File.Exists(tempOut)) File.Delete(tempOut); } catch { }
         }
     }
+
+    /// <summary>
+    /// Generates a WebP thumbnail snapshot from a video using FFmpeg directly.
+    /// Does not require ffprobe or external analysis dependencies.
+    /// </summary>
+    public static async Task<bool> ExtractSnapshotAsync(
+        string inputVideoPath,
+        string outputThumbPath,
+        int width,
+        int height,
+        double seekSeconds = 1.0,
+        ILogger? logger = null,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            var ffmpegBin = GetFfmpegPath();
+            var seekArg = seekSeconds > 0 
+                ? $"-ss {seekSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture)}" 
+                : "";
+            var args = $"-y {seekArg} -i \"{inputVideoPath}\" -vframes 1 -vf \"scale=min({width}\\,iw):-2\" -c:v libwebp -quality 80 \"{outputThumbPath}\"";
+
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = ffmpegBin,
+                Arguments = args,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = new Process { StartInfo = startInfo };
+            process.Start();
+
+            var stderrTask = process.StandardError.ReadToEndAsync(ct);
+            await process.WaitForExitAsync(ct);
+            var stderr = await stderrTask;
+
+            if (process.ExitCode == 0 && File.Exists(outputThumbPath))
+            {
+                return true;
+            }
+
+            // If seek failed (e.g. video shorter than seekSeconds), retry from frame 0
+            if (seekSeconds > 0)
+            {
+                logger?.LogInformation("FFmpeg seek to {Sec}s failed; retrying at start of video", seekSeconds);
+                return await ExtractSnapshotAsync(inputVideoPath, outputThumbPath, width, height, 0.0, logger, ct);
+            }
+
+            logger?.LogWarning("FFmpeg snapshot failed (code {ExitCode}): {Error}", process.ExitCode, stderr);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            logger?.LogError(ex, "Failed to extract snapshot from {VideoPath}", inputVideoPath);
+            return false;
+        }
+    }
 }

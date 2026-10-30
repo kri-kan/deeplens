@@ -33,6 +33,7 @@ public class Product
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     
     public bool IsStarred { get; set; } = false;
+    public bool IsMediaReviewRequired { get; set; } = false;
     
     // Navigation
     public Category? Category { get; set; }

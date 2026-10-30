@@ -61,11 +61,19 @@ public class VideoProcessingWorker : BackgroundService
             _consumer.Subscribe(_topic);
             while (!stoppingToken.IsCancellationRequested)
             {
-                var consumeResult = _consumer.Consume(TimeSpan.FromSeconds(1));
-                if (consumeResult?.Message != null)
+                try
                 {
-                    await ProcessVideoEvent(consumeResult, stoppingToken);
-                    _consumer.Commit(consumeResult);
+                    var consumeResult = _consumer.Consume(TimeSpan.FromSeconds(1));
+                    if (consumeResult?.Message != null)
+                    {
+                        await ProcessVideoEvent(consumeResult, stoppingToken);
+                        _consumer.Commit(consumeResult);
+                    }
+                }
+                catch (ConsumeException cx)
+                {
+                    _logger.LogWarning("VideoProcessingWorker consume warning: {Reason}", cx.Error.Reason);
+                    await Task.Delay(1000, stoppingToken);
                 }
             }
         }
@@ -103,11 +111,23 @@ public class VideoProcessingWorker : BackgroundService
                 await stream.CopyToAsync(fileStream, ct);
             }
 
-            var analysis = await FFProbe.AnalyseAsync(tempInput);
-            var duration = (decimal)analysis.Duration.TotalSeconds;
+            decimal duration = 0;
+            int videoWidth = 0;
+            int videoHeight = 0;
+            try
+            {
+                var analysis = await FFProbe.AnalyseAsync(tempInput);
+                duration = (decimal)analysis.Duration.TotalSeconds;
+                videoWidth = analysis.PrimaryVideoStream?.Width ?? 0;
+                videoHeight = analysis.PrimaryVideoStream?.Height ?? 0;
+            }
+            catch (Exception probeEx)
+            {
+                _logger.LogWarning(probeEx, "FFProbe analysis skipped for video {VideoId}; falling back to direct FFmpeg snapshot", videoId);
+            }
 
             // 1. Generate Multiple Thumbnails based on TargetThumbnailSizes
-            var targetSizes = videoEvent.ProcessingOptions.TargetThumbnailSizes ?? new[] { "medium" };
+            var targetSizes = videoEvent.ProcessingOptions.TargetThumbnailSizes ?? new[] { "icon", "medium", "large" };
 
             foreach (var specName in targetSizes)
             {
@@ -118,7 +138,13 @@ public class VideoProcessingWorker : BackgroundService
                 
                 _logger.LogInformation("Generating {SpecName} video snapshot ({Width}x{Height}) for {VideoId}", specName, width, height, videoId);
 
-                await FFMpeg.SnapshotAsync(tempInput, tempThumb, new Size(width, height), TimeSpan.FromSeconds(duration > 2 ? 1 : 0));
+                double seekSeconds = duration > 2 ? 1.0 : 0.0;
+                bool extracted = await VideoCompressorHelper.ExtractSnapshotAsync(tempInput, tempThumb, width, height, seekSeconds, _logger, ct);
+                if (!extracted)
+                {
+                    _logger.LogWarning("Failed to extract snapshot for {VideoId} ({SpecName})", videoId, specName);
+                    continue;
+                }
 
                 string thumbPath = StoragePathRegistry.GetThumbnailPath(hash, specName);
                 var thumbTags = string.IsNullOrEmpty(videoEvent.ProcessingOptions.Retention) ? null : new Dictionary<string, string> { { MediaConstants.Retention.TagKey, videoEvent.ProcessingOptions.Retention } };
@@ -137,28 +163,47 @@ public class VideoProcessingWorker : BackgroundService
                 string tempPreview = Path.Combine(Path.GetTempPath(), $"{videoId}_preview.gif");
                 var startTime = duration > 5 ? TimeSpan.FromSeconds((double)duration * 0.2) : TimeSpan.Zero;
                 
-                await FFMpegArguments
-                    .FromFileInput(tempInput, true, options => options.Seek(startTime))
-                    .OutputToFile(tempPreview, true, options => options
-                        .WithDuration(TimeSpan.FromSeconds(3))
-                        .WithVideoFilters(f => f.Scale(256, -1))
-                        .WithCustomArgument("-loop 0"))
-                    .ProcessAsynchronously();
-
-                previewPath = $"{MediaConstants.Paths.PreviewsDir}/{hash}.gif";
-                var previewTags = string.IsNullOrEmpty(videoEvent.ProcessingOptions.Retention) ? null : new Dictionary<string, string> { { MediaConstants.Retention.TagKey, videoEvent.ProcessingOptions.Retention } };
-                using (var fs = File.OpenRead(tempPreview)) 
+                try
                 {
-                    await storage.UploadThumbnailAsync(previewPath, fs, MediaConstants.Formats.Gif, previewTags);
+                    await FFMpegArguments
+                        .FromFileInput(tempInput, true, options => options.Seek(startTime))
+                        .OutputToFile(tempPreview, true, options => options
+                            .WithDuration(TimeSpan.FromSeconds(3))
+                            .WithVideoFilters(f => f.Scale(256, -1))
+                            .WithCustomArgument("-loop 0"))
+                        .ProcessAsynchronously();
+
+                    previewPath = $"{MediaConstants.Paths.PreviewsDir}/{hash}.gif";
+                    var previewTags = string.IsNullOrEmpty(videoEvent.ProcessingOptions.Retention) ? null : new Dictionary<string, string> { { MediaConstants.Retention.TagKey, videoEvent.ProcessingOptions.Retention } };
+                    using (var fs = File.OpenRead(tempPreview)) 
+                    {
+                        await storage.UploadThumbnailAsync(previewPath, fs, MediaConstants.Formats.Gif, previewTags);
+                    }
                 }
-                
-                if (File.Exists(tempPreview)) File.Delete(tempPreview);
+                catch (Exception gifEx)
+                {
+                    _logger.LogWarning(gifEx, "GIF preview generation failed for {VideoId}", videoId);
+                }
+                finally
+                {
+                    if (File.Exists(tempPreview)) File.Delete(tempPreview);
+                }
             }
 
             // For default thumbnail in metadata, use the first available in TargetThumbnailSizes or Medium
             string defaultSpec = targetSizes.FirstOrDefault() ?? MediaConstants.ThumbnailSpecs.Medium;
             await metadata.UpdateVideoMetadataAsync(videoId, duration, StoragePathRegistry.GetThumbnailPath(hash, defaultSpec), previewPath);
-            await metadata.UpdateMediaDimensionsAsync(videoId, analysis.PrimaryVideoStream?.Width ?? 0, analysis.PrimaryVideoStream?.Height ?? 0);
+            if (videoWidth > 0 && videoHeight > 0)
+            {
+                await metadata.UpdateMediaDimensionsAsync(videoId, videoWidth, videoHeight);
+            }
+
+            // Clear on-demand Redis cache flag
+            var cache = scope.ServiceProvider.GetService<Microsoft.Extensions.Caching.Distributed.IDistributedCache>();
+            if (cache != null)
+            {
+                await cache.RemoveAsync($"video_thumb_gen:{videoId}", ct);
+            }
         }
         catch (Exception ex)
         {

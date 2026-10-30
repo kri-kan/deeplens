@@ -75,6 +75,19 @@ public class VendorProduct
     [JsonPropertyName("isStarred")]
     public bool IsStarred { get; set; } = false;
 
+    /// <summary>Indicates whether the product requires admin media review due to high media count.</summary>
+    [JsonPropertyName("isMediaReviewRequired")]
+    public bool IsMediaReviewRequired { get; set; } = false;
+
+    [JsonPropertyName("isPublished")]
+    public bool IsPublished { get; set; } = false;
+
+    [JsonPropertyName("mediaUpdatedAt")]
+    public DateTime? MediaUpdatedAt { get; set; }
+
+    [JsonPropertyName("storePublishUpdatedAt")]
+    public DateTime? StorePublishUpdatedAt { get; set; }
+
     [JsonPropertyName("unifiedAttributes")]
     public Dictionary<string, object>? UnifiedAttributes { get; set; }
 
