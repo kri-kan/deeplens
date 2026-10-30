@@ -47,12 +47,14 @@ services:
     image: jaegertracing/all-in-one:1.57
     container_name: deeplens-jaeger
     restart: unless-stopped
+    user: root
     environment:
       - COLLECTOR_OTLP_ENABLED=true
       - SPAN_STORAGE_TYPE=badger
+      - BADGER_EPHEMERAL=false
       - BADGER_DIRECTORY_VALUE=/badger/data
       - BADGER_DIRECTORY_KEY=/badger/key
-      - BADGER_SPAN_STORE_TTL=720h0m0s # 30-day retention for traces
+      - BADGER_SPAN_STORE_TTL=168h0m0s # 7-day retention for traces
     volumes:
       - jaeger-data:/badger
     ports:

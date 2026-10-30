@@ -141,6 +141,9 @@ export const ProductDetailPage: React.FC = () => {
           label: m.title || `${cg.name} - View ${idx + 1}`,
           url: m.url,
           gradient: [cg.slotA || '#1a2a4e', cg.slotB || '#d81b60'],
+          sourcePlatform: m.sourcePlatform,
+          sourceUrl: m.sourceUrl,
+          sourcePostId: m.sourcePostId,
         }));
 
         map[cg.id] = {
@@ -219,6 +222,9 @@ export const ProductDetailPage: React.FC = () => {
             label: m.title || `${product.title} - View ${idx + 1}`,
             url: m.url,
             gradient: [product.colorHex || '#1a2a4e', '#d81b60'],
+            sourcePlatform: m.sourcePlatform as any,
+            sourceUrl: m.sourceUrl,
+            sourcePostId: m.sourcePostId,
           }))
         : (product.images || []).map((url, idx) => ({
             id: `img-${idx}`,
@@ -350,9 +356,42 @@ export const ProductDetailPage: React.FC = () => {
 
   const wishlisted = isInWishlist(product.id);
 
+  // Active SKU resolution based on active swatch
+  const activeSku = useMemo(() => {
+    if (!product || !product.skus || product.skus.length === 0) return null;
+    return (
+      product.skus.find(
+        (s) =>
+          s.id === activeColorKey ||
+          s.colorGroupId === activeColorKey ||
+          s.skuCode === activeColorKey
+      ) || product.skus[0]
+    );
+  }, [product, activeColorKey]);
+
+  // Dynamic pricing (inherits product price unless overridden at item level)
+  const effectivePrice =
+    activeSku && !activeSku.isPriceInherited && activeSku.price != null
+      ? activeSku.price
+      : product.price;
+
+  const effectiveOriginalPrice =
+    activeSku && !activeSku.isPriceInherited && activeSku.mrp != null
+      ? activeSku.mrp
+      : product.originalPrice;
+
+  const effectiveDiscount =
+    effectiveOriginalPrice > effectivePrice && effectiveOriginalPrice > 0
+      ? Math.round(((effectiveOriginalPrice - effectivePrice) / effectiveOriginalPrice) * 100)
+      : product.discountPercentage;
+
+  const effectiveStock = activeSku ? activeSku.stockQuantity : (product.stockQuantity ?? 1);
+  const allowWaitlist = activeSku ? activeSku.allowWaitlist : true;
+  const activeSkuCustomMessage = activeSku?.customMessage;
+
   const isOutOfStock =
     product.lifecycleStatus === 'out_of_stock' ||
-    (product.stockQuantity !== undefined && product.stockQuantity <= 0) ||
+    effectiveStock <= 0 ||
     product.inStock === false;
 
   const handleJoinWaitlist = async (authOverride?: { token?: string; user?: any }) => {
@@ -434,7 +473,13 @@ export const ProductDetailPage: React.FC = () => {
       accentHex: activeOption?.tertiaryColor,
     };
 
-    addItem(product, swatch, selectedSize);
+    const effectiveProduct = {
+      ...product,
+      price: effectivePrice,
+      originalPrice: effectiveOriginalPrice,
+    };
+
+    addItem(effectiveProduct, swatch, selectedSize);
     showToast({
       message: `Added ${product.title.slice(0, 24)}... (${selectedSize}) to Bag`,
       type: 'success',
@@ -477,8 +522,8 @@ export const ProductDetailPage: React.FC = () => {
     }
   };
 
-  const formattedPrice = `₹${product.price.toLocaleString('en-IN')}`;
-  const formattedOrigPrice = `₹${product.originalPrice.toLocaleString('en-IN')}`;
+  const formattedPrice = `₹${effectivePrice.toLocaleString('en-IN')}`;
+  const formattedOrigPrice = `₹${effectiveOriginalPrice.toLocaleString('en-IN')}`;
   const activeColorLabel =
     colourOptions.find((o) => o.key === activeColorKey)?.label || product.colorwayName || 'Silk Drape';
 
@@ -556,6 +601,27 @@ export const ProductDetailPage: React.FC = () => {
                 {product.title}
               </Text>
 
+              {/* Highlighted Tag for Custom SKU Message */}
+              {activeSkuCustomMessage ? (
+                <XStack
+                  alignSelf="flex-start"
+                  backgroundColor="#FEF3C7"
+                  borderColor="#F59E0B"
+                  borderWidth={1}
+                  paddingHorizontal={10}
+                  paddingVertical={5}
+                  borderRadius={8}
+                  alignItems="center"
+                  gap={6}
+                  marginTop={2}
+                >
+                  <Text fontSize={12}>✨</Text>
+                  <Text fontSize={12} fontWeight="800" color="#92400E">
+                    {activeSkuCustomMessage}
+                  </Text>
+                </XStack>
+              ) : null}
+
               <Text fontSize={13} color={tokens.textSecondary} lineHeight={20}>
                 {product.description ||
                   `Handcrafted authentic ${product.weaveOrigin || 'Chanderi'} weave with certified natural silk mark guarantee.`}
@@ -564,12 +630,26 @@ export const ProductDetailPage: React.FC = () => {
 
             {/* Pricing Section */}
             <YStack paddingVertical={4}>
-              <PriceTag
-                price={product.price}
-                originalPrice={product.originalPrice > product.price ? product.originalPrice : undefined}
-                offPercent={product.discountPercentage > 0 ? product.discountPercentage : undefined}
-                size={isMobile ? 'md' : 'lg'}
-              />
+              <XStack alignItems="center" gap={8}>
+                <PriceTag
+                  price={effectivePrice}
+                  originalPrice={effectiveOriginalPrice > effectivePrice ? effectiveOriginalPrice : undefined}
+                  offPercent={effectiveDiscount > 0 ? effectiveDiscount : undefined}
+                  size={isMobile ? 'md' : 'lg'}
+                />
+                {activeSku && !activeSku.isPriceInherited && (
+                  <XStack
+                    backgroundColor="#DBEAFE"
+                    paddingHorizontal={6}
+                    paddingVertical={2}
+                    borderRadius={4}
+                  >
+                    <Text fontSize={9} fontWeight="800" color="#1E40AF">
+                      Item Price
+                    </Text>
+                  </XStack>
+                )}
+              </XStack>
               <Text fontSize={11} color={tokens.textMuted} marginTop={4}>
                 Inclusive of all taxes. Free express delivery applied at checkout.
               </Text>
@@ -647,29 +727,45 @@ export const ProductDetailPage: React.FC = () => {
               category={product.category}
             />
 
-            {/* Call to Actions: Waitlist vs Add to Bag */}
+            {/* Call to Actions: Waitlist vs Sold Out vs Add to Bag */}
             <XStack gap={10} marginTop={6} alignItems="center">
               {isOutOfStock ? (
-                <XStack
-                  flex={1}
-                  height={46}
-                  backgroundColor={isOnWaitlist ? '#059669' : '#B45309'}
-                  borderRadius={12}
-                  alignItems="center"
-                  justifyContent="center"
-                  cursor={isOnWaitlist ? 'default' : 'pointer'}
-                  onPress={isOnWaitlist ? undefined : () => handleJoinWaitlist()}
-                  hoverStyle={isOnWaitlist ? undefined : { opacity: 0.92, scale: 1.02 }}
-                  pressStyle={isOnWaitlist ? undefined : { scale: 0.96 }}
-                >
-                  <Text color="#FFFFFF" fontWeight="800" fontSize={14}>
-                    {isWaitlistLoading
-                      ? 'Joining...'
-                      : isOnWaitlist
-                      ? 'On Waitlist ✓'
-                      : '🔔 Join Waitlist'}
-                  </Text>
-                </XStack>
+                allowWaitlist ? (
+                  <XStack
+                    flex={1}
+                    height={46}
+                    backgroundColor={isOnWaitlist ? '#059669' : '#B45309'}
+                    borderRadius={12}
+                    alignItems="center"
+                    justifyContent="center"
+                    cursor={isOnWaitlist ? 'default' : 'pointer'}
+                    onPress={isOnWaitlist ? undefined : () => handleJoinWaitlist()}
+                    hoverStyle={isOnWaitlist ? undefined : { opacity: 0.92, scale: 1.02 }}
+                    pressStyle={isOnWaitlist ? undefined : { scale: 0.96 }}
+                  >
+                    <Text color="#FFFFFF" fontWeight="800" fontSize={14}>
+                      {isWaitlistLoading
+                        ? 'Joining...'
+                        : isOnWaitlist
+                        ? 'On Waitlist ✓'
+                        : '🔔 Join Waitlist'}
+                    </Text>
+                  </XStack>
+                ) : (
+                  <XStack
+                    flex={1}
+                    height={46}
+                    backgroundColor="#94A3B8"
+                    borderRadius={12}
+                    alignItems="center"
+                    justifyContent="center"
+                    cursor="default"
+                  >
+                    <Text color="#FFFFFF" fontWeight="800" fontSize={14}>
+                      Sold Out (No Restock)
+                    </Text>
+                  </XStack>
+                )
               ) : (
                 <XStack
                   flex={1}
@@ -836,21 +932,33 @@ export const ProductDetailPage: React.FC = () => {
             title={`${product.title} (${activeColorLabel})`}
             onAddToBag={
               isOutOfStock
-                ? isOnWaitlist
-                  ? () => {}
-                  : handleJoinWaitlist
+                ? allowWaitlist
+                  ? isOnWaitlist
+                    ? () => {}
+                    : handleJoinWaitlist
+                  : () => {}
                 : handleAddToBag
             }
             buttonLabel={
               isOutOfStock
-                ? isWaitlistLoading
-                  ? 'Joining...'
-                  : isOnWaitlist
-                  ? 'On Waitlist ✓'
-                  : '🔔 Join Waitlist'
+                ? allowWaitlist
+                  ? isWaitlistLoading
+                    ? 'Joining...'
+                    : isOnWaitlist
+                    ? 'On Waitlist ✓'
+                    : '🔔 Join Waitlist'
+                  : 'Sold Out'
                 : undefined
             }
-            buttonBg={isOutOfStock ? (isOnWaitlist ? '#059669' : '#B45309') : undefined}
+            buttonBg={
+              isOutOfStock
+                ? allowWaitlist
+                  ? isOnWaitlist
+                    ? '#059669'
+                    : '#B45309'
+                  : '#94A3B8'
+                : undefined
+            }
           />
         }
       />

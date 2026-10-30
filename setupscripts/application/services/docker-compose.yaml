@@ -92,7 +92,7 @@ services:
       - Minio__AccessKey=krikan
       - Minio__SecretKey=Krikank1$
       - Minio__BucketName=store-assets
-      - Minio__PublicBaseUrl=http://media.vayyarifashions.com/store-assets
+      - Minio__PublicBaseUrl=http://adminapi.vayyarifashions.com/store-assets
       - DOTNET_GCHeapHardLimitPercent=75
     working_dir: /app
     command: dotnet Store.Api.dll

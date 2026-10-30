@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import posthog from 'posthog-js';
 import { getOrCreatePersistentDeviceId, DeviceMetadata } from './DeviceFingerprint';
 
 declare const process: any;
@@ -52,12 +53,16 @@ class UserJourneyTelemetryManager {
   private signalBuffer: any[] = [];
   private flushTimer: any = null;
   private posthogHost: string = (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_POSTHOG_HOST) || '';
+  private posthogInitialized: boolean = false;
 
   constructor() {
     this.sessionStartTime = Date.now();
     this.deviceMetadata = getOrCreatePersistentDeviceId();
     this.deviceId = this.deviceMetadata.deviceId;
     this.sessionId = `ses_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+
+    // Initialize PostHog for Web
+    this.initPostHog();
 
     // Track session start
     this.trackEvent('session_start', {
@@ -79,6 +84,7 @@ class UserJourneyTelemetryManager {
         summary: () => this.getSummary(),
         flush: () => this.flushSignals(),
         clear: () => this.clearHistory(),
+        posthog: () => posthog,
       };
 
       // Flush signals on tab switch / page close
@@ -90,6 +96,59 @@ class UserJourneyTelemetryManager {
       window.addEventListener('beforeunload', () => {
         this.flushSignals();
       });
+    }
+  }
+
+  private getPosthogHost(): string {
+    if (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_POSTHOG_HOST) {
+      return process.env.EXPO_PUBLIC_POSTHOG_HOST;
+    }
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
+      if (window.location.hostname.endsWith('vayyarifashions.com')) {
+        return `${window.location.origin}/ingest`;
+      }
+      return `http://${window.location.hostname}:8000`;
+    }
+    return 'http://192.168.0.170:8000';
+  }
+
+  private initPostHog() {
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || this.posthogInitialized) return;
+    try {
+      const apiKey =
+        (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_POSTHOG_API_KEY) ||
+        (window as any).__POSTHOG_API_KEY__ ||
+        'phc_vayyari_store';
+
+      posthog.init(apiKey, {
+        api_host: this.getPosthogHost(),
+        ui_host: 'http://localhost:8000',
+        bootstrap: {
+          distinctID: this.deviceId,
+        },
+        autocapture: true,
+        capture_pageview: true,
+        capture_pageleave: true,
+        disable_session_recording: false,
+        session_recording: {
+          maskAllInputs: true,
+        },
+        loaded: (ph: any) => {
+          ph.register({
+            platform: this.deviceMetadata.platform,
+            os: this.deviceMetadata.os,
+            model: this.deviceMetadata.model,
+            browser: this.deviceMetadata.browser,
+            screenResolution: this.deviceMetadata.screenResolution,
+            fingerprintHash: this.deviceMetadata.fingerprintHash,
+            app: 'vayyari-store',
+          });
+        },
+      });
+      this.posthogInitialized = true;
+      (window as any).posthog = posthog;
+    } catch (err) {
+      console.debug('[PostHog] Init deferred in store:', err);
     }
   }
 
@@ -178,15 +237,19 @@ class UserJourneyTelemetryManager {
       this.scheduleFlush();
     }
 
-    // Optional secondary bridge to PostHog Web SDK (if mounted)
-    if (typeof window !== 'undefined' && (window as any).posthog?.capture) {
-      try {
-        (window as any).posthog.capture(type, {
-          ...properties,
-          distinct_id: this.deviceId,
-        });
-      } catch {}
-    }
+    // Bridge to PostHog Web SDK
+    try {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        const ph = (window as any).posthog || posthog;
+        if (ph?.__loaded || ph?.capture) {
+          ph.capture(type, {
+            ...properties,
+            distinct_id: this.deviceId,
+            session_duration_sec: event.sessionDurationSec,
+          });
+        }
+      }
+    } catch {}
   }
 
   private scheduleFlush() {
@@ -253,6 +316,31 @@ class UserJourneyTelemetryManager {
         return acc;
       }, {} as Record<string, number>),
     };
+  }
+
+  public identifyUser(userId: string, userProps: Record<string, any> = {}) {
+    try {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        const ph = (window as any).posthog || posthog;
+        if (ph?.identify) {
+          ph.identify(userId, {
+            ...userProps,
+            distinct_id: this.deviceId,
+          });
+        }
+      }
+    } catch {}
+  }
+
+  public resetUser() {
+    try {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        const ph = (window as any).posthog || posthog;
+        if (ph?.reset) {
+          ph.reset();
+        }
+      }
+    } catch {}
   }
 
   public clearHistory() {

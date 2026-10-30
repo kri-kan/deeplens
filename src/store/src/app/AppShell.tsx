@@ -98,6 +98,9 @@ export const AppShell: React.FC = () => {
       await verifyOtp(data.phone.replace('+91 ', ''), '123456');
     }
     telemetry.trackEvent('auth_completed', { method: data.method });
+    if (data.phone) {
+      telemetry.identifyUser(data.phone.replace('+91 ', ''), { loginMethod: data.method });
+    }
     setShowAuthSheet(false);
   };
 

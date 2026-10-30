@@ -122,6 +122,30 @@ appId: com.instagram.android
             visible: "Stop sharing"
           commands:
             - evalScript: ${output.review_detected = 'already_accepted'}
+      # Check 3: Tagged people icon on Feed photo view
+      - runFlow:
+          when:
+            true: ${output.review_detected == 'false'}
+            visible:
+              id: "com.instagram.android:id/indicator_icon_view"
+          commands:
+            - tapOn:
+                id: "com.instagram.android:id/indicator_icon_view"
+            - evalScript: |
+                var start = new Date().getTime();
+                while (new Date().getTime() < start + 1000);
+      # Feed Post scroll down: if not visible after 2 waits, scroll down to bring review banner into view
+      - runFlow:
+          when:
+            true: ${output.review_detected == 'false' && output.wait_count == 2}
+          commands:
+            - swipe:
+                start: "50%,70%"
+                end: "50%,40%"
+                duration: 400
+            - evalScript: |
+                var start = new Date().getTime();
+                while (new Date().getTime() < start + 1000);
       - runFlow:
           when:
             true: ${output.review_detected == 'false'}

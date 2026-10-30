@@ -37,6 +37,9 @@ export interface StoreMediaItem {
   isQualified?: boolean;
   isCommon?: boolean;
   title?: string;
+  sourcePlatform?: 'instagram' | 'catalog' | 'whatsapp';
+  sourceUrl?: string;
+  sourcePostId?: string;
 }
 
 export interface SiblingSwatch {
@@ -44,6 +47,22 @@ export interface SiblingSwatch {
   colorHex: string;
   colorwayName: string;
   heroImageUrl?: string;
+}
+
+export interface StoreSkuItem {
+  id: string;
+  skuCode: string;
+  colorwayName: string;
+  colorHex: string;
+  secondaryHex?: string;
+  colorGroupId?: string;
+  price?: number | null;
+  mrp?: number | null;
+  isPriceInherited?: boolean;
+  stockQuantity: number;
+  allowWaitlist: boolean;
+  customMessage?: string;
+  thumbnailUrl?: string;
 }
 
 export interface StoreProduct {
@@ -74,6 +93,8 @@ export interface StoreProduct {
   lifecycleStatus?: string;
   siblingSwatches?: SiblingSwatch[];
   waitlistCount?: number;
+  skus?: StoreSkuItem[];
+  tags?: string[];
 }
 
 export const MOCK_STORE_PRODUCTS: StoreProduct[] = [];
@@ -83,8 +104,9 @@ const DEFAULT_LAN_HOST = '192.168.0.170';
 const normalizeMediaUrl = (url?: string): string => {
   if (!url) return '';
   return url
-    .replace(/http:\/\/192\.168\.0\.170:9000/g, 'http://media.vayyarifashions.com')
-    .replace(/http:\/\/localhost:9000/g, 'http://media.vayyarifashions.com');
+    .replace(/^https?:\/\/media\.vayyarifashions\.com/, 'http://adminapi.vayyarifashions.com')
+    .replace(/^https?:\/\/192\.168\.0\.170:9000/, 'http://adminapi.vayyarifashions.com/store-assets')
+    .replace(/^https?:\/\/localhost:9000/, 'http://adminapi.vayyarifashions.com/store-assets');
 };
 
 const getStoreApiUrl = () => {
@@ -202,6 +224,8 @@ const mapRawProduct = (p: any, defaultCode?: string): StoreProduct => {
     lifecycleStatus: p.lifecycleStatus || (isOutOfStock ? 'out_of_stock' : 'active'),
     siblingSwatches: rawSiblings,
     waitlistCount: p.waitlistCount ?? 0,
+    skus: Array.isArray(p.skus) ? p.skus : [],
+    tags: Array.isArray(p.tags) ? p.tags : [],
   };
 };
 
