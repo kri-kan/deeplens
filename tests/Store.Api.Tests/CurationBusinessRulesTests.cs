@@ -127,4 +127,125 @@ public class CurationBusinessRulesTests
         deserializedMedia[0].IsCommon.Should().BeFalse();
         deserializedMedia[1].IsCommon.Should().BeTrue();
     }
+
+    [Test]
+    public void StoreMediaItem_WithInstagramSource_SerializesAndDeserializesCorrectly()
+    {
+        // Arrange
+        var mediaItem = new StoreMediaItemDto(
+            Id: "ig-media-101",
+            Url: "https://media.vayyarifashions.com/instagram/reels/vid_101.mp4",
+            MediaType: 2, // Video
+            Order: 3,
+            DwellSeconds: 4.5,
+            IsCover: false,
+            ColorGroupId: null,
+            IsQualified: true,
+            IsCommon: true, // Universal common reel across all colorways
+            Title: "Instagram Reel Showcase",
+            SourcePlatform: "instagram",
+            SourceUrl: "https://www.instagram.com/reel/DC5xy78AbC/",
+            SourcePostId: "3489123456789"
+        );
+
+        // Act
+        var json = JsonSerializer.Serialize(mediaItem, JsonOptions);
+        var deserialized = JsonSerializer.Deserialize<StoreMediaItemDto>(json, JsonOptions);
+
+        // Assert
+        deserialized.Should().NotBeNull();
+        deserialized!.SourcePlatform.Should().Be("instagram");
+        deserialized.SourceUrl.Should().Be("https://www.instagram.com/reel/DC5xy78AbC/");
+        deserialized.SourcePostId.Should().Be("3489123456789");
+        deserialized.IsCommon.Should().BeTrue();
+        deserialized.MediaType.Should().Be(2);
+    }
+
+    [Test]
+    public void StoreMediaItem_LegacyJsonWithoutInstagramFields_DeserializesCleanlyWithDefaults()
+    {
+        // Arrange: Legacy JSON lacking sourcePlatform, sourceUrl, sourcePostId
+        const string legacyJson = @"
+        {
+            ""id"": ""legacy-m-1"",
+            ""url"": ""https://media.vayyarifashions.com/products/img1.jpg"",
+            ""mediaType"": 1,
+            ""order"": 1,
+            ""dwellSeconds"": 2.0,
+            ""isCover"": true,
+            ""isCommon"": false
+        }";
+
+        // Act
+        var deserialized = JsonSerializer.Deserialize<StoreMediaItemDto>(legacyJson, JsonOptions);
+
+        // Assert
+        deserialized.Should().NotBeNull();
+        deserialized!.Id.Should().Be("legacy-m-1");
+        deserialized.SourcePlatform.Should().BeNull();
+        deserialized.SourceUrl.Should().BeNull();
+        deserialized.SourcePostId.Should().BeNull();
+        deserialized.IsCover.Should().BeTrue();
+    }
+
+    [Test]
+    public void StoreMediaItemDto_AllProperties_HaveExplicitCamelCaseJsonPropertyName()
+    {
+        // Enforces the DeepLens Hard Rule:
+        // C# DTOs: Every public property MUST have [JsonPropertyName("camelCase")].
+        var properties = typeof(StoreMediaItemDto).GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+        
+        foreach (var prop in properties)
+        {
+            var attr = prop.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonPropertyNameAttribute), false)
+                .Cast<System.Text.Json.Serialization.JsonPropertyNameAttribute>()
+                .FirstOrDefault();
+
+            attr.Should().NotBeNull($"Property {prop.Name} on StoreMediaItemDto must have [JsonPropertyName]");
+            
+            // First character must be lowercase
+            var name = attr!.Name;
+            char.IsLower(name[0]).Should().BeTrue($"JsonPropertyName '{name}' on {prop.Name} must start with a lowercase letter (camelCase)");
+        }
+    }
+
+    [Test]
+    public void StoreMediaItem_ReelVideoMediaType_PreservesVideoAttributesWithInstagramAttribution()
+    {
+        // Arrange: Video Reel with dwellSeconds, transformRecipe, and Instagram attribution
+        var reel = new StoreMediaItemDto(
+            Id: "reel-v1",
+            Url: "https://media.vayyarifashions.com/instagram/reels/vid_001.mp4",
+            MediaType: 2, // Video
+            Order: 1,
+            DwellSeconds: 7.2,
+            IsCover: true,
+            ColorGroupId: null,
+            IsQualified: true,
+            IsCommon: true,
+            Title: "Artisan Zari Weave Demonstration",
+            OriginalUrl: "https://media.vayyarifashions.com/instagram/reels/vid_001_raw.mp4",
+            ModifiedUrl: "https://media.vayyarifashions.com/instagram/reels/vid_001.mp4",
+            ActiveDisplaySource: "modified",
+            HasModified: true,
+            TransformRecipe: "{\"crop\":{\"aspect\":\"9:16\"}}",
+            SourcePlatform: "instagram",
+            SourceUrl: "https://www.instagram.com/reel/C8xyz123/",
+            SourcePostId: "post-reel-123"
+        );
+
+        // Act
+        var json = JsonSerializer.Serialize(reel, JsonOptions);
+        var roundtripped = JsonSerializer.Deserialize<StoreMediaItemDto>(json, JsonOptions);
+
+        // Assert
+        roundtripped.Should().NotBeNull();
+        roundtripped!.MediaType.Should().Be(2);
+        roundtripped.DwellSeconds.Should().Be(7.2);
+        roundtripped.IsCover.Should().BeTrue();
+        roundtripped.HasModified.Should().BeTrue();
+        roundtripped.SourcePlatform.Should().Be("instagram");
+        roundtripped.SourceUrl.Should().Be("https://www.instagram.com/reel/C8xyz123/");
+        roundtripped.TransformRecipe.Should().Contain("9:16");
+    }
 }

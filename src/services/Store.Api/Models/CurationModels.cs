@@ -2,6 +2,12 @@ using System.Text.Json.Serialization;
 
 namespace Store.Api.Models;
 
+public record PublishMediaItemDto(
+    [property: JsonPropertyName("catalogMediaId")] string? CatalogMediaId,
+    [property: JsonPropertyName("url")] string Url,
+    [property: JsonPropertyName("mediaType")] int MediaType = 1
+);
+
 public record PublishProductRequest(
     [property: JsonPropertyName("vayyariProductId")] Guid VayyariProductId,
     [property: JsonPropertyName("productCode")] string ProductCode,
@@ -10,7 +16,8 @@ public record PublishProductRequest(
     [property: JsonPropertyName("categoryName")] string CategoryName,
     [property: JsonPropertyName("fabric")] string? Fabric,
     [property: JsonPropertyName("baseCost")] decimal BaseCost,
-    [property: JsonPropertyName("mediaUrls")] List<string> MediaUrls
+    [property: JsonPropertyName("mediaUrls")] List<string>? MediaUrls = null,
+    [property: JsonPropertyName("mediaItems")] List<PublishMediaItemDto>? MediaItems = null
 );
 
 public record BatchPublishRequest(
@@ -28,11 +35,15 @@ public record StoreMediaItemDto(
     [property: JsonPropertyName("isQualified")] bool? IsQualified = null,
     [property: JsonPropertyName("isCommon")] bool? IsCommon = null,
     [property: JsonPropertyName("title")] string? Title = null,
+    [property: JsonPropertyName("catalogMediaId")] string? CatalogMediaId = null,
     [property: JsonPropertyName("originalUrl")] string? OriginalUrl = null,
     [property: JsonPropertyName("modifiedUrl")] string? ModifiedUrl = null,
     [property: JsonPropertyName("activeDisplaySource")] string? ActiveDisplaySource = "original",
     [property: JsonPropertyName("hasModified")] bool HasModified = false,
-    [property: JsonPropertyName("transformRecipe")] string? TransformRecipe = null
+    [property: JsonPropertyName("transformRecipe")] string? TransformRecipe = null,
+    [property: JsonPropertyName("sourcePlatform")] string? SourcePlatform = null,
+    [property: JsonPropertyName("sourceUrl")] string? SourceUrl = null,
+    [property: JsonPropertyName("sourcePostId")] string? SourcePostId = null
 );
 
 public record StoreColorGroupDto(
@@ -46,7 +57,28 @@ public record StoreColorGroupDto(
     [property: JsonPropertyName("slotD")] string? SlotD = null,
     [property: JsonPropertyName("colors")] List<string>? Colors = null,
     [property: JsonPropertyName("colorCount")] int? ColorCount = null,
-    [property: JsonPropertyName("isAvailable")] bool? IsAvailable = null
+    [property: JsonPropertyName("isAvailable")] bool? IsAvailable = null,
+    [property: JsonPropertyName("price")] decimal? Price = null,
+    [property: JsonPropertyName("mrp")] decimal? Mrp = null,
+    [property: JsonPropertyName("stockQuantity")] int? StockQuantity = null,
+    [property: JsonPropertyName("allowWaitlist")] bool? AllowWaitlist = null,
+    [property: JsonPropertyName("customMessage")] string? CustomMessage = null
+);
+
+public record StoreSkuDto(
+    [property: JsonPropertyName("id")] string Id,
+    [property: JsonPropertyName("skuCode")] string SkuCode,
+    [property: JsonPropertyName("colorwayName")] string ColorwayName,
+    [property: JsonPropertyName("colorHex")] string ColorHex,
+    [property: JsonPropertyName("secondaryHex")] string? SecondaryHex = null,
+    [property: JsonPropertyName("colorGroupId")] string? ColorGroupId = null,
+    [property: JsonPropertyName("price")] decimal? Price = null,
+    [property: JsonPropertyName("mrp")] decimal? Mrp = null,
+    [property: JsonPropertyName("isPriceInherited")] bool IsPriceInherited = true,
+    [property: JsonPropertyName("stockQuantity")] int StockQuantity = 10,
+    [property: JsonPropertyName("allowWaitlist")] bool AllowWaitlist = true,
+    [property: JsonPropertyName("customMessage")] string? CustomMessage = null,
+    [property: JsonPropertyName("thumbnailUrl")] string? ThumbnailUrl = null
 );
 
 
@@ -79,7 +111,8 @@ public record UpdateCurationRequest(
     [property: JsonPropertyName("swatchTemplate")] string? SwatchTemplate,
     [property: JsonPropertyName("colorGroups")] List<StoreColorGroupDto>? ColorGroups,
     [property: JsonPropertyName("mediaOrder")] List<StoreMediaItemDto>? MediaOrder,
-    [property: JsonPropertyName("tags")] List<string>? Tags
+    [property: JsonPropertyName("tags")] List<string>? Tags,
+    [property: JsonPropertyName("skus")] List<StoreSkuDto>? Skus = null
 );
 
 public record ToggleMediaDisplaySourceRequest(

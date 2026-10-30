@@ -10,6 +10,7 @@ public interface IMediaStorageService
         string sourceUrl,
         int order,
         bool isCover,
+        string? catalogMediaId = null,
         CancellationToken ct = default);
 
     Task EnsureBucketExistsAsync(CancellationToken ct = default);
@@ -23,5 +24,17 @@ public interface IMediaStorageService
 
     Task DeleteModifiedMediaAsync(
         string modifiedUrl,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Deletes any media_assets rows (and their MinIO objects) for the given product that are NOT
+    /// represented by a URL in <paramref name="survivingPublicUrls"/>.  This covers both the
+    /// 'original' copies stored under products/{code}/ and any 'modified' derivatives stored under
+    /// store/modified/{productId}/.  Called during Publish Updates so that photos removed from the
+    /// catalog don't accumulate as orphaned objects in MinIO.
+    /// </summary>
+    Task PruneOrphanedMediaAsync(
+        Guid productId,
+        ISet<string> survivingPublicUrls,
         CancellationToken ct = default);
 }

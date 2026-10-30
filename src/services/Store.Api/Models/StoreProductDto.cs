@@ -38,7 +38,9 @@ public record StoreProductDto(
     [property: JsonPropertyName("takeDownExpiresAt")] DateTime? TakeDownExpiresAt = null,
     [property: JsonPropertyName("isReEvaluationPending")] bool IsReEvaluationPending = false,
     [property: JsonPropertyName("waitlistCount")] int WaitlistCount = 0,
-    [property: JsonPropertyName("siblingSwatches")] List<SiblingSwatchDto>? SiblingSwatches = null
+    [property: JsonPropertyName("siblingSwatches")] List<SiblingSwatchDto>? SiblingSwatches = null,
+    [property: JsonPropertyName("swatchesCount")] int SwatchesCount = 0,
+    [property: JsonPropertyName("skus")] List<StoreSkuDto>? Skus = null
 );
 
 public record UpdateLifecycleRequest(

@@ -44,16 +44,65 @@ public class CurationService : ICurationService
 
         foreach (var req in requests)
         {
-            // 1. Check existing product by vayyari_product_id
-            const string findSql = @"SELECT id, mrp, sale_price FROM products WHERE vayyari_product_id = @VayyariId LIMIT 1;";
-            var existing = await conn.QuerySingleOrDefaultAsync<(Guid Id, decimal Mrp, decimal SalePrice)?>(findSql, new { VayyariId = req.VayyariProductId });
+            // 1. Check existing product by vayyari_product_id or product_code
+            const string findSql = @"SELECT id, mrp, sale_price, media_order::text AS MediaOrderJson FROM products WHERE vayyari_product_id = @VayyariId OR LOWER(product_code) = LOWER(@ProductCode) LIMIT 1;";
+            var existing = await conn.QuerySingleOrDefaultAsync<(Guid Id, decimal Mrp, decimal SalePrice, string? MediaOrderJson)?>(findSql, new 
+            { 
+                VayyariId = req.VayyariProductId,
+                ProductCode = req.ProductCode
+            });
             var productId = existing?.Id ?? Guid.NewGuid();
 
-            // 2. Ingest media into MinIO store-assets & register in central media_assets
-            var mediaTasks = req.MediaUrls.Select((url, idx) => 
-                _mediaStorage.IngestProductMediaAsync(productId, req.ProductCode, url, idx + 1, idx == 0)
-            );
+            var existingMedia = string.IsNullOrEmpty(existing?.MediaOrderJson)
+                ? new List<StoreMediaItemDto>()
+                : JsonSerializer.Deserialize<List<StoreMediaItemDto>>(existing.Value.MediaOrderJson, JsonOptions) ?? new();
+
+            // Prepare normalized incoming media items (supporting both mediaItems and legacy mediaUrls)
+            var incomingItems = req.MediaItems != null && req.MediaItems.Count > 0
+                ? req.MediaItems
+                : (req.MediaUrls ?? new List<string>()).Select(u => new PublishMediaItemDto(null, u, 1)).ToList();
+
+            // 2. Ingest or reuse media into MinIO store-assets, matching by catalogMediaId or sourceUrl
+            var mediaTasks = incomingItems.Select(async (item, idx) =>
+            {
+                var order = idx + 1;
+                var isCover = idx == 0;
+
+                // Check if we already have this exact asset in existing product media
+                var matched = existingMedia.FirstOrDefault(m =>
+                    (!string.IsNullOrEmpty(item.CatalogMediaId) && m.CatalogMediaId == item.CatalogMediaId) ||
+                    (!string.IsNullOrEmpty(item.Url) && (m.SourceUrl == item.Url || m.Url == item.Url))
+                );
+
+                if (matched != null)
+                {
+                    // Existing asset! Retain existing swatch grouping (colorGroupId), modifications, and flags
+                    return matched with
+                    {
+                        Order = order,
+                        IsCover = isCover,
+                        CatalogMediaId = item.CatalogMediaId ?? matched.CatalogMediaId,
+                        SourceUrl = item.Url ?? matched.SourceUrl
+                    };
+                }
+
+                // New media asset to ingest
+                return await _mediaStorage.IngestProductMediaAsync(
+                    productId,
+                    req.ProductCode,
+                    item.Url,
+                    order,
+                    isCover,
+                    item.CatalogMediaId
+                );
+            });
+
             var mediaList = (await Task.WhenAll(mediaTasks)).ToList();
+
+            // 2b. Prune any MinIO objects + media_assets rows that are no longer in the incoming set.
+            //     This covers original copies AND any modified/transformed derivatives linked to them.
+            var survivingUrls = mediaList.Select(m => m.Url).ToHashSet();
+            await _mediaStorage.PruneOrphanedMediaAsync(productId, survivingUrls);
 
             var mrp = req.BaseCost > 0 ? Math.Round(req.BaseCost * 1.6m, 0) : 9999m;
             var salePrice = req.BaseCost > 0 ? Math.Round(req.BaseCost * 1.3m, 0) : 7999m;
@@ -87,6 +136,7 @@ public class CurationService : ICurationService
                     media_order = EXCLUDED.media_order,
                     tags = EXCLUDED.tags,
                     is_published = true,
+                    published_at = NOW(),
                     updated_at = NOW()
                 RETURNING id;";
 
@@ -179,6 +229,7 @@ public class CurationService : ICurationService
                 p.color_groups::text AS ColorGroupsJson,
                 p.media_order::text AS MediaOrderJson, 
                 p.tags::text AS TagsJson,
+                p.skus::text AS SkusJson,
                 p.is_published AS IsPublished, 
                 p.published_at AS PublishedAt,
                 s.sibling_swatches::text AS SiblingSwatchesJson
@@ -355,6 +406,7 @@ public class CurationService : ICurationService
                 p.color_groups::text AS ColorGroupsJson,
                 p.media_order::text AS MediaOrderJson, 
                 p.tags::text AS TagsJson,
+                p.skus::text AS SkusJson,
                 p.is_published AS IsPublished, 
                 p.published_at AS PublishedAt,
                 s.sibling_swatches::text AS SiblingSwatchesJson
@@ -414,6 +466,7 @@ public class CurationService : ICurationService
                 p.color_groups::text AS ColorGroupsJson,
                 p.media_order::text AS MediaOrderJson, 
                 p.tags::text AS TagsJson,
+                p.skus::text AS SkusJson,
                 p.is_published AS IsPublished, 
                 p.published_at AS PublishedAt,
                 s.sibling_swatches::text AS SiblingSwatchesJson
@@ -426,8 +479,20 @@ public class CurationService : ICurationService
               AND (@Search IS NULL OR 
                    p.title ILIKE '%' || @Search || '%' OR 
                    p.product_code ILIKE '%' || @Search || '%' OR 
-                   p.category_name ILIKE '%' || @Search || '%')
-            ORDER BY p.published_at DESC;";
+                   p.category_name ILIKE '%' || @Search || '%' OR
+                   COALESCE(p.fabric, '') ILIKE '%' || @Search || '%' OR
+                   p.colorway_name ILIKE '%' || @Search || '%' OR
+                   word_similarity(@Search, p.title) > 0.35 OR
+                   word_similarity(@Search, p.product_code) > 0.40 OR
+                   word_similarity(@Search, COALESCE(p.fabric, '')) > 0.35 OR
+                   word_similarity(@Search, p.colorway_name) > 0.35)
+            ORDER BY 
+              CASE WHEN @Search IS NOT NULL THEN GREATEST(
+                similarity(p.title, @Search), 
+                similarity(p.product_code, @Search),
+                similarity(COALESCE(p.fabric, ''), @Search)
+              ) ELSE 0 END DESC,
+              p.published_at DESC;";
 
         var rows = await conn.QueryAsync<ProductDbRow>(sql, new
         {
@@ -484,6 +549,7 @@ public class CurationService : ICurationService
                 p.color_groups::text AS ColorGroupsJson,
                 p.media_order::text AS MediaOrderJson, 
                 p.tags::text AS TagsJson,
+                p.skus::text AS SkusJson,
                 p.is_published AS IsPublished, 
                 p.published_at AS PublishedAt,
                 s.sibling_swatches::text AS SiblingSwatchesJson
@@ -568,6 +634,7 @@ public class CurationService : ICurationService
         string? mediaOrderJson = req.MediaOrder != null ? JsonSerializer.Serialize(req.MediaOrder) : null;
         string? colorGroupsJson = req.ColorGroups != null ? JsonSerializer.Serialize(req.ColorGroups) : null;
         string? tagsJson = req.Tags != null ? JsonSerializer.Serialize(req.Tags) : null;
+        string? skusJson = req.Skus != null ? JsonSerializer.Serialize(req.Skus) : null;
 
         const string updateSql = @"
             UPDATE products SET
@@ -583,6 +650,7 @@ public class CurationService : ICurationService
                 color_groups = CASE WHEN @ColorGroups::jsonb IS NOT NULL THEN @ColorGroups::jsonb ELSE color_groups END,
                 media_order = CASE WHEN @MediaOrder::jsonb IS NOT NULL THEN @MediaOrder::jsonb ELSE media_order END,
                 tags = CASE WHEN @Tags::jsonb IS NOT NULL THEN @Tags::jsonb ELSE tags END,
+                skus = CASE WHEN @Skus::jsonb IS NOT NULL THEN @Skus::jsonb ELSE skus END,
                 updated_at = NOW()
             WHERE id = @Id;";
 
@@ -600,7 +668,8 @@ public class CurationService : ICurationService
             SwatchTemplate = req.SwatchTemplate,
             ColorGroups = colorGroupsJson,
             MediaOrder = mediaOrderJson,
-            Tags = tagsJson
+            Tags = tagsJson,
+            Skus = skusJson
         });
 
         // Publish event to Kafka
@@ -823,6 +892,47 @@ public class CurationService : ICurationService
             ? new List<SiblingSwatchDto>()
             : JsonSerializer.Deserialize<List<SiblingSwatchDto>>(r.SiblingSwatchesJson, JsonOptions) ?? new();
 
+        var skus = string.IsNullOrEmpty(r.SkusJson)
+            ? null
+            : JsonSerializer.Deserialize<List<StoreSkuDto>>(r.SkusJson, JsonOptions);
+
+        if ((skus == null || skus.Count == 0) && colorGroups != null && colorGroups.Count > 0)
+        {
+            skus = colorGroups.Select((cg, idx) => new StoreSkuDto(
+                Id: cg.Id,
+                SkuCode: cg.ColorwayCode ?? $"{r.ProductCode}{(idx + 1):D2}",
+                ColorwayName: cg.Name,
+                ColorHex: cg.SlotA ?? "#1B4D3E",
+                SecondaryHex: cg.SlotB,
+                ColorGroupId: cg.Id,
+                Price: cg.Price,
+                Mrp: cg.Mrp,
+                IsPriceInherited: !cg.Price.HasValue,
+                StockQuantity: cg.StockQuantity ?? 10,
+                AllowWaitlist: cg.AllowWaitlist ?? true,
+                CustomMessage: cg.CustomMessage,
+                ThumbnailUrl: media.FirstOrDefault(m => m.ColorGroupId == cg.Id)?.Url ?? media.FirstOrDefault()?.Url
+            )).ToList();
+        }
+
+        var effectiveSkuCount = Math.Max(
+            siblingSwatches.Count,
+            Math.Max(skus?.Count ?? 0, colorGroups?.Count ?? 0)
+        );
+        var swatchesCount = effectiveSkuCount > 0 ? effectiveSkuCount : 1;
+
+        // If siblingSwatches has only 1 element (itself) but the product has multiple color groups / SKUs curated inside,
+        // synthesize sibling swatches so tile preview dots and PDP show all curated colorways
+        if (siblingSwatches.Count <= 1 && colorGroups != null && colorGroups.Count > 1)
+        {
+            siblingSwatches = colorGroups.Select((cg, idx) => new SiblingSwatchDto(
+                ProductCode: cg.ColorwayCode ?? $"{r.ProductCode}{(idx + 1):D2}",
+                ColorHex: cg.SlotA ?? "#1B4D3E",
+                ColorwayName: cg.Name,
+                HeroImageUrl: media.FirstOrDefault(m => m.ColorGroupId == cg.Id)?.Url ?? media.FirstOrDefault()?.Url
+            )).ToList();
+        }
+
         return new StoreProductDto(
             Id: r.Id,
             VayyariProductId: r.VayyariProductId,
@@ -852,7 +962,9 @@ public class CurationService : ICurationService
             TakeDownExpiresAt: r.TakeDownExpiresAt,
             IsReEvaluationPending: r.IsReEvaluationPending,
             WaitlistCount: r.WaitlistCount,
-            SiblingSwatches: siblingSwatches
+            SiblingSwatches: siblingSwatches,
+            SwatchesCount: swatchesCount,
+            Skus: skus
         );
     }
 
@@ -884,6 +996,7 @@ public class CurationService : ICurationService
         public string? ColorGroupsJson { get; set; }
         public string? MediaOrderJson { get; set; }
         public string? TagsJson { get; set; }
+        public string? SkusJson { get; set; }
         public bool IsPublished { get; set; }
         public DateTime PublishedAt { get; set; }
         public string? SiblingSwatchesJson { get; set; }

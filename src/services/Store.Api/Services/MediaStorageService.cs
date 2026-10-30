@@ -71,9 +71,12 @@ public class MediaStorageService : IMediaStorageService
         string sourceUrl,
         int order,
         bool isCover,
+        string? catalogMediaId = null,
         CancellationToken ct = default)
     {
-        var mediaId = $"m_{order}_{productId:N}"[..12];
+        var mediaId = !string.IsNullOrWhiteSpace(catalogMediaId) 
+            ? catalogMediaId 
+            : $"m_{order}_{productId:N}"[..12];
 
         // 1. If URL is already in store-assets bucket, no need to duplicate
         if (!string.IsNullOrWhiteSpace(sourceUrl) && sourceUrl.Contains($"/{_bucketName}/"))
@@ -84,7 +87,9 @@ public class MediaStorageService : IMediaStorageService
                 MediaType: 1,
                 Order: order,
                 DwellSeconds: 0.0,
-                IsCover: isCover
+                IsCover: isCover,
+                CatalogMediaId: catalogMediaId,
+                SourceUrl: sourceUrl
             );
         }
 
@@ -126,6 +131,8 @@ public class MediaStorageService : IMediaStorageService
 
             // 6. Record asset in PostgreSQL media_assets central registry
             Guid assetId;
+            Guid? catalogMediaGuid = Guid.TryParse(catalogMediaId, out var parsedGuid) ? parsedGuid : null;
+
             await using (var conn = new NpgsqlConnection(_connectionString))
             {
                 await conn.OpenAsync(ct);
@@ -133,16 +140,17 @@ public class MediaStorageService : IMediaStorageService
                     INSERT INTO media_assets (
                         id, bucket_name, storage_key, public_url, sha256_hash, byte_size,
                         mime_type, media_type, owner_type, owner_id, derivative_type, processing_status,
-                        created_at, updated_at
+                        catalog_media_id, created_at, updated_at
                     ) VALUES (
                         gen_random_uuid(), @BucketName, @StorageKey, @PublicUrl, @Sha256Hash, @ByteSize,
                         @MimeType, 'image', 'product', @ProductId, 'original', 'ready',
-                        NOW(), NOW()
+                        @CatalogMediaId, NOW(), NOW()
                     )
                     ON CONFLICT (storage_key) DO UPDATE SET
                         public_url = EXCLUDED.public_url,
                         byte_size = EXCLUDED.byte_size,
                         owner_id = EXCLUDED.owner_id,
+                        catalog_media_id = COALESCE(EXCLUDED.catalog_media_id, media_assets.catalog_media_id),
                         processing_status = 'ready',
                         updated_at = NOW()
                     RETURNING id;";
@@ -155,7 +163,8 @@ public class MediaStorageService : IMediaStorageService
                     Sha256Hash = hash,
                     ByteSize = (long)bytes.Length,
                     MimeType = mimeType,
-                    ProductId = productId
+                    ProductId = productId,
+                    CatalogMediaId = catalogMediaGuid
                 });
             }
 
@@ -177,6 +186,7 @@ public class MediaStorageService : IMediaStorageService
                     byteSize = bytes.Length,
                     order = order,
                     isCover = isCover,
+                    catalogMediaId = catalogMediaId,
                     requestedAt = DateTime.UtcNow
                 },
                 ct
@@ -190,7 +200,9 @@ public class MediaStorageService : IMediaStorageService
                 MediaType: 1,
                 Order: order,
                 DwellSeconds: 0.0,
-                IsCover: isCover
+                IsCover: isCover,
+                CatalogMediaId: catalogMediaId,
+                SourceUrl: sourceUrl
             );
         }
         catch (Exception ex)
@@ -202,7 +214,9 @@ public class MediaStorageService : IMediaStorageService
                 MediaType: 1,
                 Order: order,
                 DwellSeconds: 0.0,
-                IsCover: isCover
+                IsCover: isCover,
+                CatalogMediaId: catalogMediaId,
+                SourceUrl: sourceUrl
             );
         }
     }
@@ -253,5 +267,73 @@ public class MediaStorageService : IMediaStorageService
         {
             _logger.LogWarning(ex, "Failed to delete modified media from MinIO: {Url}", modifiedUrl);
         }
+    }
+
+    /// <inheritdoc />
+    public async Task PruneOrphanedMediaAsync(
+        Guid productId,
+        ISet<string> survivingPublicUrls,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        // Fetch all non-deleted rows for this product (originals AND modified derivatives via parent FK)
+        const string fetchSql = @"
+            SELECT id, storage_key, public_url, parent_asset_id
+            FROM media_assets
+            WHERE owner_id = @ProductId
+              AND is_deleted = false;";
+
+        var rows = (await conn.QueryAsync<(Guid Id, string StorageKey, string PublicUrl, Guid? ParentAssetId)>(
+            fetchSql, new { ProductId = productId })).ToList();
+
+        // Rows whose public_url is no longer in the surviving set
+        var orphanedIds = new HashSet<Guid>();
+        foreach (var row in rows.Where(r => !survivingPublicUrls.Contains(r.PublicUrl)))
+            orphanedIds.Add(row.Id);
+
+        // Also collect modified derivatives (store/modified/{productId}/...) whose parent original is being pruned
+        foreach (var row in rows)
+        {
+            if (row.ParentAssetId.HasValue && orphanedIds.Contains(row.ParentAssetId.Value))
+                orphanedIds.Add(row.Id);
+        }
+
+        if (orphanedIds.Count == 0)
+        {
+            _logger.LogInformation("PruneOrphanedMedia: no orphaned assets for product {ProductId}", productId);
+            return;
+        }
+
+        // Delete from MinIO
+        int minioDeleted = 0;
+        foreach (var row in rows.Where(r => orphanedIds.Contains(r.Id)))
+        {
+            try
+            {
+                await _minioClient.RemoveObjectAsync(new RemoveObjectArgs()
+                    .WithBucket(_bucketName)
+                    .WithObject(row.StorageKey),
+                    ct);
+                minioDeleted++;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "PruneOrphanedMedia: failed to delete MinIO object {Key}", row.StorageKey);
+            }
+        }
+
+        // Bulk soft-delete in one SQL statement
+        const string softDeleteSql = @"
+            UPDATE media_assets
+            SET is_deleted = true, updated_at = NOW()
+            WHERE id = ANY(@Ids);";
+
+        var dbDeleted = await conn.ExecuteAsync(softDeleteSql, new { Ids = orphanedIds.ToArray() });
+
+        _logger.LogInformation(
+            "PruneOrphanedMedia: pruned {DbDeleted} media_assets rows ({MinioDeleted} MinIO objects) for product {ProductId}",
+            dbDeleted, minioDeleted, productId);
     }
 }

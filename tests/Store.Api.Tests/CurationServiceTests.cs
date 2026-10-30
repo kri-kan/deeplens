@@ -225,14 +225,59 @@ public class CurationServiceTests
             "admin@vayyari.com");
     }
 
+    [Test]
+    public async Task BatchPublishProductsAsync_WhenProductAlreadyExists_UpdatesPublishedAtToNow()
+    {
+        // 1. Manually backdate published_at to 2 days ago
+        await using (var conn = new NpgsqlConnection(_storeConnStr))
+        {
+            await conn.OpenAsync();
+            await conn.ExecuteAsync(@"
+                UPDATE products 
+                SET published_at = NOW() - INTERVAL '2 days',
+                    updated_at = NOW() - INTERVAL '2 days'
+                WHERE id = @Id;", new { Id = _testVariant1Id });
+        }
+
+        // Verify it was backdated
+        var preCheck = await _curationService.GetProductByCodeAsync("VFX99901");
+        preCheck.Should().NotBeNull();
+        preCheck!.PublishedAt.Should().BeBefore(DateTime.UtcNow.AddDays(-1));
+
+        // 2. Publish updated product batch
+        var publishRequests = new List<PublishProductRequest>
+        {
+            new(
+                VayyariProductId: _testVariant1Id,
+                ProductCode: "VFX99901",
+                Title: "Test Saree - Royal Blue Updated",
+                Description: "Updated Silk Saree",
+                CategoryName: "Saree",
+                Fabric: "Pure Silk",
+                BaseCost: 1100,
+                MediaUrls: new List<string> { "http://test.com/v1-updated.jpg" }
+            )
+        };
+
+        var publishedCount = await _curationService.BatchPublishProductsAsync(publishRequests, "admin@vayyari.com");
+        publishedCount.Should().Be(1);
+
+        // 3. Verify published_at was updated to NOW() on conflict
+        var postCheck = await _curationService.GetProductByCodeAsync("VFX99901");
+        postCheck.Should().NotBeNull();
+        postCheck!.PublishedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(10));
+    }
+
+
     private class FakeMediaStorageService : IMediaStorageService
     {
-        public Task<StoreMediaItemDto> IngestProductMediaAsync(Guid productId, string productCode, string sourceUrl, int order, bool isCover, CancellationToken ct = default)
-            => Task.FromResult(new StoreMediaItemDto(Guid.NewGuid().ToString(), sourceUrl, 1, order, 0, isCover));
+        public Task<StoreMediaItemDto> IngestProductMediaAsync(Guid productId, string productCode, string sourceUrl, int order, bool isCover, string? catalogMediaId = null, CancellationToken ct = default)
+            => Task.FromResult(new StoreMediaItemDto(catalogMediaId ?? Guid.NewGuid().ToString(), sourceUrl, 1, order, 0, isCover, CatalogMediaId: catalogMediaId, SourceUrl: sourceUrl));
         public Task<string> UploadModifiedMediaAsync(Guid productId, string mediaId, Stream imageStream, string mimeType, CancellationToken ct = default)
             => Task.FromResult($"http://fake-storage/{mediaId}.webp");
         public Task DeleteModifiedMediaAsync(string fileUrl, CancellationToken ct = default) => Task.CompletedTask;
         public Task EnsureBucketExistsAsync(CancellationToken ct = default) => Task.CompletedTask;
+        public Task PruneOrphanedMediaAsync(Guid productId, ISet<string> survivingPublicUrls, CancellationToken ct = default) => Task.CompletedTask;
     }
 
     private class FakeStoreEventPublisher : IStoreEventPublisher

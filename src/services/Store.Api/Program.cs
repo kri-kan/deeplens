@@ -1,6 +1,8 @@
 using Dapper;
 using Microsoft.AspNetCore.Mvc;
 using Minio;
+using StackExchange.Redis;
+using System.Text.Json;
 using Store.Api.Models;
 using Store.Api.Services;
 
@@ -41,6 +43,28 @@ builder.Services.AddSingleton<ICurationService, CurationService>();
 builder.Services.AddSingleton<ITelemetryService, TelemetryService>();
 builder.Services.AddSingleton<IWhatsAppCloudApiClient, WhatsAppCloudApiClient>();
 builder.Services.AddSingleton<IAuthService, AuthService>();
+
+// Redis Cache Registration
+builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
+{
+    var config = sp.GetRequiredService<IConfiguration>();
+    var redisConn = config.GetConnectionString("Redis") ?? "192.168.0.170:6379";
+    try
+    {
+        return ConnectionMultiplexer.Connect(new ConfigurationOptions
+        {
+            EndPoints = { redisConn },
+            AbortOnConnectFail = false,
+            ConnectTimeout = 2000
+        });
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[Redis] Warning: Failed to connect to Redis at {redisConn}: {ex.Message}");
+        return ConnectionMultiplexer.Connect("127.0.0.1:6379,abortConnect=false");
+    }
+});
+
 builder.Services.AddHostedService<CartPruningBackgroundService>();
 builder.Services.AddHostedService<TelemetryRollupBackgroundWorker>();
 
@@ -99,27 +123,32 @@ app.MapGet("/health", () => Results.Ok(new
 .WithOpenApi();
 
 // ── Product Discovery & PDP Endpoints ──
-app.MapGet("/api/v1/products", async ([FromQuery] string? search, [FromQuery] string? category, ICurationService curationService) =>
+app.MapGet("/api/v1/products", async ([FromQuery] string? search, [FromQuery] string? category, ICurationService curationService, IConnectionMultiplexer? redis) =>
 {
-    var inStore = await curationService.GetInStoreProductsAsync();
-    var results = inStore.AsEnumerable();
+    var normalizedCategory = string.IsNullOrWhiteSpace(category) ? "all" : category.Trim().ToLowerInvariant();
+    var normalizedSearch = string.IsNullOrWhiteSpace(search) ? "" : search.Trim().ToLowerInvariant();
+    var cacheKey = $"store:search:{normalizedCategory}:{normalizedSearch}";
 
-    if (!string.IsNullOrWhiteSpace(category) && !category.Equals("all", StringComparison.OrdinalIgnoreCase))
+    IDatabase? db = null;
+    try
     {
-        results = results.Where(p => p.CategoryName.Equals(category, StringComparison.OrdinalIgnoreCase));
+        if (redis != null && redis.IsConnected)
+        {
+            db = redis.GetDatabase();
+            var cached = await db.StringGetAsync(cacheKey);
+            if (cached.HasValue)
+            {
+                return Results.Content(cached.ToString(), "application/json");
+            }
+        }
     }
-    if (!string.IsNullOrWhiteSpace(search))
+    catch (Exception ex)
     {
-        var s = search.Trim();
-        results = results.Where(p =>
-            p.ProductCode.Contains(s, StringComparison.OrdinalIgnoreCase) ||
-            p.Title.Contains(s, StringComparison.OrdinalIgnoreCase) ||
-            (p.Fabric != null && p.Fabric.Contains(s, StringComparison.OrdinalIgnoreCase)) ||
-            p.ColorwayName.Contains(s, StringComparison.OrdinalIgnoreCase)
-        );
+        Console.WriteLine($"[Redis] Cache read failed: {ex.Message}");
     }
 
-    var mapped = results.Select(p => new
+    var inStore = await curationService.GetInStoreProductsAsync(category, search);
+    var mapped = inStore.Select(p => new
     {
         id = p.Id.ToString(),
         productCode = p.ProductCode,
@@ -140,6 +169,7 @@ app.MapGet("/api/v1/products", async ([FromQuery] string? search, [FromQuery] st
         stockQuantity = p.StockQuantity,
         waitlistCount = p.WaitlistCount,
         siblingSwatches = p.SiblingSwatches,
+        swatchesCount = p.SwatchesCount,
         primaryImageUri = p.MediaOrder.FirstOrDefault()?.Url ?? "https://picsum.photos/seed/saree/600/800",
         allMediaUris = p.MediaOrder.Select(m => m.Url).ToArray(),
         colorGroupId = p.ColorGroupId,
@@ -148,10 +178,25 @@ app.MapGet("/api/v1/products", async ([FromQuery] string? search, [FromQuery] st
         swatchTemplate = p.SwatchTemplate,
         colorGroups = p.ColorGroups,
         mediaOrder = p.MediaOrder,
+        skus = p.Skus,
+        tags = p.Tags,
         descriptions = !string.IsNullOrEmpty(p.Description) ? new[] { p.Description } : Array.Empty<string>()
-    });
+    }).ToList();
 
-    return Results.Ok(mapped.ToList());
+    if (db != null)
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(mapped);
+            await db.StringSetAsync(cacheKey, json, TimeSpan.FromMinutes(5));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Redis] Cache write failed: {ex.Message}");
+        }
+    }
+
+    return Results.Ok(mapped);
 })
 .WithName("GetProducts")
 .WithOpenApi();
@@ -184,6 +229,7 @@ app.MapGet("/api/v1/products/code/{code}", async (string code, ICurationService 
         stockQuantity = p.StockQuantity,
         waitlistCount = p.WaitlistCount,
         siblingSwatches = p.SiblingSwatches,
+        swatchesCount = p.SwatchesCount,
         primaryImageUri = p.MediaOrder.FirstOrDefault()?.Url ?? "",
         allMediaUris = p.MediaOrder.Select(m => m.Url).ToArray(),
         colorGroupId = p.ColorGroupId,
@@ -192,6 +238,8 @@ app.MapGet("/api/v1/products/code/{code}", async (string code, ICurationService 
         swatchTemplate = p.SwatchTemplate,
         colorGroups = p.ColorGroups,
         mediaOrder = p.MediaOrder,
+        skus = p.Skus,
+        tags = p.Tags,
         descriptions = !string.IsNullOrEmpty(p.Description) ? new[] { p.Description } : Array.Empty<string>()
     };
 
@@ -228,6 +276,7 @@ app.MapGet("/api/v1/product/code/{code}", async (string code, ICurationService c
         stockQuantity = p.StockQuantity,
         waitlistCount = p.WaitlistCount,
         siblingSwatches = p.SiblingSwatches,
+        swatchesCount = p.SwatchesCount,
         primaryImageUri = p.MediaOrder.FirstOrDefault()?.Url ?? "",
         allMediaUris = p.MediaOrder.Select(m => m.Url).ToArray(),
         colorGroupId = p.ColorGroupId,
@@ -281,6 +330,7 @@ app.MapGet("/api/v1/products/{id}", async (string id, ICurationService curationS
         stockQuantity = p.StockQuantity,
         waitlistCount = p.WaitlistCount,
         siblingSwatches = p.SiblingSwatches,
+        swatchesCount = p.SwatchesCount,
         primaryImageUri = p.MediaOrder.FirstOrDefault()?.Url ?? "",
         allMediaUris = p.MediaOrder.Select(m => m.Url).ToArray(),
         colorGroupId = p.ColorGroupId,
@@ -504,6 +554,21 @@ app.MapGet("/api/v1/admin/telemetry/devices/{deviceId}/profile", async (string d
 .WithName("GetDeviceTasteProfile")
 .WithOpenApi();
 
+app.MapGet("/api/v1/admin/telemetry/devices/{deviceId}/signals", async (string deviceId, [FromQuery] string? token, [FromQuery] int? limit, [FromQuery] int? days, HttpContext ctx, ITelemetryService telemetryService) =>
+{
+    var authHeader = ctx.Request.Headers["Authorization"].FirstOrDefault();
+    var patHeader = ctx.Request.Headers["X-Store-Admin-Key"].FirstOrDefault();
+    if (string.IsNullOrWhiteSpace(authHeader) && string.IsNullOrWhiteSpace(patHeader) && string.IsNullOrWhiteSpace(token))
+    {
+        return Results.Unauthorized();
+    }
+
+    var signals = await telemetryService.GetDeviceSignalsAsync(deviceId, limit ?? 100, days ?? 30);
+    return Results.Ok(signals);
+})
+.WithName("GetDeviceSignals")
+.WithOpenApi();
+
 app.MapPost("/api/v1/admin/telemetry/rollup/trigger", async ([FromQuery] string? token, [FromQuery] int? retentionDays, HttpContext ctx, ITelemetryService telemetryService) =>
 {
     var authHeader = ctx.Request.Headers["Authorization"].FirstOrDefault();
@@ -532,6 +597,40 @@ app.MapGet("/api/v1/admin/telemetry/activity/hourly", async ([FromQuery] string?
     return Results.Ok(summary);
 })
 .WithName("GetHourlyActivitySummary")
+.WithOpenApi();
+
+app.MapGet("/api/v1/admin/telemetry/growth/daily", async ([FromQuery] string? token, [FromQuery] int? days, [FromQuery] int? range, [FromQuery] string? granularity, HttpContext ctx, ITelemetryService telemetryService) =>
+{
+    var authHeader = ctx.Request.Headers["Authorization"].FirstOrDefault();
+    var patHeader = ctx.Request.Headers["X-Store-Admin-Key"].FirstOrDefault();
+    if (string.IsNullOrWhiteSpace(authHeader) && string.IsNullOrWhiteSpace(patHeader) && string.IsNullOrWhiteSpace(token))
+    {
+        return Results.Unauthorized();
+    }
+
+    var effectiveRange = range ?? days ?? 10;
+    var effectiveGranularity = !string.IsNullOrWhiteSpace(granularity) ? granularity : "day";
+    var summary = await telemetryService.GetDailyAcquisitionsSummaryAsync(effectiveRange, effectiveGranularity);
+    return Results.Ok(summary);
+})
+.WithName("GetDailyAcquisitionsSummary")
+.WithOpenApi();
+
+app.MapGet("/api/v1/admin/telemetry/growth/acquisitions", async ([FromQuery] string? token, [FromQuery] int? range, [FromQuery] string? granularity, HttpContext ctx, ITelemetryService telemetryService) =>
+{
+    var authHeader = ctx.Request.Headers["Authorization"].FirstOrDefault();
+    var patHeader = ctx.Request.Headers["X-Store-Admin-Key"].FirstOrDefault();
+    if (string.IsNullOrWhiteSpace(authHeader) && string.IsNullOrWhiteSpace(patHeader) && string.IsNullOrWhiteSpace(token))
+    {
+        return Results.Unauthorized();
+    }
+
+    var effectiveRange = range ?? 10;
+    var effectiveGranularity = !string.IsNullOrWhiteSpace(granularity) ? granularity : "day";
+    var summary = await telemetryService.GetDailyAcquisitionsSummaryAsync(effectiveRange, effectiveGranularity);
+    return Results.Ok(summary);
+})
+.WithName("GetAcquisitionsSummary")
 .WithOpenApi();
 
 // =============================================================================
