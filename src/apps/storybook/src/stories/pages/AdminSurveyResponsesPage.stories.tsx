@@ -4,6 +4,7 @@ import {
   AdminSurveyResponsesPage,
   AdminSurveyResponsesPageProps,
 } from '../../components/pages/survey-admin/AdminSurveyResponsesPage';
+import { withFormFactor } from '../utils/FormFactorPreview';
 import { THEME_ARG_TYPES, THEME_ARGS } from '../../utils/storyTheme';
 import {
   MOCK_ADMIN_RESPONSES,
@@ -14,8 +15,10 @@ import {
 const meta: Meta<any> = {
   title: 'Pages/Admin/Survey Framework/5 - Submissions & Responses',
   component: AdminSurveyResponsesPage,
+  decorators: [withFormFactor('desktop', 'Submissions & Response Analytics')],
   args: {
     ...THEME_ARGS,
+    disableSafeArea: false,
     responses: MOCK_ADMIN_RESPONSES,
     surveys: MOCK_ADMIN_SURVEYS,
     questionsBank: MOCK_ADMIN_QUESTIONS,
@@ -35,12 +38,12 @@ export default meta;
 type Story = StoryObj<typeof AdminSurveyResponsesPage>;
 
 /**
- * 1. Default Overview Story
+ * 1. Default Overview Story (Desktop)
  * Shows all submissions (both Live and Sandbox) across all surveys,
  * with metrics bar, origin route filter pills, and search bar.
  */
 export const DefaultOverviewStory: Story = {
-  name: '1. All Submissions (Live & Sandbox Overview)',
+  name: '1. All Submissions (Desktop Overview)',
   args: {
     initialSurveyId: 'all',
     initialModeFilter: 'all',
@@ -49,12 +52,27 @@ export const DefaultOverviewStory: Story = {
 };
 
 /**
- * 2. Filtered Live Submissions Story
+ * 2. Mobile Responsive Story (390px Viewport)
+ * Compact mobile frame demonstrating responsive submissions list,
+ * status badges, and inspection action.
+ */
+export const MobileViewStory: Story = {
+  name: '2. Submissions List (Mobile 390px Frame)',
+  decorators: [withFormFactor('mobile', 'Submissions Review - Mobile Viewport')],
+  args: {
+    initialSurveyId: 'all',
+    initialModeFilter: 'all',
+    initialSearchQuery: '',
+  },
+};
+
+/**
+ * 3. Filtered Live Submissions Story
  * Displays verified customer completions resulting in real Mudras
  * transactions and order-associated responses.
  */
 export const LiveSubmissionsStory: Story = {
-  name: '2. Live Customer Submissions Only',
+  name: '3. Live Customer Submissions Only',
   args: {
     initialSurveyId: 'all',
     initialModeFilter: 'live',
@@ -63,28 +81,15 @@ export const LiveSubmissionsStory: Story = {
 };
 
 /**
- * 3. Filtered Sandbox Test Runs Story
+ * 4. Filtered Sandbox Test Runs Story
  * Displays non-mutating simulated runs dispatched from the preview runner,
  * carrying test fingerprint signatures and mock VIP Pass codes.
  */
 export const SandboxTestRunsStory: Story = {
-  name: '3. Sandbox Test Executions Only',
+  name: '4. Sandbox Test Executions Only',
   args: {
     initialSurveyId: 'all',
     initialModeFilter: 'sandbox',
-    initialSearchQuery: '',
-  },
-};
-
-/**
- * 4. Filtered By Survey (Taste Discovery)
- * Displays submissions specifically for the flagship luxury `taste-discovery` survey.
- */
-export const FilteredTasteDiscoveryStory: Story = {
-  name: '4. Survey Specific (taste-discovery)',
-  args: {
-    initialSurveyId: 'survey-taste-discovery-id',
-    initialModeFilter: 'all',
     initialSearchQuery: '',
   },
 };

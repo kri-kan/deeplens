@@ -1,6 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { TextInput, StyleSheet } from 'react-native';
 import { YStack, XStack, Text, ScrollView } from 'tamagui';
+import { Pressable, Modal } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSurveyAdminTheme, surveyAdminStyles } from './surveyAdminTheme';
+import { useResponsive } from '../../../theme';
 import {
   LuLayers,
   LuPlus,
@@ -50,6 +54,7 @@ export interface AdminSurveyBuilderPageProps {
   onEditQuestion?: (questionKey: string) => void;
   onNavigateBack?: () => void;
   initialModal?: 'publish' | 'add_step' | 'new_survey' | null;
+  disableSafeArea?: boolean;
 }
 
 export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
@@ -63,7 +68,13 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
   onEditQuestion,
   onNavigateBack,
   initialModal = null,
+  disableSafeArea = false,
 }) => {
+  const theme = useSurveyAdminTheme();
+  const { isMobile } = useResponsive();
+  const insets = useSafeAreaInsets();
+  const topInset = disableSafeArea ? 0 : insets.top;
+  const bottomInset = disableSafeArea ? 0 : insets.bottom;
   // Master Surveys list state
   const [surveysList, setSurveysList] = useState<AdminSurveyItem[]>(
     propSurveys && propSurveys.length > 0 ? propSurveys : MOCK_ADMIN_SURVEYS
@@ -450,7 +461,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
   };
 
   return (
-    <ScrollView backgroundColor="#0b0d11" flex={1}>
+    <ScrollView backgroundColor={theme.bg} flex={1}>
       <YStack paddingHorizontal={24} paddingVertical={24} gap={24} maxWidth={1380} width="100%" alignSelf="center">
         {/* ======================================================== */}
         {/* TOAST FEEDBACK NOTIFICATION                              */}
@@ -473,7 +484,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
               </Text>
             </XStack>
             <XStack cursor="pointer" onPress={() => setToastMessage(null)}>
-              <LuX size={16} color="#9ca3af" />
+              <LuX size={16} color={theme.textMuted} />
             </XStack>
           </XStack>
         )}
@@ -486,9 +497,9 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
             {onNavigateBack && (
               <XStack
                 cursor="pointer"
-                backgroundColor="#12151c"
+                backgroundColor={theme.surface}
                 borderWidth={1}
-                borderColor="#1f2533"
+                borderColor={theme.border}
                 paddingHorizontal={12}
                 paddingVertical={8}
                 borderRadius={8}
@@ -497,19 +508,19 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                 hoverStyle={{ borderColor: '#D4AF37' }}
                 onPress={onNavigateBack}
               >
-                <Text color="#9ca3af" fontSize={12} fontWeight="600">
+                <Text color={theme.textMuted} fontSize={12} fontWeight="600">
                   ← Back
                 </Text>
               </XStack>
             )}
             <YStack>
               <XStack alignItems="center" gap={8}>
-                <LuLayers size={22} color="#D4AF37" />
-                <Text color="#ffffff" fontSize={24} fontWeight="800" letterSpacing={-0.5}>
+                <LuLayers size={22} color={theme.accent} />
+                <Text color={theme.text} fontSize={24} fontWeight="800" letterSpacing={-0.5}>
                   Survey Assembly & Version Publisher
                 </Text>
               </XStack>
-              <Text color="#9ca3af" fontSize={13} marginTop={2}>
+              <Text color={theme.textMuted} fontSize={13} marginTop={2}>
                 Assemble atomic questions, sequence steps, pin revisions, and publish immutable versioned snapshots.
               </Text>
             </YStack>
@@ -517,9 +528,9 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
 
           {/* Quick Stats Pill */}
           <XStack
-            backgroundColor="#12151c"
+            backgroundColor={theme.surface}
             borderWidth={1}
-            borderColor="#1f2533"
+            borderColor={theme.border}
             borderRadius={10}
             paddingHorizontal={14}
             paddingVertical={8}
@@ -527,16 +538,16 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
             gap={14}
           >
             <XStack alignItems="center" gap={6}>
-              <LuLayers size={14} color="#D4AF37" />
-              <Text color="#9ca3af" fontSize={12}>
-                Total Surveys: <Text color="#ffffff" fontWeight="700">{surveysList.length}</Text>
+              <LuLayers size={14} color={theme.accent} />
+              <Text color={theme.textMuted} fontSize={12}>
+                Total Surveys: <Text color={theme.text} fontWeight="700">{surveysList.length}</Text>
               </Text>
             </XStack>
             <Text color="#2b3242">|</Text>
             <XStack alignItems="center" gap={6}>
-              <LuCoins size={14} color="#D4AF37" />
-              <Text color="#9ca3af" fontSize={12}>
-                Question Bank: <Text color="#ffffff" fontWeight="700">{questionsBank.length}</Text>
+              <LuCoins size={14} color={theme.accent} />
+              <Text color={theme.textMuted} fontSize={12}>
+                Question Bank: <Text color={theme.text} fontWeight="700">{questionsBank.length}</Text>
               </Text>
             </XStack>
           </XStack>
@@ -546,9 +557,9 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
         {/* 2. SURVEY SWITCHER & CONTROLS BAR                        */}
         {/* ======================================================== */}
         <YStack
-          backgroundColor="#12151c"
+          backgroundColor={theme.surface}
           borderWidth={1}
-          borderColor="#1f2533"
+          borderColor={theme.border}
           borderRadius={12}
           padding={18}
           gap={16}
@@ -557,7 +568,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
             {/* Left: Survey Selector Dropdown & Badges */}
             <XStack alignItems="center" gap={12} flexWrap="wrap">
               <YStack gap={4}>
-                <Text color="#6b7280" fontSize={10} fontWeight="800" letterSpacing={0.5} textTransform="uppercase">
+                <Text color={theme.textMuted} fontSize={10} fontWeight="800" letterSpacing={0.5} textTransform="uppercase">
                   Select Active Survey
                 </Text>
                 {/* Horizontal Survey Pill Tabs */}
@@ -613,9 +624,9 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
               {/* Button: New Survey */}
               <XStack
                 cursor="pointer"
-                backgroundColor="#171b24"
+                backgroundColor={theme.surfaceRaised}
                 borderWidth={1}
-                borderColor="#283247"
+                borderColor={theme.border}
                 hoverStyle={{ backgroundColor: '#1f2533', borderColor: '#D4AF37' }}
                 pressStyle={{ opacity: 0.8 }}
                 paddingHorizontal={14}
@@ -630,8 +641,8 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                   setActiveModal('new_survey');
                 }}
               >
-                <LuPlus size={14} color="#D4AF37" strokeWidth={2.5} />
-                <Text color="#ffffff" fontSize={12} fontWeight="700">
+                <LuPlus size={14} color={theme.accent} strokeWidth={2.5} />
+                <Text color={theme.text} fontSize={12} fontWeight="700">
                   New Survey
                 </Text>
               </XStack>
@@ -639,9 +650,9 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
               {/* Button: Save Draft */}
               <XStack
                 cursor="pointer"
-                backgroundColor="#171b24"
+                backgroundColor={theme.surfaceRaised}
                 borderWidth={1}
-                borderColor="#283247"
+                borderColor={theme.border}
                 hoverStyle={{ backgroundColor: '#1f2533' }}
                 pressStyle={{ opacity: 0.8 }}
                 paddingHorizontal={14}
@@ -651,8 +662,8 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                 gap={6}
                 onPress={handleSaveDraft}
               >
-                <LuSave size={14} color="#9ca3af" />
-                <Text color="#d1d5db" fontSize={12} fontWeight="700">
+                <LuSave size={14} color={theme.textMuted} />
+                <Text color={theme.textSecondary} fontSize={12} fontWeight="700">
                   Save Draft
                 </Text>
               </XStack>
@@ -681,7 +692,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
               {/* Button: Publish Version */}
               <XStack
                 cursor="pointer"
-                backgroundColor="#D4AF37"
+                backgroundColor={theme.accent}
                 hoverStyle={{ opacity: 0.9 }}
                 pressStyle={{ opacity: 0.8 }}
                 paddingHorizontal={16}
@@ -691,8 +702,8 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                 gap={6}
                 onPress={handleOpenPublishModal}
               >
-                <LuSparkles size={14} color="#0b0d11" strokeWidth={2.5} />
-                <Text color="#0b0d11" fontSize={13} fontWeight="800">
+                <LuSparkles size={14} color={theme.accentForeground} strokeWidth={2.5} />
+                <Text color={theme.accentForeground} fontSize={13} fontWeight="800">
                   Publish Version
                 </Text>
               </XStack>
@@ -701,9 +712,9 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
 
           {/* Active Survey Metadata Bar */}
           <XStack
-            backgroundColor="#0b0d11"
+            backgroundColor={theme.bg}
             borderWidth={1}
-            borderColor="#1f2533"
+            borderColor={theme.border}
             borderRadius={8}
             paddingHorizontal={14}
             paddingVertical={10}
@@ -715,10 +726,10 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
             <XStack alignItems="center" gap={12} flexWrap="wrap">
               {/* Slug */}
               <XStack alignItems="center" gap={6}>
-                <Text color="#6b7280" fontSize={11} fontWeight="700">
+                <Text color={theme.textMuted} fontSize={11} fontWeight="700">
                   ROUTE:
                 </Text>
-                <Text color="#D4AF37" fontSize={12} fontWeight="700" style={styles.monospaceText}>
+                <Text color={theme.accent} fontSize={12} fontWeight="700" style={styles.monospaceText}>
                   /{currentSurvey.slug}
                 </Text>
               </XStack>
@@ -727,8 +738,8 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
 
               {/* Category */}
               <XStack alignItems="center" gap={6}>
-                <LuTag size={12} color="#9ca3af" />
-                <Text color="#9ca3af" fontSize={12}>
+                <LuTag size={12} color={theme.textMuted} />
+                <Text color={theme.textMuted} fontSize={12}>
                   {currentSurvey.category}
                 </Text>
               </XStack>
@@ -759,8 +770,8 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
 
               {/* Default Language */}
               <XStack alignItems="center" gap={5}>
-                <LuGlobe size={12} color="#9ca3af" />
-                <Text color="#9ca3af" fontSize={12} fontWeight="700" textTransform="uppercase">
+                <LuGlobe size={12} color={theme.textMuted} />
+                <Text color={theme.textMuted} fontSize={12} fontWeight="700" textTransform="uppercase">
                   {currentSurvey.defaultLanguage}
                 </Text>
               </XStack>
@@ -769,8 +780,8 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
 
               {/* Target Mudras */}
               <XStack alignItems="center" gap={5}>
-                <LuCoins size={12} color="#D4AF37" />
-                <Text color="#D4AF37" fontSize={12} fontWeight="800">
+                <LuCoins size={12} color={theme.accent} />
+                <Text color={theme.accent} fontSize={12} fontWeight="800">
                   +{currentSurvey.totalMudrasTarget} Mudras
                 </Text>
               </XStack>
@@ -817,9 +828,9 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
         {/* 3. SURVEY COVER PAGE STUDIO                              */}
         {/* ======================================================== */}
         <YStack
-          backgroundColor="#12151c"
+          backgroundColor={theme.surface}
           borderWidth={1}
-          borderColor="#1f2533"
+          borderColor={theme.border}
           borderRadius={12}
           padding={20}
           gap={18}
@@ -827,14 +838,14 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
           {/* Header */}
           <XStack justifyContent="space-between" alignItems="center">
             <XStack alignItems="center" gap={10}>
-              <XStack backgroundColor="rgba(212, 175, 55, 0.15)" padding={8} borderRadius={8}>
-                <LuSparkles size={18} color="#D4AF37" />
+              <XStack backgroundColor={theme.accentSubtle} padding={8} borderRadius={8}>
+                <LuSparkles size={18} color={theme.accent} />
               </XStack>
               <YStack>
-                <Text color="#ffffff" fontSize={16} fontWeight="800">
+                <Text color={theme.text} fontSize={16} fontWeight="800">
                   Survey Cover Page Studio
                 </Text>
-                <Text color="#9ca3af" fontSize={12}>
+                <Text color={theme.textMuted} fontSize={12}>
                   Configure the luxury welcome screen, kicker badge, and reward statement presented before question flow.
                 </Text>
               </YStack>
@@ -847,7 +858,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
             <YStack flex={1} minWidth={320} gap={14}>
               {/* Kicker Badge */}
               <YStack gap={6}>
-                <Text color="#d1d5db" fontSize={12} fontWeight="700">
+                <Text color={theme.textSecondary} fontSize={12} fontWeight="700">
                   Kicker Badge Text
                 </Text>
                 <TextInput
@@ -861,7 +872,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
 
               {/* Headline Title */}
               <YStack gap={6}>
-                <Text color="#d1d5db" fontSize={12} fontWeight="700">
+                <Text color={theme.textSecondary} fontSize={12} fontWeight="700">
                   Headline Title
                 </Text>
                 <TextInput
@@ -875,7 +886,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
 
               {/* Subtitle / Description */}
               <YStack gap={6}>
-                <Text color="#d1d5db" fontSize={12} fontWeight="700">
+                <Text color={theme.textSecondary} fontSize={12} fontWeight="700">
                   Subtitle Description
                 </Text>
                 <TextInput
@@ -891,7 +902,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
 
               {/* Estimated Duration */}
               <YStack gap={6}>
-                <Text color="#d1d5db" fontSize={12} fontWeight="700">
+                <Text color={theme.textSecondary} fontSize={12} fontWeight="700">
                   Estimated Duration Pill
                 </Text>
                 <TextInput
@@ -908,8 +919,8 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
             <YStack
               flex={1}
               minWidth={320}
-              backgroundColor="#0b0d11"
-              borderColor="#2b3242"
+              backgroundColor={theme.bg}
+              borderColor={theme.border}
               borderWidth={1}
               borderRadius={12}
               padding={20}
@@ -927,7 +938,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                 paddingVertical={3}
                 borderRadius={4}
               >
-                <Text color="#9ca3af" fontSize={10} fontWeight="800" letterSpacing={0.5}>
+                <Text color={theme.textMuted} fontSize={10} fontWeight="800" letterSpacing={0.5}>
                   LIVE COVER PREVIEW
                 </Text>
               </XStack>
@@ -936,7 +947,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
               <YStack
                 width="100%"
                 maxWidth={380}
-                backgroundColor="#12151c"
+                backgroundColor={theme.surface}
                 borderWidth={1}
                 borderColor="rgba(212, 175, 55, 0.4)"
                 borderRadius={14}
@@ -953,18 +964,18 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                   width={44}
                   height={44}
                   borderRadius={22}
-                  backgroundColor="rgba(212, 175, 55, 0.15)"
-                  borderColor="#D4AF37"
+                  backgroundColor={theme.accentSubtle}
+                  borderColor={theme.accent}
                   borderWidth={1}
                   justifyContent="center"
                   alignItems="center"
                 >
-                  <LuSparkles size={20} color="#D4AF37" />
+                  <LuSparkles size={20} color={theme.accent} />
                 </XStack>
 
                 {/* Kicker */}
                 <XStack
-                  backgroundColor="rgba(212, 175, 55, 0.15)"
+                  backgroundColor={theme.accentSubtle}
                   borderColor="rgba(212, 175, 55, 0.3)"
                   borderWidth={1}
                   paddingHorizontal={10}
@@ -972,7 +983,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                   borderRadius={12}
                 >
                   <Text
-                    color="#D4AF37"
+                    color={theme.accent}
                     fontSize={11}
                     fontWeight="800"
                     letterSpacing={0.8}
@@ -984,7 +995,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
 
                 {/* Title */}
                 <Text
-                  color="#ffffff"
+                  color={theme.text}
                   fontSize={18}
                   fontWeight="800"
                   textAlign="center"
@@ -995,7 +1006,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
 
                 {/* Subtitle */}
                 <Text
-                  color="#9ca3af"
+                  color={theme.textMuted}
                   fontSize={12}
                   textAlign="center"
                   lineHeight={18}
@@ -1006,8 +1017,8 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                 {/* Duration & Mudras Pill */}
                 <XStack gap={10} alignItems="center" marginTop={4}>
                   <XStack
-                    backgroundColor="#0b0d11"
-                    borderColor="#1f2533"
+                    backgroundColor={theme.bg}
+                    borderColor={theme.border}
                     borderWidth={1}
                     paddingHorizontal={10}
                     paddingVertical={5}
@@ -1015,14 +1026,14 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                     alignItems="center"
                     gap={6}
                   >
-                    <LuClock size={12} color="#9ca3af" />
-                    <Text color="#9ca3af" fontSize={11} fontWeight="600">
+                    <LuClock size={12} color={theme.textMuted} />
+                    <Text color={theme.textMuted} fontSize={11} fontWeight="600">
                       {currentSurvey.coverPage.durationEstimate || '2 mins'}
                     </Text>
                   </XStack>
 
                   <XStack
-                    backgroundColor="rgba(212, 175, 55, 0.15)"
+                    backgroundColor={theme.accentSubtle}
                     borderColor="rgba(212, 175, 55, 0.4)"
                     borderWidth={1}
                     paddingHorizontal={10}
@@ -1031,8 +1042,8 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                     alignItems="center"
                     gap={5}
                   >
-                    <LuCoins size={12} color="#D4AF37" />
-                    <Text color="#D4AF37" fontSize={11} fontWeight="800">
+                    <LuCoins size={12} color={theme.accent} />
+                    <Text color={theme.accent} fontSize={11} fontWeight="800">
                       +{currentSurvey.totalMudrasTarget} Mudras
                     </Text>
                   </XStack>
@@ -1040,7 +1051,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
 
                 {/* Simulated Start Button */}
                 <XStack
-                  backgroundColor="#D4AF37"
+                  backgroundColor={theme.accent}
                   width="100%"
                   paddingVertical={10}
                   borderRadius={8}
@@ -1049,10 +1060,10 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                   gap={6}
                   marginTop={6}
                 >
-                  <Text color="#0b0d11" fontSize={13} fontWeight="800">
+                  <Text color={theme.accentForeground} fontSize={13} fontWeight="800">
                     Begin Royal Discovery
                   </Text>
-                  <LuArrowRight size={14} color="#0b0d11" strokeWidth={2.5} />
+                  <LuArrowRight size={14} color={theme.accentForeground} strokeWidth={2.5} />
                 </XStack>
               </YStack>
             </YStack>
@@ -1063,9 +1074,9 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
         {/* 4. STEP SEQUENCER (SURVEY QUESTION WORKFLOW)             */}
         {/* ======================================================== */}
         <YStack
-          backgroundColor="#12151c"
+          backgroundColor={theme.surface}
           borderWidth={1}
-          borderColor="#1f2533"
+          borderColor={theme.border}
           borderRadius={12}
           padding={20}
           gap={18}
@@ -1078,7 +1089,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
               </XStack>
               <YStack>
                 <XStack alignItems="center" gap={8}>
-                  <Text color="#ffffff" fontSize={16} fontWeight="800">
+                  <Text color={theme.text} fontSize={16} fontWeight="800">
                     Step Sequence Workflow
                   </Text>
                   <XStack
@@ -1087,12 +1098,12 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                     paddingVertical={2}
                     borderRadius={10}
                   >
-                    <Text color="#d1d5db" fontSize={11} fontWeight="800">
+                    <Text color={theme.textSecondary} fontSize={11} fontWeight="800">
                       {currentSurvey.stepQuestionKeys.length} Steps
                     </Text>
                   </XStack>
                 </XStack>
-                <Text color="#9ca3af" fontSize={12}>
+                <Text color={theme.textMuted} fontSize={12}>
                   Linear step order, pinned question revisions, and upgrade indicators.
                 </Text>
               </YStack>
@@ -1101,8 +1112,8 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
             {/* Add Step Button */}
             <XStack
               cursor="pointer"
-              backgroundColor="#171b24"
-              borderColor="#D4AF37"
+              backgroundColor={theme.surfaceRaised}
+              borderColor={theme.accent}
               borderWidth={1}
               hoverStyle={{ backgroundColor: 'rgba(212, 175, 55, 0.15)' }}
               pressStyle={{ opacity: 0.8 }}
@@ -1117,8 +1128,8 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                 setActiveModal('add_step');
               }}
             >
-              <LuPlus size={14} color="#D4AF37" strokeWidth={2.5} />
-              <Text color="#D4AF37" fontSize={12} fontWeight="800">
+              <LuPlus size={14} color={theme.accent} strokeWidth={2.5} />
+              <Text color={theme.accent} fontSize={12} fontWeight="800">
                 Add Step from Bank
               </Text>
             </XStack>
@@ -1128,19 +1139,19 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
           <YStack gap={12}>
             {currentSurvey.stepQuestionKeys.length === 0 ? (
               <YStack
-                backgroundColor="#0b0d11"
+                backgroundColor={theme.bg}
                 borderWidth={1}
-                borderColor="#1f2533"
+                borderColor={theme.border}
                 borderRadius={10}
                 padding={32}
                 alignItems="center"
                 gap={10}
               >
-                <LuLayers size={28} color="#4b5563" />
-                <Text color="#ffffff" fontSize={14} fontWeight="700">
+                <LuLayers size={28} color={theme.textMuted} />
+                <Text color={theme.text} fontSize={14} fontWeight="700">
                   No Questions Added Yet
                 </Text>
-                <Text color="#9ca3af" fontSize={12}>
+                <Text color={theme.textMuted} fontSize={12}>
                   Add questions from the question bank to assemble this survey workflow.
                 </Text>
               </YStack>
@@ -1161,7 +1172,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                   <YStack
                     key={`${qKey}-${index}`}
                     backgroundColor="#0f1219"
-                    borderColor="#1f2533"
+                    borderColor={theme.border}
                     borderWidth={1}
                     borderRadius={10}
                     padding={16}
@@ -1173,8 +1184,8 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                       <XStack alignItems="center" gap={12} flex={1} minWidth={280}>
                         {/* Step Index Badge */}
                         <XStack
-                          backgroundColor="#171b24"
-                          borderColor="#283247"
+                          backgroundColor={theme.surfaceRaised}
+                          borderColor={theme.border}
                           borderWidth={1}
                           width={32}
                           height={32}
@@ -1182,7 +1193,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                           justifyContent="center"
                           alignItems="center"
                         >
-                          <Text color="#ffffff" fontSize={12} fontWeight="800">
+                          <Text color={theme.text} fontSize={12} fontWeight="800">
                             {index + 1}
                           </Text>
                         </XStack>
@@ -1190,7 +1201,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                         {/* Title & Metadata */}
                         <YStack flex={1} gap={4}>
                           <XStack alignItems="center" gap={8} flexWrap="wrap">
-                            <Text color="#D4AF37" fontSize={12} fontWeight="800" style={styles.monospaceText}>
+                            <Text color={theme.accent} fontSize={12} fontWeight="800" style={styles.monospaceText}>
                               {qKey}
                             </Text>
 
@@ -1211,15 +1222,15 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                             {/* Mudras Tag */}
                             {question && (
                               <XStack
-                                backgroundColor="rgba(212, 175, 55, 0.12)"
+                                backgroundColor={theme.accentSubtle}
                                 paddingHorizontal={6}
                                 paddingVertical={2}
                                 borderRadius={6}
                                 alignItems="center"
                                 gap={4}
                               >
-                                <LuCoins size={11} color="#D4AF37" />
-                                <Text color="#D4AF37" fontSize={10} fontWeight="800">
+                                <LuCoins size={11} color={theme.accent} />
+                                <Text color={theme.accent} fontSize={10} fontWeight="800">
                                   +{question.points}
                                 </Text>
                               </XStack>
@@ -1233,7 +1244,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                                 paddingVertical={2}
                                 borderRadius={6}
                               >
-                                <Text color="#9ca3af" fontSize={10} fontWeight="600">
+                                <Text color={theme.textMuted} fontSize={10} fontWeight="600">
                                   {question.options.length} {question.options[0]?.format === 'image' ? 'Image Tiles' : 'Options'}
                                 </Text>
                               </XStack>
@@ -1241,7 +1252,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                           </XStack>
 
                           {/* Question Headline preview */}
-                          <Text color="#ffffff" fontSize={13} fontWeight="600" numberOfLines={1}>
+                          <Text color={theme.text} fontSize={13} fontWeight="600" numberOfLines={1}>
                             {question?.statements.title.en || '(Custom Question Key)'}
                           </Text>
                         </YStack>
@@ -1251,8 +1262,8 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                       <XStack alignItems="center" gap={10} flexWrap="wrap">
                         {/* Pinned Revision Pill */}
                         <XStack
-                          backgroundColor="#171b24"
-                          borderColor="#283247"
+                          backgroundColor={theme.surfaceRaised}
+                          borderColor={theme.border}
                           borderWidth={1}
                           paddingHorizontal={8}
                           paddingVertical={4}
@@ -1260,8 +1271,8 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                           alignItems="center"
                           gap={5}
                         >
-                          <LuHistory size={11} color="#9ca3af" />
-                          <Text color="#d1d5db" fontSize={11} fontWeight="700" style={styles.monospaceText}>
+                          <LuHistory size={11} color={theme.textMuted} />
+                          <Text color={theme.textSecondary} fontSize={11} fontWeight="700" style={styles.monospaceText}>
                             Rev {pinnedRev}
                           </Text>
                         </XStack>
@@ -1292,7 +1303,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                         {/* Edit Question */}
                         <XStack
                           cursor="pointer"
-                          backgroundColor="#171b24"
+                          backgroundColor={theme.surfaceRaised}
                           hoverStyle={{ backgroundColor: '#1f2533' }}
                           paddingHorizontal={10}
                           paddingVertical={6}
@@ -1301,8 +1312,8 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                           gap={5}
                           onPress={() => onEditQuestion?.(qKey)}
                         >
-                          <LuPencil size={12} color="#9ca3af" />
-                          <Text color="#9ca3af" fontSize={11} fontWeight="700">
+                          <LuPencil size={12} color={theme.textMuted} />
+                          <Text color={theme.textMuted} fontSize={11} fontWeight="700">
                             Edit
                           </Text>
                         </XStack>
@@ -1313,20 +1324,20 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                           <XStack
                             cursor={index === 0 ? 'default' : 'pointer'}
                             opacity={index === 0 ? 0.3 : 1}
-                            backgroundColor="#171b24"
+                            backgroundColor={theme.surfaceRaised}
                             hoverStyle={index !== 0 ? { backgroundColor: '#1f2533' } : undefined}
                             padding={6}
                             borderRadius={6}
                             onPress={() => handleMoveStepUp(index)}
                           >
-                            <LuArrowUp size={14} color="#d1d5db" />
+                            <LuArrowUp size={14} color={theme.textSecondary} />
                           </XStack>
 
                           {/* Move Down */}
                           <XStack
                             cursor={index === currentSurvey.stepQuestionKeys.length - 1 ? 'default' : 'pointer'}
                             opacity={index === currentSurvey.stepQuestionKeys.length - 1 ? 0.3 : 1}
-                            backgroundColor="#171b24"
+                            backgroundColor={theme.surfaceRaised}
                             hoverStyle={
                               index !== currentSurvey.stepQuestionKeys.length - 1
                                 ? { backgroundColor: '#1f2533' }
@@ -1336,7 +1347,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                             borderRadius={6}
                             onPress={() => handleMoveStepDown(index)}
                           >
-                            <LuArrowDown size={14} color="#d1d5db" />
+                            <LuArrowDown size={14} color={theme.textSecondary} />
                           </XStack>
 
                           {/* Remove Step */}
@@ -1362,14 +1373,14 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
             <XStack
               cursor="pointer"
               borderWidth={1}
-              borderColor="#283247"
+              borderColor={theme.border}
               borderStyle="dashed"
               borderRadius={10}
               paddingVertical={14}
               alignItems="center"
               justifyContent="center"
               gap={8}
-              backgroundColor="#0b0d11"
+              backgroundColor={theme.bg}
               hoverStyle={{ borderColor: '#D4AF37', backgroundColor: 'rgba(212, 175, 55, 0.05)' }}
               onPress={() => {
                 setStepSearchQuery('');
@@ -1377,8 +1388,8 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                 setActiveModal('add_step');
               }}
             >
-              <LuPlus size={16} color="#D4AF37" strokeWidth={2.5} />
-              <Text color="#D4AF37" fontSize={13} fontWeight="700">
+              <LuPlus size={16} color={theme.accent} strokeWidth={2.5} />
+              <Text color={theme.accent} fontSize={13} fontWeight="700">
                 Add Step from Question Bank
               </Text>
             </XStack>
@@ -1393,7 +1404,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
             <YStack
               backgroundColor="#161a24"
               borderWidth={1}
-              borderColor="#2b3242"
+              borderColor={theme.border}
               borderRadius={14}
               padding={24}
               maxWidth={580}
@@ -1407,20 +1418,20 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
               {/* Header */}
               <XStack justifyContent="space-between" alignItems="center">
                 <XStack alignItems="center" gap={10}>
-                  <XStack backgroundColor="rgba(212, 175, 55, 0.15)" padding={8} borderRadius={8}>
-                    <LuFileCheck size={20} color="#D4AF37" />
+                  <XStack backgroundColor={theme.accentSubtle} padding={8} borderRadius={8}>
+                    <LuFileCheck size={20} color={theme.accent} />
                   </XStack>
                   <YStack>
-                    <Text color="#ffffff" fontSize={18} fontWeight="800">
+                    <Text color={theme.text} fontSize={18} fontWeight="800">
                       Publish Immutable Snapshot
                     </Text>
-                    <Text color="#9ca3af" fontSize={12}>
+                    <Text color={theme.textMuted} fontSize={12}>
                       Locks current survey schema, step order, and pinned revisions into an immutable version.
                     </Text>
                   </YStack>
                 </XStack>
                 <XStack cursor="pointer" padding={6} onPress={() => setActiveModal(null)}>
-                  <LuX size={18} color="#9ca3af" />
+                  <LuX size={18} color={theme.textMuted} />
                 </XStack>
               </XStack>
 
@@ -1435,7 +1446,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                 alignItems="center"
               >
                 <YStack gap={4}>
-                  <Text color="#6b7280" fontSize={11} fontWeight="700">
+                  <Text color={theme.textMuted} fontSize={11} fontWeight="700">
                     VERSION TRANSITION
                   </Text>
                   <XStack alignItems="center" gap={10}>
@@ -1445,22 +1456,22 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                       paddingVertical={4}
                       borderRadius={6}
                     >
-                      <Text color="#9ca3af" fontSize={13} fontWeight="800" style={styles.monospaceText}>
+                      <Text color={theme.textMuted} fontSize={13} fontWeight="800" style={styles.monospaceText}>
                         v{currentSurvey.latestVersionNumber}
                       </Text>
                     </XStack>
 
-                    <LuArrowRight size={16} color="#D4AF37" strokeWidth={2.5} />
+                    <LuArrowRight size={16} color={theme.accent} strokeWidth={2.5} />
 
                     <XStack
-                      backgroundColor="rgba(212, 175, 55, 0.2)"
-                      borderColor="#D4AF37"
+                      backgroundColor={theme.accentSubtle}
+                      borderColor={theme.accent}
                       borderWidth={1}
                       paddingHorizontal={12}
                       paddingVertical={4}
                       borderRadius={6}
                     >
-                      <Text color="#D4AF37" fontSize={14} fontWeight="900" style={styles.monospaceText}>
+                      <Text color={theme.accent} fontSize={14} fontWeight="900" style={styles.monospaceText}>
                         v{currentSurvey.latestVersionNumber + 1} (Immutable)
                       </Text>
                     </XStack>
@@ -1468,30 +1479,30 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                 </YStack>
 
                 <YStack alignItems="flex-end" gap={2}>
-                  <Text color="#6b7280" fontSize={11} fontWeight="700">
+                  <Text color={theme.textMuted} fontSize={11} fontWeight="700">
                     TARGET SLUG
                   </Text>
-                  <Text color="#ffffff" fontSize={12} fontWeight="800" style={styles.monospaceText}>
+                  <Text color={theme.text} fontSize={12} fontWeight="800" style={styles.monospaceText}>
                     /{currentSurvey.slug}
                   </Text>
                 </YStack>
               </XStack>
 
               {/* Published Snapshot Breakdown */}
-              <YStack backgroundColor="#0b0d11" borderWidth={1} borderColor="#1f2533" borderRadius={8} padding={12} gap={8}>
-                <Text color="#6b7280" fontSize={10} fontWeight="800" letterSpacing={0.5} textTransform="uppercase">
+              <YStack backgroundColor={theme.bg} borderWidth={1} borderColor={theme.border} borderRadius={8} padding={12} gap={8}>
+                <Text color={theme.textMuted} fontSize={10} fontWeight="800" letterSpacing={0.5} textTransform="uppercase">
                   Snapshot Payload Summary
                 </Text>
                 <XStack justifyContent="space-between" alignItems="center">
-                  <Text color="#9ca3af" fontSize={12}>
+                  <Text color={theme.textMuted} fontSize={12}>
                     Total Sequenced Steps:
                   </Text>
-                  <Text color="#ffffff" fontSize={12} fontWeight="700">
+                  <Text color={theme.text} fontSize={12} fontWeight="700">
                     {currentSurvey.stepQuestionKeys.length} Questions
                   </Text>
                 </XStack>
                 <XStack justifyContent="space-between" alignItems="center">
-                  <Text color="#9ca3af" fontSize={12}>
+                  <Text color={theme.textMuted} fontSize={12}>
                     Audience Accessibility:
                   </Text>
                   <Text color="#60a5fa" fontSize={12} fontWeight="700" textTransform="uppercase">
@@ -1499,10 +1510,10 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                   </Text>
                 </XStack>
                 <XStack justifyContent="space-between" alignItems="center">
-                  <Text color="#9ca3af" fontSize={12}>
+                  <Text color={theme.textMuted} fontSize={12}>
                     Total Target Mudras:
                   </Text>
-                  <Text color="#D4AF37" fontSize={12} fontWeight="800">
+                  <Text color={theme.accent} fontSize={12} fontWeight="800">
                     +{currentSurvey.totalMudrasTarget} Mudras
                   </Text>
                 </XStack>
@@ -1511,10 +1522,10 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
               {/* Changelog Input */}
               <YStack gap={8}>
                 <XStack justifyContent="space-between" alignItems="center">
-                  <Text color="#ffffff" fontSize={13} fontWeight="700">
+                  <Text color={theme.text} fontSize={13} fontWeight="700">
                     Release Changelog Note <Text color="#ef4444">*</Text>
                   </Text>
-                  <Text color="#6b7280" fontSize={11}>
+                  <Text color={theme.textMuted} fontSize={11}>
                     Required for audit trail
                   </Text>
                 </XStack>
@@ -1551,14 +1562,14 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                   borderRadius={8}
                   onPress={() => setActiveModal(null)}
                 >
-                  <Text color="#9ca3af" fontSize={13} fontWeight="600">
+                  <Text color={theme.textMuted} fontSize={13} fontWeight="600">
                     Cancel
                   </Text>
                 </XStack>
 
                 <XStack
                   cursor="pointer"
-                  backgroundColor="#D4AF37"
+                  backgroundColor={theme.accent}
                   hoverStyle={{ opacity: 0.9 }}
                   paddingHorizontal={18}
                   paddingVertical={10}
@@ -1567,8 +1578,8 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                   gap={6}
                   onPress={handleConfirmPublish}
                 >
-                  <LuSparkles size={14} color="#0b0d11" strokeWidth={2.5} />
-                  <Text color="#0b0d11" fontSize={13} fontWeight="800">
+                  <LuSparkles size={14} color={theme.accentForeground} strokeWidth={2.5} />
+                  <Text color={theme.accentForeground} fontSize={13} fontWeight="800">
                     Confirm & Publish v{currentSurvey.latestVersionNumber + 1}
                   </Text>
                 </XStack>
@@ -1585,7 +1596,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
             <YStack
               backgroundColor="#161a24"
               borderWidth={1}
-              borderColor="#2b3242"
+              borderColor={theme.border}
               borderRadius={14}
               padding={24}
               maxWidth={760}
@@ -1600,20 +1611,20 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
               {/* Header */}
               <XStack justifyContent="space-between" alignItems="center">
                 <XStack alignItems="center" gap={10}>
-                  <XStack backgroundColor="rgba(212, 175, 55, 0.15)" padding={8} borderRadius={8}>
-                    <LuPlus size={20} color="#D4AF37" />
+                  <XStack backgroundColor={theme.accentSubtle} padding={8} borderRadius={8}>
+                    <LuPlus size={20} color={theme.accent} />
                   </XStack>
                   <YStack>
-                    <Text color="#ffffff" fontSize={18} fontWeight="800">
+                    <Text color={theme.text} fontSize={18} fontWeight="800">
                       Add Question Step from Bank
                     </Text>
-                    <Text color="#9ca3af" fontSize={12}>
+                    <Text color={theme.textMuted} fontSize={12}>
                       Search available atomic questions and append them to this survey workflow.
                     </Text>
                   </YStack>
                 </XStack>
                 <XStack cursor="pointer" padding={6} onPress={() => setActiveModal(null)}>
-                  <LuX size={18} color="#9ca3af" />
+                  <LuX size={18} color={theme.textMuted} />
                 </XStack>
               </XStack>
 
@@ -1621,15 +1632,15 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
               <XStack gap={10} alignItems="center">
                 <XStack
                   flex={1}
-                  backgroundColor="#0b0d11"
+                  backgroundColor={theme.bg}
                   borderWidth={1}
-                  borderColor="#1f2533"
+                  borderColor={theme.border}
                   borderRadius={8}
                   paddingHorizontal={12}
                   alignItems="center"
                   gap={8}
                 >
-                  <LuSearch size={14} color="#9ca3af" />
+                  <LuSearch size={14} color={theme.textMuted} />
                   <TextInput
                     style={styles.searchInput}
                     value={stepSearchQuery}
@@ -1639,7 +1650,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                   />
                   {stepSearchQuery.length > 0 && (
                     <XStack cursor="pointer" onPress={() => setStepSearchQuery('')}>
-                      <LuX size={14} color="#9ca3af" />
+                      <LuX size={14} color={theme.textMuted} />
                     </XStack>
                   )}
                 </XStack>
@@ -1686,7 +1697,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                 <YStack gap={10}>
                   {filteredBankQuestions.length === 0 ? (
                     <YStack padding={32} alignItems="center" gap={8}>
-                      <Text color="#9ca3af" fontSize={13}>
+                      <Text color={theme.textMuted} fontSize={13}>
                         No questions matched your search criteria.
                       </Text>
                     </YStack>
@@ -1698,8 +1709,8 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                       return (
                         <XStack
                           key={q.id}
-                          backgroundColor="#0b0d11"
-                          borderColor="#1f2533"
+                          backgroundColor={theme.bg}
+                          borderColor={theme.border}
                           borderWidth={1}
                           borderRadius={8}
                           padding={12}
@@ -1710,7 +1721,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                         >
                           <YStack flex={1} gap={4}>
                             <XStack alignItems="center" gap={8} flexWrap="wrap">
-                              <Text color="#D4AF37" fontSize={12} fontWeight="800" style={styles.monospaceText}>
+                              <Text color={theme.accent} fontSize={12} fontWeight="800" style={styles.monospaceText}>
                                 {q.questionKey}
                               </Text>
 
@@ -1727,7 +1738,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                                 </Text>
                               </XStack>
 
-                              <Text color="#9ca3af" fontSize={11}>
+                              <Text color={theme.textMuted} fontSize={11}>
                                 Rev {q.revisionNumber}
                               </Text>
 
@@ -1739,14 +1750,14 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                                 alignItems="center"
                                 gap={3}
                               >
-                                <LuCoins size={10} color="#D4AF37" />
-                                <Text color="#D4AF37" fontSize={10} fontWeight="800">
+                                <LuCoins size={10} color={theme.accent} />
+                                <Text color={theme.accent} fontSize={10} fontWeight="800">
                                   +{q.points}
                                 </Text>
                               </XStack>
                             </XStack>
 
-                            <Text color="#ffffff" fontSize={12} fontWeight="600" numberOfLines={1}>
+                            <Text color={theme.text} fontSize={12} fontWeight="600" numberOfLines={1}>
                               {q.statements.title.en}
                             </Text>
                           </YStack>
@@ -1769,7 +1780,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                           ) : (
                             <XStack
                               cursor="pointer"
-                              backgroundColor="#D4AF37"
+                              backgroundColor={theme.accent}
                               hoverStyle={{ opacity: 0.9 }}
                               paddingHorizontal={12}
                               paddingVertical={6}
@@ -1778,8 +1789,8 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                               gap={5}
                               onPress={() => handleAddQuestionToSurvey(q)}
                             >
-                              <LuPlus size={12} color="#0b0d11" strokeWidth={2.5} />
-                              <Text color="#0b0d11" fontSize={11} fontWeight="800">
+                              <LuPlus size={12} color={theme.accentForeground} strokeWidth={2.5} />
+                              <Text color={theme.accentForeground} fontSize={11} fontWeight="800">
                                 Add to Survey
                               </Text>
                             </XStack>
@@ -1802,7 +1813,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                   borderRadius={8}
                   onPress={() => setActiveModal(null)}
                 >
-                  <Text color="#9ca3af" fontSize={12} fontWeight="600">
+                  <Text color={theme.textMuted} fontSize={12} fontWeight="600">
                     Done
                   </Text>
                 </XStack>
@@ -1819,7 +1830,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
             <YStack
               backgroundColor="#161a24"
               borderWidth={1}
-              borderColor="#2b3242"
+              borderColor={theme.border}
               borderRadius={14}
               padding={24}
               maxWidth={580}
@@ -1833,20 +1844,20 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
               {/* Header */}
               <XStack justifyContent="space-between" alignItems="center">
                 <XStack alignItems="center" gap={10}>
-                  <XStack backgroundColor="rgba(212, 175, 55, 0.15)" padding={8} borderRadius={8}>
-                    <LuPlus size={20} color="#D4AF37" />
+                  <XStack backgroundColor={theme.accentSubtle} padding={8} borderRadius={8}>
+                    <LuPlus size={20} color={theme.accent} />
                   </XStack>
                   <YStack>
-                    <Text color="#ffffff" fontSize={18} fontWeight="800">
+                    <Text color={theme.text} fontSize={18} fontWeight="800">
                       Create New Survey
                     </Text>
-                    <Text color="#9ca3af" fontSize={12}>
+                    <Text color={theme.textMuted} fontSize={12}>
                       Register a new versioned survey slug and set default reward rules.
                     </Text>
                   </YStack>
                 </XStack>
                 <XStack cursor="pointer" padding={6} onPress={() => setActiveModal(null)}>
-                  <LuX size={18} color="#9ca3af" />
+                  <LuX size={18} color={theme.textMuted} />
                 </XStack>
               </XStack>
 
@@ -1854,7 +1865,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
               <YStack gap={12}>
                 {/* Slug */}
                 <YStack gap={6}>
-                  <Text color="#ffffff" fontSize={12} fontWeight="700">
+                  <Text color={theme.text} fontSize={12} fontWeight="700">
                     Survey Slug / Route <Text color="#ef4444">*</Text>
                   </Text>
                   <TextInput
@@ -1872,7 +1883,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
 
                 {/* Title */}
                 <YStack gap={6}>
-                  <Text color="#ffffff" fontSize={12} fontWeight="700">
+                  <Text color={theme.text} fontSize={12} fontWeight="700">
                     Survey Title <Text color="#ef4444">*</Text>
                   </Text>
                   <TextInput
@@ -1891,7 +1902,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                 <XStack gap={12} flexWrap="wrap">
                   {/* Category */}
                   <YStack flex={1} minWidth={200} gap={6}>
-                    <Text color="#ffffff" fontSize={12} fontWeight="700">
+                    <Text color={theme.text} fontSize={12} fontWeight="700">
                       Category
                     </Text>
                     <TextInput
@@ -1905,7 +1916,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
 
                   {/* Audience Segmented Control */}
                   <YStack flex={1} minWidth={200} gap={6}>
-                    <Text color="#ffffff" fontSize={12} fontWeight="700">
+                    <Text color={theme.text} fontSize={12} fontWeight="700">
                       Audience Type
                     </Text>
                     <XStack gap={6}>
@@ -1943,7 +1954,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                 {/* Default Language & Target Mudras */}
                 <XStack gap={12} flexWrap="wrap">
                   <YStack flex={1} minWidth={200} gap={6}>
-                    <Text color="#ffffff" fontSize={12} fontWeight="700">
+                    <Text color={theme.text} fontSize={12} fontWeight="700">
                       Default Language
                     </Text>
                     <XStack gap={6}>
@@ -1976,7 +1987,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                   </YStack>
 
                   <YStack flex={1} minWidth={200} gap={6}>
-                    <Text color="#ffffff" fontSize={12} fontWeight="700">
+                    <Text color={theme.text} fontSize={12} fontWeight="700">
                       Target Mudras Reward
                     </Text>
                     <TextInput
@@ -1992,7 +2003,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
 
                 {/* Kicker default */}
                 <YStack gap={6}>
-                  <Text color="#ffffff" fontSize={12} fontWeight="700">
+                  <Text color={theme.text} fontSize={12} fontWeight="700">
                     Cover Kicker
                   </Text>
                   <TextInput
@@ -2026,14 +2037,14 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                   borderRadius={8}
                   onPress={() => setActiveModal(null)}
                 >
-                  <Text color="#9ca3af" fontSize={13} fontWeight="600">
+                  <Text color={theme.textMuted} fontSize={13} fontWeight="600">
                     Cancel
                   </Text>
                 </XStack>
 
                 <XStack
                   cursor="pointer"
-                  backgroundColor="#D4AF37"
+                  backgroundColor={theme.accent}
                   hoverStyle={{ opacity: 0.9 }}
                   paddingHorizontal={18}
                   paddingVertical={10}
@@ -2042,8 +2053,8 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                   gap={6}
                   onPress={handleConfirmCreateSurvey}
                 >
-                  <LuCheck size={14} color="#0b0d11" strokeWidth={2.5} />
-                  <Text color="#0b0d11" fontSize={13} fontWeight="800">
+                  <LuCheck size={14} color={theme.accentForeground} strokeWidth={2.5} />
+                  <Text color={theme.accentForeground} fontSize={13} fontWeight="800">
                     Create Survey
                   </Text>
                 </XStack>

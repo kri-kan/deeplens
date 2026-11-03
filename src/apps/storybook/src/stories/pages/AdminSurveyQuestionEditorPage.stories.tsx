@@ -4,6 +4,7 @@ import {
   AdminSurveyQuestionEditorPage,
   AdminSurveyQuestionEditorPageProps,
 } from '../../components/pages/survey-admin/AdminSurveyQuestionEditorPage';
+import { withFormFactor } from '../utils/FormFactorPreview';
 import { THEME_ARG_TYPES, THEME_ARGS } from '../../utils/storyTheme';
 import { MOCK_ADMIN_QUESTIONS } from '../../components/pages/survey-admin/surveyAdminMocks';
 
@@ -22,8 +23,10 @@ const questionCraftsmanshipLikert = MOCK_ADMIN_QUESTIONS.find(
 const meta: Meta<any> = {
   title: 'Pages/Admin/Survey Framework/2 - Question Studio',
   component: AdminSurveyQuestionEditorPage,
+  decorators: [withFormFactor('desktop', 'Question & Option Studio')],
   args: {
     ...THEME_ARGS,
+    disableSafeArea: false,
     availableQuestionKeys: MOCK_ADMIN_QUESTIONS.map((q) => q.questionKey),
     onSaveQuestion: (question: any) =>
       alert(
@@ -43,12 +46,12 @@ export default meta;
 type Story = StoryObj<typeof AdminSurveyQuestionEditorPage>;
 
 /**
- * 1. Edit Image Tile Question Story
+ * 1. Edit Image Tile Question Story (Desktop)
  * Loads `q_saree_occasion` with 4 luxury options, 4:3 aspect ratio,
  * MinIO sourcing pathways, and multilingual statements in 6 languages.
  */
 export const EditImageTileQuestionStory: Story = {
-  name: '1. Edit Image Tile Question (q_saree_occasion)',
+  name: '1. Edit Image Tile Question (Desktop)',
   args: {
     initialQuestion: questionSareeOccasion,
     isNew: false,
@@ -56,12 +59,26 @@ export const EditImageTileQuestionStory: Story = {
 };
 
 /**
- * 2. Edit Hidden Parameter Question Story
+ * 2. Mobile Responsive Story (390px Viewport)
+ * Compact mobile frame demonstrating stacked studio sections,
+ * responsive option preview, and language selector.
+ */
+export const MobileViewStory: Story = {
+  name: '2. Question Studio (Mobile 390px Frame)',
+  decorators: [withFormFactor('mobile', 'Question Studio - Mobile Viewport')],
+  args: {
+    initialQuestion: questionSareeOccasion,
+    isNew: false,
+  },
+};
+
+/**
+ * 3. Edit Hidden Parameter Question Story
  * Loads `q_order_id_hidden` with URL query param extraction (`orderId`),
  * fallback default values, and zeroed Mudras configuration.
  */
 export const EditHiddenParamQuestionStory: Story = {
-  name: '2. Edit Hidden Parameter Question (q_order_id_hidden)',
+  name: '3. Edit Hidden Parameter Question (q_order_id_hidden)',
   args: {
     initialQuestion: questionOrderIdHidden,
     isNew: false,
@@ -69,12 +86,12 @@ export const EditHiddenParamQuestionStory: Story = {
 };
 
 /**
- * 3. Create New Question Story
+ * 4. Create New Question Story
  * Blank canvas editor initialized with draft state, auto-generated slug,
  * and pristine taxonomy ready for luxury question configuration.
  */
 export const CreateNewQuestionStory: Story = {
-  name: '3. Create New Question (Blank Studio Draft)',
+  name: '4. Create New Question (Blank Studio Draft)',
   args: {
     initialQuestion: null,
     isNew: true,
@@ -82,12 +99,12 @@ export const CreateNewQuestionStory: Story = {
 };
 
 /**
- * 4. Edit Likert Rating Question Story
+ * 5. Edit Likert Rating Question Story
  * Loads `q_craftsmanship_likert` showing the 5-point craftsmanship
  * agreement scale and authenticity criteria statements.
  */
 export const EditLikertRatingQuestionStory: Story = {
-  name: '4. Edit Likert Rating Question (q_craftsmanship_likert)',
+  name: '5. Edit Likert Rating Question (q_craftsmanship_likert)',
   args: {
     initialQuestion: questionCraftsmanshipLikert,
     isNew: false,

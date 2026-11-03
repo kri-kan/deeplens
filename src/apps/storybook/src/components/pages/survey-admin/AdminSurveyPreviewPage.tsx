@@ -1,6 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { TextInput, StyleSheet } from 'react-native';
 import { YStack, XStack, Text, ScrollView } from 'tamagui';
+import { Pressable, Modal } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSurveyAdminTheme, surveyAdminStyles } from './surveyAdminTheme';
+import { useResponsive } from '../../../theme';
 import {
   LuArrowLeft,
   LuSmartphone,
@@ -56,6 +60,7 @@ export interface AdminSurveyPreviewPageProps {
   initialViewport?: 'mobile' | 'tablet' | 'desktop';
   initialLanguage?: SupportedLanguage;
   showInitialReceipt?: boolean;
+  disableSafeArea?: boolean;
 }
 
 export type ViewportMode = 'mobile' | 'tablet' | 'desktop';
@@ -207,7 +212,13 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
   initialViewport = 'mobile',
   initialLanguage = 'en',
   showInitialReceipt = false,
+  disableSafeArea = false,
 }) => {
+  const theme = useSurveyAdminTheme();
+  const { isMobile } = useResponsive();
+  const insets = useSafeAreaInsets();
+  const topInset = disableSafeArea ? 0 : insets.top;
+  const bottomInset = disableSafeArea ? 0 : insets.bottom;
   // 1. Active Survey State
   const [activeSurvey, setActiveSurvey] = useState<AdminSurveyItem>(() => {
     if (initialSurvey) return initialSurvey;
@@ -376,7 +387,7 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
       {/* ========================================================= */}
       <XStack
         height={64}
-        backgroundColor="#12151c"
+        backgroundColor={theme.surface}
         borderBottomWidth={1}
         borderBottomColor="#1f2533"
         alignItems="center"
@@ -393,19 +404,19 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
             cursor="pointer"
             alignItems="center"
             gap={6}
-            backgroundColor="#171b24"
+            backgroundColor={theme.surfaceRaised}
             hoverStyle={{ backgroundColor: '#1f2533', borderColor: '#D4AF37' }}
             pressStyle={{ transform: [{ scale: 0.97 }] }}
             paddingHorizontal={12}
             paddingVertical={8}
             borderRadius={8}
             borderWidth={1}
-            borderColor="#283040"
+            borderColor={theme.border}
             onPress={onBackToBuilder}
             style={{ transition: 'all 0.15s ease' }}
           >
-            <LuArrowLeft size={16} color="#D4AF37" />
-            <Text fontSize={13} fontWeight="600" color="#f3f4f6">
+            <LuArrowLeft size={16} color={theme.accent} />
+            <Text fontSize={13} fontWeight="600" color={theme.text}>
               Back to Builder
             </Text>
           </XStack>
@@ -416,39 +427,39 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
               cursor="pointer"
               alignItems="center"
               gap={10}
-              backgroundColor="#171b24"
+              backgroundColor={theme.surfaceRaised}
               hoverStyle={{ borderColor: '#3b82f6' }}
               paddingHorizontal={14}
               paddingVertical={8}
               borderRadius={8}
               borderWidth={1}
-              borderColor="#283040"
+              borderColor={theme.border}
               onPress={() => setIsSurveyDropdownOpen(!isSurveyDropdownOpen)}
               style={{ transition: 'all 0.15s ease' }}
             >
               <YStack>
                 <XStack alignItems="center" gap={6}>
-                  <Text fontSize={13} fontWeight="700" color="#f9fafb">
+                  <Text fontSize={13} fontWeight="700" color={theme.text}>
                     {activeSurvey.title}
                   </Text>
                   <XStack
-                    backgroundColor="rgba(212, 175, 55, 0.15)"
-                    borderColor="#D4AF37"
+                    backgroundColor={theme.accentSubtle}
+                    borderColor={theme.accent}
                     borderWidth={1}
                     paddingHorizontal={6}
                     paddingVertical={2}
                     borderRadius={4}
                   >
-                    <Text fontSize={10} fontWeight="700" color="#D4AF37">
+                    <Text fontSize={10} fontWeight="700" color={theme.accent}>
                       v{activeSurvey.latestVersionNumber}
                     </Text>
                   </XStack>
                 </XStack>
-                <Text fontSize={11} color="#9ca3af" fontFamily="monospace">
+                <Text fontSize={11} color={theme.textMuted} fontFamily="monospace">
                   /{activeSurvey.slug}
                 </Text>
               </YStack>
-              <LuChevronDown size={14} color="#9ca3af" />
+              <LuChevronDown size={14} color={theme.textMuted} />
             </XStack>
 
             {/* Dropdown Menu */}
@@ -458,8 +469,8 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
                 top={48}
                 left={0}
                 width={320}
-                backgroundColor="#12151c"
-                borderColor="#283040"
+                backgroundColor={theme.surface}
+                borderColor={theme.border}
                 borderWidth={1}
                 borderRadius={10}
                 padding={6}
@@ -469,7 +480,7 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
                   boxShadow: '0 12px 36px rgba(0,0,0,0.8)',
                 }}
               >
-                <Text fontSize={11} fontWeight="700" color="#6b7280" paddingHorizontal={10} paddingVertical={4}>
+                <Text fontSize={11} fontWeight="700" color={theme.textMuted} paddingHorizontal={10} paddingVertical={4}>
                   SWITCH SURVEY TO PREVIEW
                 </Text>
                 {allSurveys.map((s) => (
@@ -493,15 +504,15 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
                       >
                         {s.title}
                       </Text>
-                      <Text fontSize={11} color="#9ca3af" fontFamily="monospace">
+                      <Text fontSize={11} color={theme.textMuted} fontFamily="monospace">
                         /{s.slug}
                       </Text>
                     </YStack>
                     <XStack alignItems="center" gap={6}>
-                      <Text fontSize={10} color="#9ca3af">
+                      <Text fontSize={10} color={theme.textMuted}>
                         v{s.latestVersionNumber}
                       </Text>
-                      {s.id === activeSurvey.id && <LuCheck size={14} color="#D4AF37" />}
+                      {s.id === activeSurvey.id && <LuCheck size={14} color={theme.accent} />}
                     </XStack>
                   </XStack>
                 ))}
@@ -513,11 +524,11 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
         {/* Center: Responsive Viewport Toggle */}
         <XStack
           alignItems="center"
-          backgroundColor="#171b24"
+          backgroundColor={theme.surfaceRaised}
           borderRadius={10}
           padding={4}
           borderWidth={1}
-          borderColor="#283040"
+          borderColor={theme.border}
           gap={2}
         >
           <XStack
@@ -595,23 +606,23 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
               cursor="pointer"
               alignItems="center"
               gap={6}
-              backgroundColor="#171b24"
+              backgroundColor={theme.surfaceRaised}
               hoverStyle={{ borderColor: '#D4AF37' }}
               paddingHorizontal={12}
               paddingVertical={8}
               borderRadius={8}
               borderWidth={1}
-              borderColor="#283040"
+              borderColor={theme.border}
               onPress={() => setIsLanguageDropdownOpen(!isLanguageDropdownOpen)}
               style={{ transition: 'all 0.15s ease' }}
             >
               <Text fontSize={14}>
                 {SUPPORTED_LANGUAGES.find((l) => l.code === selectedLanguage)?.flag || '🌐'}
               </Text>
-              <Text fontSize={12} fontWeight="700" color="#f3f4f6">
+              <Text fontSize={12} fontWeight="700" color={theme.text}>
                 {SUPPORTED_LANGUAGES.find((l) => l.code === selectedLanguage)?.label}
               </Text>
-              <LuChevronDown size={14} color="#9ca3af" />
+              <LuChevronDown size={14} color={theme.textMuted} />
             </XStack>
 
             {isLanguageDropdownOpen && (
@@ -620,8 +631,8 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
                 top={48}
                 right={0}
                 width={220}
-                backgroundColor="#12151c"
-                borderColor="#283040"
+                backgroundColor={theme.surface}
+                borderColor={theme.border}
                 borderWidth={1}
                 borderRadius={10}
                 padding={6}
@@ -631,7 +642,7 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
                   boxShadow: '0 12px 36px rgba(0,0,0,0.8)',
                 }}
               >
-                <Text fontSize={11} fontWeight="700" color="#6b7280" paddingHorizontal={8} paddingVertical={4}>
+                <Text fontSize={11} fontWeight="700" color={theme.textMuted} paddingHorizontal={8} paddingVertical={4}>
                   SELECT PREVIEW LANGUAGE
                 </Text>
                 {SUPPORTED_LANGUAGES.map((lang) => (
@@ -660,7 +671,7 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
                         {lang.label}
                       </Text>
                     </XStack>
-                    {lang.code === selectedLanguage && <LuCheck size={14} color="#D4AF37" />}
+                    {lang.code === selectedLanguage && <LuCheck size={14} color={theme.accent} />}
                   </XStack>
                 ))}
               </YStack>
@@ -672,14 +683,14 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
             cursor="pointer"
             alignItems="center"
             gap={6}
-            backgroundColor="#171b24"
+            backgroundColor={theme.surfaceRaised}
             hoverStyle={{ backgroundColor: '#1f2533', borderColor: '#ef4444' }}
             pressStyle={{ transform: [{ scale: 0.96 }] }}
             paddingHorizontal={12}
             paddingVertical={8}
             borderRadius={8}
             borderWidth={1}
-            borderColor="#283040"
+            borderColor={theme.border}
             onPress={handleResetPreview}
             style={{ transition: 'all 0.15s ease' }}
           >
@@ -744,7 +755,7 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
               backgroundColor="#0e121a"
               borderRadius={44}
               borderWidth={4}
-              borderColor="#2b3242"
+              borderColor={theme.border}
               position="relative"
               overflow="hidden"
               style={{
@@ -761,7 +772,7 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
                 backgroundColor="#0e121a"
                 zIndex={10}
               >
-                <Text fontSize={12} fontWeight="700" color="#ffffff" letterSpacing={0.2}>
+                <Text fontSize={12} fontWeight="700" color={theme.text} letterSpacing={0.2}>
                   9:41
                 </Text>
                 {/* Dynamic Island / Notch Pill */}
@@ -776,9 +787,9 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
                   <XStack width={10} height={10} borderRadius={5} backgroundColor="#10b981" />
                 </XStack>
                 <XStack alignItems="center" gap={6}>
-                  <LuSignal size={12} color="#ffffff" />
-                  <LuWifi size={12} color="#ffffff" />
-                  <LuBatteryMedium size={14} color="#ffffff" />
+                  <LuSignal size={12} color={theme.text} />
+                  <LuWifi size={12} color={theme.text} />
+                  <LuBatteryMedium size={14} color={theme.text} />
                 </XStack>
               </XStack>
 
@@ -851,7 +862,7 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
               backgroundColor="#0e121a"
               borderRadius={16}
               borderWidth={1}
-              borderColor="#1f2533"
+              borderColor={theme.border}
               position="relative"
               overflow="hidden"
               style={{
@@ -880,7 +891,7 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
                 <XStack
                   flex={1}
                   height={26}
-                  backgroundColor="#0b0d11"
+                  backgroundColor={theme.bg}
                   borderRadius={6}
                   paddingHorizontal={10}
                   alignItems="center"
@@ -889,9 +900,9 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
                   borderColor="#1e2430"
                 >
                   <LuShield size={12} color="#10b981" />
-                  <Text fontSize={11} color="#9ca3af" fontFamily="monospace" numberOfLines={1}>
+                  <Text fontSize={11} color={theme.textMuted} fontFamily="monospace" numberOfLines={1}>
                     https://vayyari.com/surveys/{activeSurvey.slug}
-                    <Text color="#D4AF37">{urlQueryString}</Text>
+                    <Text color={theme.accent}>{urlQueryString}</Text>
                   </Text>
                 </XStack>
 
@@ -963,7 +974,7 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
                       style={{ boxShadow: '0 0 8px #10b981' }}
                     />
                   </XStack>
-                  <Text fontSize={11} color="#9ca3af" lineHeight={15}>
+                  <Text fontSize={11} color={theme.textMuted} lineHeight={15}>
                     Submissions dispatched here carry <Text color="#10b981" fontWeight="700">isTest: true</Text> and do NOT mutate real customer wallets, order tracking, or live analytics.
                   </Text>
                 </YStack>
@@ -971,10 +982,10 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
                 {/* SECTION 1: Customer Persona Simulator */}
                 <YStack gap={10}>
                   <XStack alignItems="center" justifyContent="space-between">
-                    <Text fontSize={12} fontWeight="800" color="#f3f4f6" textTransform="uppercase" letterSpacing={0.5}>
+                    <Text fontSize={12} fontWeight="800" color={theme.text} textTransform="uppercase" letterSpacing={0.5}>
                       Customer Persona Simulator
                     </Text>
-                    <LuUser size={14} color="#9ca3af" />
+                    <LuUser size={14} color={theme.textMuted} />
                   </XStack>
 
                   <YStack gap={6}>
@@ -1011,16 +1022,16 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
                                 </Text>
                               </XStack>
                             </XStack>
-                            <Text fontSize={11} color="#9ca3af" fontFamily="monospace">
+                            <Text fontSize={11} color={theme.textMuted} fontFamily="monospace">
                               FP: {p.virtualUserId}
                             </Text>
                             {p.phone && (
-                              <Text fontSize={10} color="#6b7280">
+                              <Text fontSize={10} color={theme.textMuted}>
                                 Phone: {p.phone}
                               </Text>
                             )}
                           </YStack>
-                          {isSelected && <LuCheck size={16} color="#D4AF37" />}
+                          {isSelected && <LuCheck size={16} color={theme.accent} />}
                         </XStack>
                       );
                     })}
@@ -1030,12 +1041,12 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
                 {/* SECTION 2: Dynamic URI Query Parameter Injector */}
                 <YStack gap={10}>
                   <XStack alignItems="center" justifyContent="space-between">
-                    <Text fontSize={12} fontWeight="800" color="#f3f4f6" textTransform="uppercase" letterSpacing={0.5}>
+                    <Text fontSize={12} fontWeight="800" color={theme.text} textTransform="uppercase" letterSpacing={0.5}>
                       URI Query Param Injector
                     </Text>
-                    <LuSlidersHorizontal size={14} color="#9ca3af" />
+                    <LuSlidersHorizontal size={14} color={theme.textMuted} />
                   </XStack>
-                  <Text fontSize={11} color="#9ca3af">
+                  <Text fontSize={11} color={theme.textMuted}>
                     Test auto-capture of hidden parameters from checkout links or marketing tags.
                   </Text>
 
@@ -1044,8 +1055,8 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
                     {Object.entries(queryParams).map(([key, val]) => (
                       <XStack
                         key={key}
-                        backgroundColor="#161b26"
-                        borderColor="#222938"
+                        backgroundColor={theme.surface}
+                        borderColor={theme.border}
                         borderWidth={1}
                         borderRadius={8}
                         paddingHorizontal={10}
@@ -1105,7 +1116,7 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
                         justifyContent="center"
                         onPress={handleAddQueryParam}
                       >
-                        <LuPlus size={14} color="#ffffff" />
+                        <LuPlus size={14} color={theme.text} />
                       </XStack>
                     </XStack>
                   </YStack>
@@ -1157,17 +1168,17 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
                                 </Text>
                               </XStack>
                             </XStack>
-                            <Text fontSize={10} color="#9ca3af">
+                            <Text fontSize={10} color={theme.textMuted}>
                               Source Param: <Text color="#93c5fd" fontFamily="monospace">?{boundKey}</Text>
                             </Text>
-                            <Text fontSize={10} color="#d1d5db" fontFamily="monospace">
+                            <Text fontSize={10} color={theme.textSecondary} fontFamily="monospace">
                               Injected Value: "{isMapped ? paramVal : hq.hiddenConfig?.defaultValue || 'NONE'}"
                             </Text>
                           </YStack>
                         );
                       })
                     ) : (
-                      <Text fontSize={11} color="#9ca3af">
+                      <Text fontSize={11} color={theme.textMuted}>
                         No hidden questions configured in current survey draft.
                       </Text>
                     )}
@@ -1177,16 +1188,16 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
                 {/* SECTION 3: Live Answers Inspector */}
                 <YStack gap={8}>
                   <XStack alignItems="center" justifyContent="space-between">
-                    <Text fontSize={12} fontWeight="800" color="#f3f4f6" textTransform="uppercase" letterSpacing={0.5}>
+                    <Text fontSize={12} fontWeight="800" color={theme.text} textTransform="uppercase" letterSpacing={0.5}>
                       Live Answers Captured ({Object.keys(liveAnswers).length})
                     </Text>
                     <XStack
-                      backgroundColor="rgba(212, 175, 55, 0.15)"
+                      backgroundColor={theme.accentSubtle}
                       paddingHorizontal={6}
                       paddingVertical={2}
                       borderRadius={4}
                     >
-                      <Text fontSize={10} fontWeight="700" color="#D4AF37">
+                      <Text fontSize={10} fontWeight="700" color={theme.accent}>
                         +{Object.keys(liveAnswers).length * (activeSurvey.pointsPerQuestion || 175)} Mudras
                       </Text>
                     </XStack>
@@ -1194,8 +1205,8 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
 
                   {Object.keys(liveAnswers).length > 0 ? (
                     <YStack
-                      backgroundColor="#161b26"
-                      borderColor="#222938"
+                      backgroundColor={theme.surface}
+                      borderColor={theme.border}
                       borderWidth={1}
                       borderRadius={8}
                       padding={10}
@@ -1203,10 +1214,10 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
                     >
                       {Object.entries(liveAnswers).map(([k, v]) => (
                         <XStack key={k} justifyContent="space-between" alignItems="center">
-                          <Text fontSize={11} color="#9ca3af" fontFamily="monospace">
+                          <Text fontSize={11} color={theme.textMuted} fontFamily="monospace">
                             {k}:
                           </Text>
-                          <Text fontSize={11} fontWeight="600" color="#f9fafb" fontFamily="monospace">
+                          <Text fontSize={11} fontWeight="600" color={theme.text} fontFamily="monospace">
                             {Array.isArray(v) ? `[${v.join(', ')}]` : String(v)}
                           </Text>
                         </XStack>
@@ -1214,14 +1225,14 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
                     </YStack>
                   ) : (
                     <YStack
-                      backgroundColor="#161b26"
-                      borderColor="#222938"
+                      backgroundColor={theme.surface}
+                      borderColor={theme.border}
                       borderWidth={1}
                       borderRadius={8}
                       padding={12}
                       alignItems="center"
                     >
-                      <Text fontSize={11} color="#6b7280" textAlign="center">
+                      <Text fontSize={11} color={theme.textMuted} textAlign="center">
                         Answers will populate in real-time as you click through steps in the center canvas.
                       </Text>
                     </YStack>
@@ -1232,7 +1243,7 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
                 <YStack gap={8} marginTop={6}>
                   <XStack
                     cursor="pointer"
-                    backgroundColor="#D4AF37"
+                    backgroundColor={theme.accent}
                     hoverStyle={{ backgroundColor: '#e6be44', transform: [{ scale: 1.01 }] }}
                     pressStyle={{ transform: [{ scale: 0.98 }] }}
                     borderRadius={10}
@@ -1247,13 +1258,13 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
                       transition: 'all 0.15s ease',
                     }}
                   >
-                    <LuSend size={16} color="#0b0d11" />
-                    <Text fontSize={13} fontWeight="800" color="#0b0d11" letterSpacing={0.5}>
+                    <LuSend size={16} color={theme.accentForeground} />
+                    <Text fontSize={13} fontWeight="800" color={theme.accentForeground} letterSpacing={0.5}>
                       DISPATCH SANDBOX TEST SUBMISSION
                     </Text>
                   </XStack>
 
-                  <Text fontSize={10} color="#6b7280" textAlign="center">
+                  <Text fontSize={10} color={theme.textMuted} textAlign="center">
                     Simulates instant backend ingestion without customer wallet side-effects.
                   </Text>
                 </YStack>
@@ -1285,7 +1296,7 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
             backgroundColor="#121620"
             borderRadius={20}
             borderWidth={1}
-            borderColor="#D4AF37"
+            borderColor={theme.accent}
             overflow="hidden"
             style={{
               boxShadow: '0 24px 60px rgba(0, 0, 0, 0.9), 0 0 30px rgba(212, 175, 55, 0.2)',
@@ -1303,7 +1314,7 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
             >
               <XStack alignItems="center" gap={8}>
                 <LuShield size={18} color="#10b981" />
-                <Text fontSize={14} fontWeight="800" color="#f9fafb" letterSpacing={0.5}>
+                <Text fontSize={14} fontWeight="800" color={theme.text} letterSpacing={0.5}>
                   SANDBOX SUBMISSION RECEIPT
                 </Text>
               </XStack>
@@ -1314,7 +1325,7 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
                 hoverStyle={{ backgroundColor: 'rgba(255,255,255,0.1)' }}
                 onPress={() => setReceiptResult(null)}
               >
-                <LuX size={16} color="#9ca3af" />
+                <LuX size={16} color={theme.textMuted} />
               </XStack>
             </XStack>
 
@@ -1338,7 +1349,7 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
                   alignItems="center"
                   justifyContent="center"
                 >
-                  <LuCheck size={20} color="#0b0d11" />
+                  <LuCheck size={20} color={theme.accentForeground} />
                 </XStack>
                 <YStack flex={1}>
                   <Text fontSize={14} fontWeight="800" color="#10b981">
@@ -1353,32 +1364,32 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
               {/* Receipt Details Card */}
               <YStack
                 backgroundColor="#0d1017"
-                borderColor="#1f2533"
+                borderColor={theme.border}
                 borderWidth={1}
                 borderRadius={12}
                 padding={14}
                 gap={10}
               >
                 <XStack justifyContent="space-between" alignItems="center">
-                  <Text fontSize={12} color="#9ca3af">
+                  <Text fontSize={12} color={theme.textMuted}>
                     Response ID:
                   </Text>
-                  <Text fontSize={12} fontWeight="700" color="#D4AF37" fontFamily="monospace">
+                  <Text fontSize={12} fontWeight="700" color={theme.accent} fontFamily="monospace">
                     {receiptResult.responseId}
                   </Text>
                 </XStack>
 
                 <XStack justifyContent="space-between" alignItems="center">
-                  <Text fontSize={12} color="#9ca3af">
+                  <Text fontSize={12} color={theme.textMuted}>
                     Survey Slug & Version:
                   </Text>
-                  <Text fontSize={12} fontWeight="600" color="#f9fafb" fontFamily="monospace">
+                  <Text fontSize={12} fontWeight="600" color={theme.text} fontFamily="monospace">
                     /{activeSurvey.slug} (v{receiptResult.versionNumber})
                   </Text>
                 </XStack>
 
                 <XStack justifyContent="space-between" alignItems="center">
-                  <Text fontSize={12} color="#9ca3af">
+                  <Text fontSize={12} color={theme.textMuted}>
                     Virtual Customer Identity:
                   </Text>
                   <Text fontSize={12} fontWeight="600" color="#93c5fd" fontFamily="monospace">
@@ -1387,16 +1398,16 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
                 </XStack>
 
                 <XStack justifyContent="space-between" alignItems="center">
-                  <Text fontSize={12} color="#9ca3af">
+                  <Text fontSize={12} color={theme.textMuted}>
                     Questions Processed:
                   </Text>
-                  <Text fontSize={12} fontWeight="700" color="#f9fafb">
+                  <Text fontSize={12} fontWeight="700" color={theme.text}>
                     {receiptResult.questionsAnsweredCount} answers logged
                   </Text>
                 </XStack>
 
                 <XStack justifyContent="space-between" alignItems="center">
-                  <Text fontSize={12} color="#9ca3af">
+                  <Text fontSize={12} color={theme.textMuted}>
                     Mudras Credited (Simulated):
                   </Text>
                   <Text fontSize={13} fontWeight="800" color="#10b981">
@@ -1405,18 +1416,18 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
                 </XStack>
 
                 <XStack justifyContent="space-between" alignItems="center">
-                  <Text fontSize={12} color="#9ca3af">
+                  <Text fontSize={12} color={theme.textMuted}>
                     VIP Pass Minted:
                   </Text>
                   <XStack
-                    backgroundColor="rgba(212, 175, 55, 0.15)"
-                    borderColor="#D4AF37"
+                    backgroundColor={theme.accentSubtle}
+                    borderColor={theme.accent}
                     borderWidth={1}
                     paddingHorizontal={8}
                     paddingVertical={3}
                     borderRadius={6}
                   >
-                    <Text fontSize={11} fontWeight="800" color="#D4AF37" fontFamily="monospace">
+                    <Text fontSize={11} fontWeight="800" color={theme.accent} fontFamily="monospace">
                       {receiptResult.vipPassCode}
                     </Text>
                   </XStack>
@@ -1439,8 +1450,8 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
                   gap={6}
                   onPress={handleCopyReceiptJson}
                 >
-                  <LuCopy size={14} color="#d1d5db" />
-                  <Text fontSize={12} fontWeight="700" color="#d1d5db">
+                  <LuCopy size={14} color={theme.textSecondary} />
+                  <Text fontSize={12} fontWeight="700" color={theme.textSecondary}>
                     {copiedReceiptJson ? 'Copied JSON!' : 'Copy Payload JSON'}
                   </Text>
                 </XStack>
@@ -1448,7 +1459,7 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
                 <XStack
                   flex={1.2}
                   cursor="pointer"
-                  backgroundColor="#D4AF37"
+                  backgroundColor={theme.accent}
                   hoverStyle={{ backgroundColor: '#e6be44' }}
                   pressStyle={{ transform: [{ scale: 0.98 }] }}
                   borderRadius={10}
@@ -1461,8 +1472,8 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
                     onViewResponses?.(activeSurvey.id);
                   }}
                 >
-                  <LuEye size={14} color="#0b0d11" />
-                  <Text fontSize={12} fontWeight="800" color="#0b0d11">
+                  <LuEye size={14} color={theme.accentForeground} />
+                  <Text fontSize={12} fontWeight="800" color={theme.accentForeground}>
                     View in Responses Visualizer
                   </Text>
                 </XStack>

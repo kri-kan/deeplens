@@ -4,6 +4,7 @@ import {
   AdminSurveyPreviewPage,
   AdminSurveyPreviewPageProps,
 } from '../../components/pages/survey-admin/AdminSurveyPreviewPage';
+import { withFormFactor } from '../utils/FormFactorPreview';
 import { THEME_ARG_TYPES, THEME_ARGS } from '../../utils/storyTheme';
 import {
   MOCK_ADMIN_SURVEYS,
@@ -13,8 +14,10 @@ import {
 const meta: Meta<any> = {
   title: 'Pages/Admin/Survey Framework/4 - Design Preview & Sandbox',
   component: AdminSurveyPreviewPage,
+  decorators: [withFormFactor('desktop', 'Design Preview & Sandbox')],
   args: {
     ...THEME_ARGS,
+    disableSafeArea: false,
     allSurveys: MOCK_ADMIN_SURVEYS,
     questionsBank: MOCK_ADMIN_QUESTIONS,
     initialSurvey: MOCK_ADMIN_SURVEYS[0],
@@ -40,6 +43,7 @@ type Story = StoryObj<typeof AdminSurveyPreviewPage>;
  */
 export const MobilePreviewStory: Story = {
   name: '1. Mobile Viewport (390px Bezel, English)',
+  decorators: [withFormFactor('mobile', 'Survey Preview - Mobile Frame')],
   args: {
     initialViewport: 'mobile',
     initialLanguage: 'en',
@@ -54,6 +58,7 @@ export const MobilePreviewStory: Story = {
  */
 export const TeluguLanguagePreviewStory: Story = {
   name: '2. Telugu Regional Preview (తెలుగు, 390px)',
+  decorators: [withFormFactor('mobile', 'Survey Preview - Telugu Language')],
   args: {
     initialViewport: 'mobile',
     initialLanguage: 'te',
@@ -68,6 +73,7 @@ export const TeluguLanguagePreviewStory: Story = {
  */
 export const TabletPreviewStory: Story = {
   name: '3. Tablet Viewport (768px Bezel)',
+  decorators: [withFormFactor('tablet', 'Survey Preview - Tablet Frame')],
   args: {
     initialViewport: 'tablet',
     initialLanguage: 'en',
@@ -82,6 +88,7 @@ export const TabletPreviewStory: Story = {
  */
 export const DesktopPreviewStory: Story = {
   name: '4. Desktop Browser (1100px Window Frame)',
+  decorators: [withFormFactor('desktop', 'Survey Preview - Desktop Window')],
   args: {
     initialViewport: 'desktop',
     initialLanguage: 'en',
@@ -96,6 +103,7 @@ export const DesktopPreviewStory: Story = {
  */
 export const WithSandboxReceiptModalStory: Story = {
   name: '5. With Sandbox Submission Receipt Open',
+  decorators: [withFormFactor('mobile', 'Survey Preview - Sandbox Receipt')],
   args: {
     initialViewport: 'mobile',
     initialLanguage: 'en',

@@ -7,6 +7,10 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
+import { Pressable } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSurveyAdminTheme, surveyAdminStyles } from './surveyAdminTheme';
+import { useResponsive } from '../../../theme';
 import {
   LuArrowLeft,
   LuSparkles,
@@ -183,6 +187,7 @@ export interface AdminSurveyQuestionEditorPageProps {
   availableQuestionKeys?: string[];
   onSaveQuestion?: (question: AdminQuestionItem) => void;
   onCancel?: () => void;
+  disableSafeArea?: boolean;
 }
 
 // ==========================================
@@ -197,7 +202,13 @@ export const AdminSurveyQuestionEditorPage: React.FC<
   availableQuestionKeys = MOCK_ADMIN_QUESTIONS.map((q) => q.questionKey),
   onSaveQuestion,
   onCancel,
+  disableSafeArea = false,
 }) => {
+  const theme = useSurveyAdminTheme();
+  const { isMobile } = useResponsive();
+  const insets = useSafeAreaInsets();
+  const topInset = disableSafeArea ? 0 : insets.top;
+  const bottomInset = disableSafeArea ? 0 : insets.bottom;
   // Initialize internal question draft state
   const [question, setQuestion] = useState<AdminQuestionItem>(() => {
     if (initialQuestion && !isNew) {
@@ -777,16 +788,16 @@ export const AdminSurveyQuestionEditorPage: React.FC<
               hoverStyle={{ opacity: 0.8 }}
               onPress={onCancel}
             >
-              <LuArrowLeft size={14} color="#D4AF37" />
-              <Text color="#D4AF37" fontSize={13} fontWeight="600">
+              <LuArrowLeft size={14} color={theme.accent} />
+              <Text color={theme.accent} fontSize={13} fontWeight="600">
                 Questions Bank
               </Text>
             </XStack>
-            <Text color="#4b5563" fontSize={13}>
+            <Text color={theme.textMuted} fontSize={13}>
               /
             </Text>
             <Text
-              color="#9ca3af"
+              color={theme.textMuted}
               fontSize={13}
               style={styles.monospaceText}
             >
@@ -803,7 +814,7 @@ export const AdminSurveyQuestionEditorPage: React.FC<
           >
             <YStack gap={4}>
               <XStack alignItems="center" gap={10}>
-                <Text color="#ffffff" fontSize={24} fontWeight="800">
+                <Text color={theme.text} fontSize={24} fontWeight="800">
                   {isNew ? 'Create New Question' : 'Question & Option Studio'}
                 </Text>
                 <XStack
@@ -857,7 +868,7 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                   </XStack>
                 )}
               </XStack>
-              <Text color="#9ca3af" fontSize={13}>
+              <Text color={theme.textMuted} fontSize={13}>
                 Configure question taxonomy, multilingual statements, interactive options, and telemetry bindings.
               </Text>
             </YStack>
@@ -865,8 +876,8 @@ export const AdminSurveyQuestionEditorPage: React.FC<
             <XStack gap={10}>
               <XStack
                 cursor="pointer"
-                backgroundColor="#12151c"
-                borderColor="#1f2533"
+                backgroundColor={theme.surface}
+                borderColor={theme.border}
                 borderWidth={1}
                 paddingHorizontal={14}
                 paddingVertical={8}
@@ -875,13 +886,13 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                 hoverStyle={{ borderColor: '#2b3242' }}
                 onPress={onCancel}
               >
-                <Text color="#9ca3af" fontSize={13} fontWeight="600">
+                <Text color={theme.textMuted} fontSize={13} fontWeight="600">
                   Cancel
                 </Text>
               </XStack>
               <XStack
                 cursor="pointer"
-                backgroundColor="#D4AF37"
+                backgroundColor={theme.accent}
                 paddingHorizontal={16}
                 paddingVertical={8}
                 borderRadius={8}
@@ -890,8 +901,8 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                 hoverStyle={{ backgroundColor: '#f5d77f' }}
                 onPress={handleValidateAndSave}
               >
-                <LuSave size={15} color="#0b0d11" />
-                <Text color="#0b0d11" fontSize={13} fontWeight="800">
+                <LuSave size={15} color={theme.accentForeground} />
+                <Text color={theme.accentForeground} fontSize={13} fontWeight="800">
                   {isNew ? 'Create Question' : 'Save Question Revision'}
                 </Text>
               </XStack>
@@ -944,15 +955,15 @@ export const AdminSurveyQuestionEditorPage: React.FC<
 
         {aiSuccessBanner && (
           <XStack
-            backgroundColor="rgba(212, 175, 55, 0.12)"
-            borderColor="#D4AF37"
+            backgroundColor={theme.accentSubtle}
+            borderColor={theme.accent}
             borderWidth={1}
             borderRadius={8}
             padding={14}
             alignItems="center"
             gap={10}
           >
-            <LuSparkles size={18} color="#D4AF37" />
+            <LuSparkles size={18} color={theme.accent} />
             <Text color="#f5d77f" fontSize={13} fontWeight="600" flex={1}>
               {aiSuccessBanner}
             </Text>
@@ -966,18 +977,18 @@ export const AdminSurveyQuestionEditorPage: React.FC<
         {/* SECTION A: CORE METADATA & HIDDEN QUESTION SWITCH        */}
         {/* ======================================================== */}
         <YStack
-          backgroundColor="#12151c"
-          borderColor="#1f2533"
+          backgroundColor={theme.surface}
+          borderColor={theme.border}
           borderWidth={1}
           borderRadius={12}
           padding={20}
           gap={18}
         >
           <XStack alignItems="center" gap={8}>
-            <Text color="#D4AF37" fontSize={11} fontWeight="800" letterSpacing={1}>
+            <Text color={theme.accent} fontSize={11} fontWeight="800" letterSpacing={1}>
               SECTION A
             </Text>
-            <Text color="#ffffff" fontSize={16} fontWeight="700">
+            <Text color={theme.text} fontSize={16} fontWeight="700">
               Taxonomy & Question Type
             </Text>
           </XStack>
@@ -987,10 +998,10 @@ export const AdminSurveyQuestionEditorPage: React.FC<
             {/* Slug Input */}
             <YStack flex={1} minWidth={280} gap={6}>
               <XStack alignItems="center" gap={6}>
-                <Text color="#ffffff" fontSize={13} fontWeight="700">
+                <Text color={theme.text} fontSize={13} fontWeight="700">
                   Question Key Slug <Text color="#ef4444">*</Text>
                 </Text>
-                <Text color="#6b7280" fontSize={11}>
+                <Text color={theme.textMuted} fontSize={11}>
                   (lowercase snake_case)
                 </Text>
               </XStack>
@@ -1001,14 +1012,14 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                 value={question.questionKey}
                 onChangeText={handleKeyChange}
               />
-              <Text color="#6b7280" fontSize={11}>
+              <Text color={theme.textMuted} fontSize={11}>
                 Unique permanent identifier used in survey schemas and branching trees.
               </Text>
             </YStack>
 
             {/* Mudras Points */}
             <YStack width={180} gap={6}>
-              <Text color="#ffffff" fontSize={13} fontWeight="700">
+              <Text color={theme.text} fontSize={13} fontWeight="700">
                 Reward Mudras <Text color="#ef4444">*</Text>
               </Text>
               <TextInput
@@ -1028,7 +1039,7 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                   }));
                 }}
               />
-              <Text color="#6b7280" fontSize={11}>
+              <Text color={theme.textMuted} fontSize={11}>
                 {question.isHidden
                   ? 'Locked to 0 for hidden parameters.'
                   : 'Mudras granted upon response.'}
@@ -1037,12 +1048,12 @@ export const AdminSurveyQuestionEditorPage: React.FC<
 
             {/* Terminal Question Checkbox */}
             <YStack width={220} gap={6}>
-              <Text color="#ffffff" fontSize={13} fontWeight="700">
+              <Text color={theme.text} fontSize={13} fontWeight="700">
                 Survey Completion
               </Text>
               <XStack
                 cursor="pointer"
-                backgroundColor="#0b0d11"
+                backgroundColor={theme.bg}
                 borderColor={question.isTerminalQuestion ? '#10b981' : '#2b3242'}
                 borderWidth={1}
                 borderRadius={8}
@@ -1068,14 +1079,14 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                   justifyContent="center"
                 >
                   {question.isTerminalQuestion && (
-                    <LuCheck size={12} color="#0b0d11" />
+                    <LuCheck size={12} color={theme.accentForeground} />
                   )}
                 </XStack>
-                <Text color="#ffffff" fontSize={12} fontWeight="600">
+                <Text color={theme.text} fontSize={12} fontWeight="600">
                   Terminal Question
                 </Text>
               </XStack>
-              <Text color="#6b7280" fontSize={11}>
+              <Text color={theme.textMuted} fontSize={11}>
                 Directly triggers completion modal.
               </Text>
             </YStack>
@@ -1083,7 +1094,7 @@ export const AdminSurveyQuestionEditorPage: React.FC<
 
           {/* Question Type Radio Grid */}
           <YStack gap={8}>
-            <Text color="#ffffff" fontSize={13} fontWeight="700">
+            <Text color={theme.text} fontSize={13} fontWeight="700">
               Question Format & Interaction Model
             </Text>
             <XStack gap={10} flexWrap="wrap">
@@ -1118,7 +1129,7 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                           width={8}
                           height={8}
                           borderRadius={4}
-                          backgroundColor="#D4AF37"
+                          backgroundColor={theme.accent}
                         />
                       )}
                     </XStack>
@@ -1139,7 +1150,7 @@ export const AdminSurveyQuestionEditorPage: React.FC<
 
           {/* Hidden Parameter Switch & Config Banner */}
           <YStack
-            backgroundColor="#0b0d11"
+            backgroundColor={theme.bg}
             borderColor={question.isHidden ? '#f59e0b' : '#1f2533'}
             borderWidth={1}
             borderRadius={10}
@@ -1156,13 +1167,13 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                 {question.isHidden ? (
                   <LuEyeOff size={20} color="#f59e0b" />
                 ) : (
-                  <LuEye size={20} color="#9ca3af" />
+                  <LuEye size={20} color={theme.textMuted} />
                 )}
                 <YStack>
-                  <Text color="#ffffff" fontSize={14} fontWeight="700">
+                  <Text color={theme.text} fontSize={14} fontWeight="700">
                     Capture Invisibly as Hidden Parameter
                   </Text>
-                  <Text color="#9ca3af" fontSize={12}>
+                  <Text color={theme.textMuted} fontSize={12}>
                     Inject tracking context (Order IDs, UTM campaign tags, user segments) without prompting the client.
                   </Text>
                 </YStack>
@@ -1192,7 +1203,7 @@ export const AdminSurveyQuestionEditorPage: React.FC<
             {/* Hidden Parameter Configuration Form */}
             {question.isHidden && (
               <YStack
-                backgroundColor="#12151c"
+                backgroundColor={theme.surface}
                 borderColor="rgba(245, 158, 11, 0.3)"
                 borderWidth={1}
                 borderRadius={8}
@@ -1209,7 +1220,7 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                 <XStack gap={14} flexWrap="wrap">
                   {/* Source Dropdown */}
                   <YStack flex={1} minWidth={220} gap={6}>
-                    <Text color="#ffffff" fontSize={12} fontWeight="600">
+                    <Text color={theme.text} fontSize={12} fontWeight="600">
                       Value Source <Text color="#ef4444">*</Text>
                     </Text>
                     <XStack gap={8}>
@@ -1285,7 +1296,7 @@ export const AdminSurveyQuestionEditorPage: React.FC<
 
                   {/* Parameter Name */}
                   <YStack flex={1} minWidth={220} gap={6}>
-                    <Text color="#ffffff" fontSize={12} fontWeight="600">
+                    <Text color={theme.text} fontSize={12} fontWeight="600">
                       Parameter Name (Key) <Text color="#ef4444">*</Text>
                     </Text>
                     <TextInput
@@ -1299,7 +1310,7 @@ export const AdminSurveyQuestionEditorPage: React.FC<
 
                   {/* Fallback Default Value */}
                   <YStack flex={1} minWidth={220} gap={6}>
-                    <Text color="#ffffff" fontSize={12} fontWeight="600">
+                    <Text color={theme.text} fontSize={12} fontWeight="600">
                       Fallback Default Value
                     </Text>
                     <TextInput
@@ -1314,15 +1325,15 @@ export const AdminSurveyQuestionEditorPage: React.FC<
 
                 {/* Suggested Parameter Chips */}
                 <XStack alignItems="center" gap={8} flexWrap="wrap">
-                  <Text color="#9ca3af" fontSize={11} fontWeight="600">
+                  <Text color={theme.textMuted} fontSize={11} fontWeight="600">
                     Preset Presets:
                   </Text>
                   {SUGGESTED_HIDDEN_PARAMS.map((param) => (
                     <XStack
                       key={param}
                       cursor="pointer"
-                      backgroundColor="#0b0d11"
-                      borderColor="#2b3242"
+                      backgroundColor={theme.bg}
+                      borderColor={theme.border}
                       borderWidth={1}
                       borderRadius={12}
                       paddingHorizontal={8}
@@ -1331,7 +1342,7 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                       onPress={() => handleHiddenConfigParamKey(param)}
                     >
                       <Text
-                        color="#9ca3af"
+                        color={theme.textMuted}
                         fontSize={10}
                         style={styles.monospaceText}
                       >
@@ -1349,8 +1360,8 @@ export const AdminSurveyQuestionEditorPage: React.FC<
         {/* SECTION B: MULTILINGUAL STATEMENT STUDIO WITH AI         */}
         {/* ======================================================== */}
         <YStack
-          backgroundColor="#12151c"
-          borderColor="#1f2533"
+          backgroundColor={theme.surface}
+          borderColor={theme.border}
           borderWidth={1}
           borderRadius={12}
           padding={20}
@@ -1364,10 +1375,10 @@ export const AdminSurveyQuestionEditorPage: React.FC<
             gap={12}
           >
             <XStack alignItems="center" gap={8}>
-              <Text color="#D4AF37" fontSize={11} fontWeight="800" letterSpacing={1}>
+              <Text color={theme.accent} fontSize={11} fontWeight="800" letterSpacing={1}>
                 SECTION B
               </Text>
-              <Text color="#ffffff" fontSize={16} fontWeight="700">
+              <Text color={theme.text} fontSize={16} fontWeight="700">
                 Multilingual Statements & AI Generator
               </Text>
             </XStack>
@@ -1375,7 +1386,7 @@ export const AdminSurveyQuestionEditorPage: React.FC<
             <XStack
               cursor={isTranslating ? 'not-allowed' : 'pointer'}
               backgroundColor={isTranslating ? '#1f2533' : '#D4AF37'}
-              borderColor="#D4AF37"
+              borderColor={theme.accent}
               borderWidth={1}
               borderRadius={8}
               paddingHorizontal={14}
@@ -1386,9 +1397,9 @@ export const AdminSurveyQuestionEditorPage: React.FC<
               onPress={isTranslating ? undefined : handleGenerateAiTranslations}
             >
               {isTranslating ? (
-                <ActivityIndicator size="small" color="#D4AF37" />
+                <ActivityIndicator size="small" color={theme.accent} />
               ) : (
-                <LuSparkles size={16} color="#0b0d11" />
+                <LuSparkles size={16} color={theme.accentForeground} />
               )}
               <Text
                 color={isTranslating ? '#D4AF37' : '#0b0d11'}
@@ -1403,7 +1414,7 @@ export const AdminSurveyQuestionEditorPage: React.FC<
           </XStack>
 
           {/* Language Tabs Bar */}
-          <XStack gap={8} flexWrap="wrap" borderBottomWidth={1} borderColor="#1f2533" paddingBottom={12}>
+          <XStack gap={8} flexWrap="wrap" borderBottomWidth={1} borderColor={theme.border} paddingBottom={12}>
             {LANGUAGES.map((lang) => {
               const isActive = activeLang === lang.code;
               const status = getLanguageStatus(lang.code);
@@ -1445,7 +1456,7 @@ export const AdminSurveyQuestionEditorPage: React.FC<
           {/* Reference Preview for Regional Languages */}
           {activeLang !== 'en' && (
             <YStack
-              backgroundColor="#0b0d11"
+              backgroundColor={theme.bg}
               borderColor="rgba(212, 175, 55, 0.3)"
               borderWidth={1}
               borderRadius={8}
@@ -1453,16 +1464,16 @@ export const AdminSurveyQuestionEditorPage: React.FC<
               gap={6}
             >
               <XStack alignItems="center" gap={6}>
-                <LuGlobe size={13} color="#D4AF37" />
-                <Text color="#D4AF37" fontSize={11} fontWeight="700">
+                <LuGlobe size={13} color={theme.accent} />
+                <Text color={theme.accent} fontSize={11} fontWeight="700">
                   REFERENCE ENGLISH STATEMENT
                 </Text>
               </XStack>
-              <Text color="#e5e7eb" fontSize={13} fontStyle="italic">
+              <Text color={theme.text} fontSize={13} fontStyle="italic">
                 &quot;{question.statements.title.en}&quot;
               </Text>
               {question.statements.subtitle?.en && (
-                <Text color="#9ca3af" fontSize={11}>
+                <Text color={theme.textMuted} fontSize={11}>
                   Helper: {question.statements.subtitle.en}
                 </Text>
               )}
@@ -1474,10 +1485,10 @@ export const AdminSurveyQuestionEditorPage: React.FC<
             {/* Kicker */}
             <YStack gap={6}>
               <XStack justifyContent="space-between" alignItems="center">
-                <Text color="#ffffff" fontSize={13} fontWeight="700">
+                <Text color={theme.text} fontSize={13} fontWeight="700">
                   Kicker / Step Badge Label ({activeLang.toUpperCase()})
                 </Text>
-                <Text color="#6b7280" fontSize={11}>
+                <Text color={theme.textMuted} fontSize={11}>
                   e.g. STEP 01 • OCCASION
                 </Text>
               </XStack>
@@ -1493,11 +1504,11 @@ export const AdminSurveyQuestionEditorPage: React.FC<
             {/* Question Title */}
             <YStack gap={6}>
               <XStack justifyContent="space-between" alignItems="center">
-                <Text color="#ffffff" fontSize={13} fontWeight="700">
+                <Text color={theme.text} fontSize={13} fontWeight="700">
                   Question Title ({activeLang.toUpperCase()}){' '}
                   <Text color="#ef4444">*</Text>
                 </Text>
-                <Text color="#6b7280" fontSize={11}>
+                <Text color={theme.textMuted} fontSize={11}>
                   Primary headline presented on survey card
                 </Text>
               </XStack>
@@ -1513,10 +1524,10 @@ export const AdminSurveyQuestionEditorPage: React.FC<
             {/* Subtitle / Helper */}
             <YStack gap={6}>
               <XStack justifyContent="space-between" alignItems="center">
-                <Text color="#ffffff" fontSize={13} fontWeight="700">
+                <Text color={theme.text} fontSize={13} fontWeight="700">
                   Subtitle / Helper Note ({activeLang.toUpperCase()})
                 </Text>
-                <Text color="#6b7280" fontSize={11}>
+                <Text color={theme.textMuted} fontSize={11}>
                   Instructional subtitle guiding customer choices
                 </Text>
               </XStack>
@@ -1532,10 +1543,10 @@ export const AdminSurveyQuestionEditorPage: React.FC<
             {/* Placeholder (if text_input or file_upload) */}
             <YStack gap={6}>
               <XStack justifyContent="space-between" alignItems="center">
-                <Text color="#ffffff" fontSize={13} fontWeight="700">
+                <Text color={theme.text} fontSize={13} fontWeight="700">
                   Input Placeholder / Upload Cue ({activeLang.toUpperCase()})
                 </Text>
-                <Text color="#6b7280" fontSize={11}>
+                <Text color={theme.textMuted} fontSize={11}>
                   Optional placeholder cue for text fields and file drag-and-drop
                 </Text>
               </XStack>
@@ -1555,8 +1566,8 @@ export const AdminSurveyQuestionEditorPage: React.FC<
         {/* ======================================================== */}
         {isSelectType ? (
           <YStack
-            backgroundColor="#12151c"
-            borderColor="#1f2533"
+            backgroundColor={theme.surface}
+            borderColor={theme.border}
             borderWidth={1}
             borderRadius={12}
             padding={20}
@@ -1570,18 +1581,18 @@ export const AdminSurveyQuestionEditorPage: React.FC<
               gap={12}
             >
               <XStack alignItems="center" gap={8}>
-                <Text color="#D4AF37" fontSize={11} fontWeight="800" letterSpacing={1}>
+                <Text color={theme.accent} fontSize={11} fontWeight="800" letterSpacing={1}>
                   SECTION C
                 </Text>
-                <Text color="#ffffff" fontSize={16} fontWeight="700">
+                <Text color={theme.text} fontSize={16} fontWeight="700">
                   Option Tiles & Media Studio
                 </Text>
               </XStack>
 
               <XStack
                 cursor="pointer"
-                backgroundColor="#0b0d11"
-                borderColor="#D4AF37"
+                backgroundColor={theme.bg}
+                borderColor={theme.accent}
                 borderWidth={1}
                 borderRadius={8}
                 paddingHorizontal={12}
@@ -1591,8 +1602,8 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                 hoverStyle={{ backgroundColor: 'rgba(212, 175, 55, 0.15)' }}
                 onPress={handleAddOption}
               >
-                <LuPlus size={14} color="#D4AF37" />
-                <Text color="#D4AF37" fontSize={12} fontWeight="700">
+                <LuPlus size={14} color={theme.accent} />
+                <Text color={theme.accent} fontSize={12} fontWeight="700">
                   Add Option Tile
                 </Text>
               </XStack>
@@ -1602,7 +1613,7 @@ export const AdminSurveyQuestionEditorPage: React.FC<
             <XStack gap={16} flexWrap="wrap">
               {/* Option Format Selector */}
               <YStack flex={1} minWidth={260} gap={6}>
-                <Text color="#ffffff" fontSize={12} fontWeight="700">
+                <Text color={theme.text} fontSize={12} fontWeight="700">
                   Option Tile Presentation Format
                 </Text>
                 <XStack gap={8}>
@@ -1644,7 +1655,7 @@ export const AdminSurveyQuestionEditorPage: React.FC<
 
               {/* Aspect Ratio Selector (for Image and Icon tiles) */}
               <YStack flex={1} minWidth={260} gap={6}>
-                <Text color="#ffffff" fontSize={12} fontWeight="700">
+                <Text color={theme.text} fontSize={12} fontWeight="700">
                   Tile Aspect Ratio
                 </Text>
                 <XStack gap={8}>
@@ -1689,8 +1700,8 @@ export const AdminSurveyQuestionEditorPage: React.FC<
             <YStack gap={14}>
               {(!question.options || question.options.length === 0) ? (
                 <YStack
-                  backgroundColor="#0b0d11"
-                  borderColor="#1f2533"
+                  backgroundColor={theme.bg}
+                  borderColor={theme.border}
                   borderWidth={1}
                   borderRadius={8}
                   padding={24}
@@ -1698,7 +1709,7 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                   justifyContent="center"
                   gap={8}
                 >
-                  <Text color="#9ca3af" fontSize={13}>
+                  <Text color={theme.textMuted} fontSize={13}>
                     No options configured. Click &quot;Add Option Tile&quot; to begin.
                   </Text>
                 </YStack>
@@ -1709,8 +1720,8 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                   return (
                     <YStack
                       key={option.id || optIdx}
-                      backgroundColor="#0b0d11"
-                      borderColor="#1f2533"
+                      backgroundColor={theme.bg}
+                      borderColor={theme.border}
                       borderWidth={1}
                       borderRadius={10}
                       padding={16}
@@ -1726,8 +1737,8 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                       >
                         <XStack alignItems="center" gap={8}>
                           <XStack
-                            backgroundColor="#171b24"
-                            borderColor="#2b3242"
+                            backgroundColor={theme.surfaceRaised}
+                            borderColor={theme.border}
                             borderWidth={1}
                             width={24}
                             height={24}
@@ -1735,12 +1746,12 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                             alignItems="center"
                             justifyContent="center"
                           >
-                            <Text color="#D4AF37" fontSize={11} fontWeight="800">
+                            <Text color={theme.accent} fontSize={11} fontWeight="800">
                               {optIdx + 1}
                             </Text>
                           </XStack>
                           <Text
-                            color="#9ca3af"
+                            color={theme.textMuted}
                             fontSize={12}
                             style={styles.monospaceText}
                           >
@@ -1752,15 +1763,15 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                         <XStack alignItems="center" gap={6}>
                           <XStack
                             cursor={optIdx > 0 ? 'pointer' : 'not-allowed'}
-                            backgroundColor="#171b24"
-                            borderColor="#2b3242"
+                            backgroundColor={theme.surfaceRaised}
+                            borderColor={theme.border}
                             borderWidth={1}
                             padding={6}
                             borderRadius={6}
                             opacity={optIdx > 0 ? 1 : 0.4}
                             onPress={() => optIdx > 0 && handleMoveOption(optIdx, 'up')}
                           >
-                            <LuArrowUp size={14} color="#ffffff" />
+                            <LuArrowUp size={14} color={theme.text} />
                           </XStack>
                           <XStack
                             cursor={
@@ -1768,8 +1779,8 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                                 ? 'pointer'
                                 : 'not-allowed'
                             }
-                            backgroundColor="#171b24"
-                            borderColor="#2b3242"
+                            backgroundColor={theme.surfaceRaised}
+                            borderColor={theme.border}
                             borderWidth={1}
                             padding={6}
                             borderRadius={6}
@@ -1781,7 +1792,7 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                               handleMoveOption(optIdx, 'down')
                             }
                           >
-                            <LuArrowDown size={14} color="#ffffff" />
+                            <LuArrowDown size={14} color={theme.text} />
                           </XStack>
                           <XStack
                             cursor="pointer"
@@ -1802,7 +1813,7 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                       <XStack gap={14} flexWrap="wrap">
                         {/* Option ID Slug */}
                         <YStack width={200} gap={6}>
-                          <Text color="#ffffff" fontSize={12} fontWeight="600">
+                          <Text color={theme.text} fontSize={12} fontWeight="600">
                             Option Slug ID <Text color="#ef4444">*</Text>
                           </Text>
                           <TextInput
@@ -1815,7 +1826,7 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                         {/* Multilingual Label */}
                         <YStack flex={1} minWidth={260} gap={6}>
                           <XStack justifyContent="space-between" alignItems="center">
-                            <Text color="#ffffff" fontSize={12} fontWeight="600">
+                            <Text color={theme.text} fontSize={12} fontWeight="600">
                               Label Statement ({activeLang.toUpperCase()}){' '}
                               <Text color="#ef4444">*</Text>
                             </Text>
@@ -1826,8 +1837,8 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                               hoverStyle={{ opacity: 0.8 }}
                               onPress={() => handleTranslateSingleOption(optIdx)}
                             >
-                              <LuSparkles size={11} color="#D4AF37" />
-                              <Text color="#D4AF37" fontSize={10} fontWeight="700">
+                              <LuSparkles size={11} color={theme.accent} />
+                              <Text color={theme.accent} fontSize={10} fontWeight="700">
                                 AI Translate
                               </Text>
                             </XStack>
@@ -1845,7 +1856,7 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                       {/* Icon Picker (if format === 'icon') */}
                       {currentTileFormat === 'icon' && (
                         <YStack gap={8}>
-                          <Text color="#ffffff" fontSize={12} fontWeight="600">
+                          <Text color={theme.text} fontSize={12} fontWeight="600">
                             Select Vector Icon
                           </Text>
                           <XStack gap={8} flexWrap="wrap">
@@ -1964,8 +1975,8 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                             {/* Pathway 1: Upload to MinIO */}
                             {sourcingTab === 'upload' && (
                               <YStack
-                                backgroundColor="#12151c"
-                                borderColor="#2b3242"
+                                backgroundColor={theme.surface}
+                                borderColor={theme.border}
                                 borderWidth={1}
                                 borderStyle="dashed"
                                 borderRadius={8}
@@ -1973,12 +1984,12 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                                 alignItems="center"
                                 gap={8}
                               >
-                                <LuUpload size={22} color="#D4AF37" />
-                                <Text color="#ffffff" fontSize={12} fontWeight="600">
+                                <LuUpload size={22} color={theme.accent} />
+                                <Text color={theme.text} fontSize={12} fontWeight="600">
                                   MinIO Media Storage Pipeline
                                 </Text>
                                 <Text
-                                  color="#9ca3af"
+                                  color={theme.textMuted}
                                   fontSize={11}
                                   textAlign="center"
                                 >
@@ -1990,8 +2001,8 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                                       ? 'not-allowed'
                                       : 'pointer'
                                   }
-                                  backgroundColor="#171b24"
-                                  borderColor="#D4AF37"
+                                  backgroundColor={theme.surfaceRaised}
+                                  borderColor={theme.accent}
                                   borderWidth={1}
                                   borderRadius={6}
                                   paddingHorizontal={12}
@@ -2006,13 +2017,13 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                                   {uploadingOptionIndex === optIdx ? (
                                     <ActivityIndicator
                                       size="small"
-                                      color="#D4AF37"
+                                      color={theme.accent}
                                     />
                                   ) : (
-                                    <LuUpload size={13} color="#D4AF37" />
+                                    <LuUpload size={13} color={theme.accent} />
                                   )}
                                   <Text
-                                    color="#D4AF37"
+                                    color={theme.accent}
                                     fontSize={11}
                                     fontWeight="700"
                                   >
@@ -2027,20 +2038,20 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                             {/* Pathway 2: Catalog Browser */}
                             {sourcingTab === 'catalog' && (
                               <YStack
-                                backgroundColor="#12151c"
-                                borderColor="#2b3242"
+                                backgroundColor={theme.surface}
+                                borderColor={theme.border}
                                 borderWidth={1}
                                 borderRadius={8}
                                 padding={14}
                                 alignItems="center"
                                 gap={8}
                               >
-                                <LuImage size={22} color="#D4AF37" />
-                                <Text color="#ffffff" fontSize={12} fontWeight="600">
+                                <LuImage size={22} color={theme.accent} />
+                                <Text color={theme.text} fontSize={12} fontWeight="600">
                                   Vayyari Handloom Media Catalog
                                 </Text>
                                 <Text
-                                  color="#9ca3af"
+                                  color={theme.textMuted}
                                   fontSize={11}
                                   textAlign="center"
                                 >
@@ -2048,8 +2059,8 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                                 </Text>
                                 <XStack
                                   cursor="pointer"
-                                  backgroundColor="#171b24"
-                                  borderColor="#D4AF37"
+                                  backgroundColor={theme.surfaceRaised}
+                                  borderColor={theme.accent}
                                   borderWidth={1}
                                   borderRadius={6}
                                   paddingHorizontal={14}
@@ -2061,9 +2072,9 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                                   }}
                                   onPress={() => handleOpenCatalogModal(optIdx)}
                                 >
-                                  <LuImage size={13} color="#D4AF37" />
+                                  <LuImage size={13} color={theme.accent} />
                                   <Text
-                                    color="#D4AF37"
+                                    color={theme.accent}
                                     fontSize={11}
                                     fontWeight="700"
                                   >
@@ -2076,7 +2087,7 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                             {/* Pathway 3: Direct URL */}
                             {sourcingTab === 'url' && (
                               <YStack gap={6}>
-                                <Text color="#ffffff" fontSize={12} fontWeight="600">
+                                <Text color={theme.text} fontSize={12} fontWeight="600">
                                   Direct Image / MinIO S3 URL
                                 </Text>
                                 <TextInput
@@ -2094,12 +2105,12 @@ export const AdminSurveyQuestionEditorPage: React.FC<
 
                           {/* Real-time Aspect Ratio Thumbnail Preview */}
                           <YStack gap={6} alignItems="center">
-                            <Text color="#9ca3af" fontSize={11} fontWeight="700">
+                            <Text color={theme.textMuted} fontSize={11} fontWeight="700">
                               Preview ({currentAspectRatio})
                             </Text>
                             <YStack
-                              backgroundColor="#12151c"
-                              borderColor="#2b3242"
+                              backgroundColor={theme.surface}
+                              borderColor={theme.border}
                               borderWidth={1}
                               borderRadius={8}
                               overflow="hidden"
@@ -2120,9 +2131,9 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                                   padding={8}
                                   gap={4}
                                 >
-                                  <LuImage size={18} color="#4b5563" />
+                                  <LuImage size={18} color={theme.textMuted} />
                                   <Text
-                                    color="#6b7280"
+                                    color={theme.textMuted}
                                     fontSize={9}
                                     textAlign="center"
                                   >
@@ -2137,7 +2148,7 @@ export const AdminSurveyQuestionEditorPage: React.FC<
 
                       {/* Next Question Key (Branching Target) */}
                       <YStack gap={6}>
-                        <Text color="#ffffff" fontSize={12} fontWeight="600">
+                        <Text color={theme.text} fontSize={12} fontWeight="600">
                           Branching Next Step Target
                         </Text>
                         <XStack gap={8} flexWrap="wrap" alignItems="center">
@@ -2217,35 +2228,35 @@ export const AdminSurveyQuestionEditorPage: React.FC<
         ) : (
           /* Non-Select Interaction Panel (Text Input / File Upload / Rating / Likert) */
           <YStack
-            backgroundColor="#12151c"
-            borderColor="#1f2533"
+            backgroundColor={theme.surface}
+            borderColor={theme.border}
             borderWidth={1}
             borderRadius={12}
             padding={20}
             gap={14}
           >
             <XStack alignItems="center" gap={8}>
-              <Text color="#D4AF37" fontSize={11} fontWeight="800" letterSpacing={1}>
+              <Text color={theme.accent} fontSize={11} fontWeight="800" letterSpacing={1}>
                 SECTION C
               </Text>
-              <Text color="#ffffff" fontSize={16} fontWeight="700">
+              <Text color={theme.text} fontSize={16} fontWeight="700">
                 Specialized Interaction Configuration
               </Text>
             </XStack>
 
             {question.questionType === 'text_input' && (
               <YStack
-                backgroundColor="#0b0d11"
-                borderColor="#1f2533"
+                backgroundColor={theme.bg}
+                borderColor={theme.border}
                 borderWidth={1}
                 borderRadius={8}
                 padding={16}
                 gap={8}
               >
-                <Text color="#ffffff" fontSize={13} fontWeight="700">
+                <Text color={theme.text} fontSize={13} fontWeight="700">
                   Freeform Text Response Model
                 </Text>
-                <Text color="#9ca3af" fontSize={12}>
+                <Text color={theme.textMuted} fontSize={12}>
                   Renders a multi-line auto-expanding luxury text field. Suitable for sizing alterations, bespoke blouse specifications, and personal curation notes.
                 </Text>
               </YStack>
@@ -2253,17 +2264,17 @@ export const AdminSurveyQuestionEditorPage: React.FC<
 
             {question.questionType === 'file_upload' && (
               <YStack
-                backgroundColor="#0b0d11"
-                borderColor="#1f2533"
+                backgroundColor={theme.bg}
+                borderColor={theme.border}
                 borderWidth={1}
                 borderRadius={8}
                 padding={16}
                 gap={8}
               >
-                <Text color="#ffffff" fontSize={13} fontWeight="700">
+                <Text color={theme.text} fontSize={13} fontWeight="700">
                   Media & Document Upload Pipeline
                 </Text>
-                <Text color="#9ca3af" fontSize={12}>
+                <Text color={theme.textMuted} fontSize={12}>
                   Direct client attachment to MinIO bucket <code>s3://deeplens-catalog/survey-uploads/</code>. Maximum upload threshold: 25MB (PNG, JPG, WEBP, PDF).
                 </Text>
               </YStack>
@@ -2271,23 +2282,23 @@ export const AdminSurveyQuestionEditorPage: React.FC<
 
             {question.questionType === 'rating' && (
               <YStack
-                backgroundColor="#0b0d11"
-                borderColor="#1f2533"
+                backgroundColor={theme.bg}
+                borderColor={theme.border}
                 borderWidth={1}
                 borderRadius={8}
                 padding={16}
                 gap={12}
               >
-                <Text color="#ffffff" fontSize={13} fontWeight="700">
+                <Text color={theme.text} fontSize={13} fontWeight="700">
                   Star Rating Affinity Scale (1 to 5 Stars)
                 </Text>
                 <XStack gap={10} alignItems="center">
                   {[1, 2, 3, 4, 5].map((star) => (
                     <XStack key={star} alignItems="center" gap={4}>
-                      <LuStar size={24} color="#D4AF37" />
+                      <LuStar size={24} color={theme.accent} />
                     </XStack>
                   ))}
-                  <Text color="#9ca3af" fontSize={12}>
+                  <Text color={theme.textMuted} fontSize={12}>
                     (1 = Elementary, 5 = Masterpiece Heirloom)
                   </Text>
                 </XStack>
@@ -2296,14 +2307,14 @@ export const AdminSurveyQuestionEditorPage: React.FC<
 
             {question.questionType === 'likert' && (
               <YStack
-                backgroundColor="#0b0d11"
-                borderColor="#1f2533"
+                backgroundColor={theme.bg}
+                borderColor={theme.border}
                 borderWidth={1}
                 borderRadius={8}
                 padding={16}
                 gap={12}
               >
-                <Text color="#ffffff" fontSize={13} fontWeight="700">
+                <Text color={theme.text} fontSize={13} fontWeight="700">
                   5-Point Handloom Sentiment Matrix
                 </Text>
                 <XStack gap={8} flexWrap="wrap">
@@ -2316,8 +2327,8 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                   ].map((tier, idx) => (
                     <XStack
                       key={tier}
-                      backgroundColor="#171b24"
-                      borderColor="#2b3242"
+                      backgroundColor={theme.surfaceRaised}
+                      borderColor={theme.border}
                       borderWidth={1}
                       borderRadius={6}
                       paddingHorizontal={10}
@@ -2342,8 +2353,8 @@ export const AdminSurveyQuestionEditorPage: React.FC<
         {/* SECTION D: STICKY FOOTER BAR                             */}
         {/* ======================================================== */}
         <XStack
-          backgroundColor="#0b0d11"
-          borderColor="#1f2533"
+          backgroundColor={theme.bg}
+          borderColor={theme.border}
           borderWidth={1}
           borderRadius={12}
           padding={16}
@@ -2353,29 +2364,29 @@ export const AdminSurveyQuestionEditorPage: React.FC<
           gap={12}
         >
           <XStack alignItems="center" gap={10}>
-            <Text color="#9ca3af" fontSize={12}>
+            <Text color={theme.textMuted} fontSize={12}>
               Editing Key:
             </Text>
             <Text
-              color="#ffffff"
+              color={theme.text}
               fontSize={13}
               fontWeight="700"
               style={styles.monospaceText}
             >
               {question.questionKey}
             </Text>
-            <Text color="#4b5563" fontSize={12}>
+            <Text color={theme.textMuted} fontSize={12}>
               •
             </Text>
-            <Text color="#D4AF37" fontSize={12} fontWeight="600">
+            <Text color={theme.accent} fontSize={12} fontWeight="600">
               {isSelectType
                 ? `${question.options?.length || 0} Options`
                 : question.questionType}
             </Text>
-            <Text color="#4b5563" fontSize={12}>
+            <Text color={theme.textMuted} fontSize={12}>
               •
             </Text>
-            <Text color="#9ca3af" fontSize={12}>
+            <Text color={theme.textMuted} fontSize={12}>
               {question.isHidden ? '0 Mudras (Hidden)' : `${question.points} Mudras`}
             </Text>
           </XStack>
@@ -2383,8 +2394,8 @@ export const AdminSurveyQuestionEditorPage: React.FC<
           <XStack alignItems="center" gap={12}>
             <XStack
               cursor="pointer"
-              backgroundColor="#12151c"
-              borderColor="#1f2533"
+              backgroundColor={theme.surface}
+              borderColor={theme.border}
               borderWidth={1}
               borderRadius={8}
               paddingHorizontal={16}
@@ -2393,14 +2404,14 @@ export const AdminSurveyQuestionEditorPage: React.FC<
               hoverStyle={{ borderColor: '#2b3242' }}
               onPress={onCancel}
             >
-              <Text color="#9ca3af" fontSize={13} fontWeight="600">
+              <Text color={theme.textMuted} fontSize={13} fontWeight="600">
                 Cancel
               </Text>
             </XStack>
 
             <XStack
               cursor="pointer"
-              backgroundColor="#D4AF37"
+              backgroundColor={theme.accent}
               borderRadius={8}
               paddingHorizontal={20}
               paddingVertical={10}
@@ -2409,8 +2420,8 @@ export const AdminSurveyQuestionEditorPage: React.FC<
               hoverStyle={{ backgroundColor: '#f5d77f' }}
               onPress={handleValidateAndSave}
             >
-              <LuSave size={16} color="#0b0d11" />
-              <Text color="#0b0d11" fontSize={13} fontWeight="800">
+              <LuSave size={16} color={theme.accentForeground} />
+              <Text color={theme.accentForeground} fontSize={13} fontWeight="800">
                 {isNew ? 'Create Question' : 'Save Question Revision'}
               </Text>
             </XStack>
@@ -2424,8 +2435,8 @@ export const AdminSurveyQuestionEditorPage: React.FC<
       {catalogModalOpen && (
         <YStack style={styles.modalBackdrop}>
           <YStack
-            backgroundColor="#12151c"
-            borderColor="#2b3242"
+            backgroundColor={theme.surface}
+            borderColor={theme.border}
             borderWidth={1}
             borderRadius={12}
             width="90%"
@@ -2438,10 +2449,10 @@ export const AdminSurveyQuestionEditorPage: React.FC<
             {/* Modal Header */}
             <XStack justifyContent="space-between" alignItems="center">
               <YStack gap={2}>
-                <Text color="#ffffff" fontSize={16} fontWeight="700">
+                <Text color={theme.text} fontSize={16} fontWeight="700">
                   Select Catalog Media Asset
                 </Text>
-                <Text color="#9ca3af" fontSize={12}>
+                <Text color={theme.textMuted} fontSize={12}>
                   Curated handloom catalog imagery with verified high-res MinIO assets.
                 </Text>
               </YStack>
@@ -2449,10 +2460,10 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                 cursor="pointer"
                 padding={6}
                 borderRadius={6}
-                backgroundColor="#171b24"
+                backgroundColor={theme.surfaceRaised}
                 onPress={() => setCatalogModalOpen(false)}
               >
-                <LuX size={18} color="#9ca3af" />
+                <LuX size={18} color={theme.textMuted} />
               </XStack>
             </XStack>
 
@@ -2461,8 +2472,8 @@ export const AdminSurveyQuestionEditorPage: React.FC<
               <XStack
                 flex={1}
                 minWidth={200}
-                backgroundColor="#0b0d11"
-                borderColor="#1f2533"
+                backgroundColor={theme.bg}
+                borderColor={theme.border}
                 borderWidth={1}
                 borderRadius={8}
                 paddingHorizontal={10}
@@ -2470,7 +2481,7 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                 height={38}
                 gap={8}
               >
-                <LuSearch size={14} color="#6b7280" />
+                <LuSearch size={14} color={theme.textMuted} />
                 <TextInput
                   style={styles.modalSearchInput}
                   placeholder="Filter catalog assets by title..."
@@ -2520,8 +2531,8 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                   <YStack
                     key={media.id}
                     cursor="pointer"
-                    backgroundColor="#0b0d11"
-                    borderColor="#1f2533"
+                    backgroundColor={theme.bg}
+                    borderColor={theme.border}
                     borderWidth={1}
                     borderRadius={8}
                     width={170}
@@ -2536,14 +2547,14 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                     />
                     <YStack padding={8} gap={4}>
                       <Text
-                        color="#ffffff"
+                        color={theme.text}
                         fontSize={11}
                         fontWeight="700"
                         numberOfLines={1}
                       >
                         {media.title}
                       </Text>
-                      <Text color="#D4AF37" fontSize={9} fontWeight="600">
+                      <Text color={theme.accent} fontSize={9} fontWeight="600">
                         {media.category}
                       </Text>
                     </YStack>
@@ -2565,7 +2576,6 @@ export const AdminSurveyQuestionEditorPage: React.FC<
 const styles = StyleSheet.create({
   screenScroll: {
     flex: 1,
-    backgroundColor: '#0b0d11',
   },
   scrollContent: {
     paddingHorizontal: 20,
@@ -2576,11 +2586,8 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace, Menlo, Consolas, Courier',
   },
   input: {
-    backgroundColor: '#0b0d11',
     borderWidth: 1,
-    borderColor: '#2b3242',
     borderRadius: 8,
-    color: '#ffffff',
     paddingHorizontal: 14,
     paddingVertical: 10,
     fontSize: 13,

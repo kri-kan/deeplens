@@ -1,5 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { TextInput, StyleSheet, Modal } from 'react-native';
+import { TextInput, StyleSheet, Modal, Pressable } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSurveyAdminTheme, surveyAdminStyles } from './surveyAdminTheme';
+import { useResponsive } from '../../../theme';
 import { YStack, XStack, Text, ScrollView } from 'tamagui';
 import {
   LuSearch,
@@ -39,6 +42,7 @@ export interface AdminSurveyResponsesPageProps {
   initialSearchQuery?: string;
   onNavigateBack?: () => void;
   onInspectResponse?: (response: AdminSurveyResponseItem) => void;
+  disableSafeArea?: boolean;
 }
 
 export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> = ({
@@ -50,7 +54,13 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
   initialSearchQuery = '',
   onNavigateBack,
   onInspectResponse,
+  disableSafeArea = false,
 }) => {
+  const theme = useSurveyAdminTheme();
+  const { isMobile } = useResponsive();
+  const insets = useSafeAreaInsets();
+  const topInset = disableSafeArea ? 0 : insets.top;
+  const bottomInset = disableSafeArea ? 0 : insets.bottom;
   const responsesList = useMemo(
     () => (propResponses && propResponses.length > 0 ? propResponses : MOCK_ADMIN_RESPONSES),
     [propResponses]
@@ -145,12 +155,12 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
   }, [questionsList]);
 
   return (
-    <YStack flex={1} backgroundColor="#0b0d11" minHeight="100vh">
+    <YStack flex={1} backgroundColor={theme.bg} minHeight="100vh">
       {/* ──────────────────────────────────────────────────────────── */}
       {/* 1. TOP HEADER & BREADCRUMBS                                  */}
       {/* ──────────────────────────────────────────────────────────── */}
       <YStack
-        backgroundColor="#12151c"
+        backgroundColor={theme.surface}
         borderBottomWidth={1}
         borderBottomColor="#1f2533"
         paddingHorizontal={28}
@@ -168,22 +178,22 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
                 hoverStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.1)' }}
                 onPress={onNavigateBack}
               >
-                <LuArrowLeft size={18} color="#9ca3af" />
+                <LuArrowLeft size={18} color={theme.textMuted} />
               </XStack>
             )}
             <YStack>
               <XStack alignItems="center" gap={8}>
-                <Text color="#9ca3af" fontSize={13} fontWeight="500">
+                <Text color={theme.textMuted} fontSize={13} fontWeight="500">
                   Survey Framework
                 </Text>
-                <Text color="#4b5563" fontSize={13}>
+                <Text color={theme.textMuted} fontSize={13}>
                   /
                 </Text>
-                <Text color="#D4AF37" fontSize={13} fontWeight="600">
+                <Text color={theme.accent} fontSize={13} fontWeight="600">
                   Submissions & Response Analytics
                 </Text>
               </XStack>
-              <Text color="#f9fafb" fontSize={24} fontWeight="800" letterSpacing={-0.5}>
+              <Text color={theme.text} fontSize={24} fontWeight="800" letterSpacing={-0.5}>
                 Response Visualizer & Submissions
               </Text>
             </YStack>
@@ -192,36 +202,36 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
           {/* Quick Metrics Pills */}
           <XStack alignItems="center" gap={10} flexWrap="wrap">
             <XStack
-              backgroundColor="#171b24"
+              backgroundColor={theme.surfaceRaised}
               paddingHorizontal={14}
               paddingVertical={8}
               borderRadius={10}
               borderWidth={1}
-              borderColor="#1f2533"
+              borderColor={theme.border}
               alignItems="center"
               gap={8}
             >
               <LuFileText size={16} color="#60a5fa" />
-              <Text color="#9ca3af" fontSize={13}>
+              <Text color={theme.textMuted} fontSize={13}>
                 Total:{' '}
-                <Text color="#f9fafb" fontWeight="700">
+                <Text color={theme.text} fontWeight="700">
                   {metrics.total}
                 </Text>
               </Text>
             </XStack>
 
             <XStack
-              backgroundColor="#171b24"
+              backgroundColor={theme.surfaceRaised}
               paddingHorizontal={14}
               paddingVertical={8}
               borderRadius={10}
               borderWidth={1}
-              borderColor="#1f2533"
+              borderColor={theme.border}
               alignItems="center"
               gap={8}
             >
               <LuCheck size={16} color="#10b981" />
-              <Text color="#9ca3af" fontSize={13}>
+              <Text color={theme.textMuted} fontSize={13}>
                 Live:{' '}
                 <Text color="#10b981" fontWeight="700">
                   {metrics.liveCount}
@@ -230,17 +240,17 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
             </XStack>
 
             <XStack
-              backgroundColor="#171b24"
+              backgroundColor={theme.surfaceRaised}
               paddingHorizontal={14}
               paddingVertical={8}
               borderRadius={10}
               borderWidth={1}
-              borderColor="#1f2533"
+              borderColor={theme.border}
               alignItems="center"
               gap={8}
             >
               <LuFlaskConical size={16} color="#f59e0b" />
-              <Text color="#9ca3af" fontSize={13}>
+              <Text color={theme.textMuted} fontSize={13}>
                 Sandbox:{' '}
                 <Text color="#f59e0b" fontWeight="700">
                   {metrics.sandboxCount}
@@ -249,19 +259,19 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
             </XStack>
 
             <XStack
-              backgroundColor="#171b24"
+              backgroundColor={theme.surfaceRaised}
               paddingHorizontal={14}
               paddingVertical={8}
               borderRadius={10}
               borderWidth={1}
-              borderColor="rgba(212, 175, 55, 0.3)"
+              borderColor={theme.accent}
               alignItems="center"
               gap={8}
             >
-              <LuCoins size={16} color="#D4AF37" />
-              <Text color="#9ca3af" fontSize={13}>
+              <LuCoins size={16} color={theme.accent} />
+              <Text color={theme.textMuted} fontSize={13}>
                 Avg Reward:{' '}
-                <Text color="#D4AF37" fontWeight="700">
+                <Text color={theme.accent} fontWeight="700">
                   +{metrics.avgMudras} Mudras
                 </Text>
               </Text>
@@ -274,7 +284,7 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
           {/* Left: Survey Selector & Mode Tabs */}
           <XStack alignItems="center" gap={12} flexWrap="wrap">
             {/* Survey Filter Dropdown Pills */}
-            <XStack backgroundColor="#171b24" borderRadius={8} padding={3} borderWidth={1} borderColor="#1f2533">
+            <XStack backgroundColor={theme.surfaceRaised} borderRadius={8} padding={3} borderWidth={1} borderColor={theme.border}>
               <XStack
                 cursor="pointer"
                 paddingHorizontal={12}
@@ -313,7 +323,7 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
             </XStack>
 
             {/* Mode Switcher (Live vs Sandbox) */}
-            <XStack backgroundColor="#171b24" borderRadius={8} padding={3} borderWidth={1} borderColor="#1f2533">
+            <XStack backgroundColor={theme.surfaceRaised} borderRadius={8} padding={3} borderWidth={1} borderColor={theme.border}>
               <XStack
                 cursor="pointer"
                 paddingHorizontal={12}
@@ -366,15 +376,15 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
           {/* Right: Search Input */}
           <XStack
             alignItems="center"
-            backgroundColor="#171b24"
+            backgroundColor={theme.surfaceRaised}
             borderRadius={10}
             borderWidth={1}
-            borderColor="#1f2533"
+            borderColor={theme.border}
             paddingHorizontal={14}
             width={320}
             gap={10}
           >
-            <LuSearch size={16} color="#6b7280" />
+            <LuSearch size={16} color={theme.textMuted} />
             <TextInput
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -384,7 +394,7 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
             />
             {searchQuery.length > 0 && (
               <XStack cursor="pointer" onPress={() => setSearchQuery('')}>
-                <LuX size={15} color="#9ca3af" />
+                <LuX size={15} color={theme.textMuted} />
               </XStack>
             )}
           </XStack>
@@ -393,7 +403,7 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
         {/* Origin Route Pills */}
         {availableRoutes.length > 0 && (
           <XStack alignItems="center" gap={8} marginTop={4} flexWrap="wrap">
-            <Text color="#6b7280" fontSize={12} fontWeight="500">
+            <Text color={theme.textMuted} fontSize={12} fontWeight="500">
               Origin Route:
             </Text>
             <XStack
@@ -441,59 +451,59 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
       <YStack flex={1} padding={28}>
         {filteredResponses.length === 0 ? (
           <YStack
-            backgroundColor="#12151c"
+            backgroundColor={theme.surface}
             borderRadius={14}
             borderWidth={1}
-            borderColor="#1f2533"
+            borderColor={theme.border}
             padding={60}
             alignItems="center"
             justifyContent="center"
             gap={14}
           >
-            <LuFileText size={48} color="#4b5563" />
-            <Text color="#f9fafb" fontSize={18} fontWeight="700">
+            <LuFileText size={48} color={theme.textMuted} />
+            <Text color={theme.text} fontSize={18} fontWeight="700">
               No Submissions Found
             </Text>
-            <Text color="#9ca3af" fontSize={14} textAlign="center" maxWidth={420}>
+            <Text color={theme.textMuted} fontSize={14} textAlign="center" maxWidth={420}>
               No survey response records match the active filters. Try switching modes or clearing your search query.
             </Text>
           </YStack>
         ) : (
           <YStack
-            backgroundColor="#12151c"
+            backgroundColor={theme.surface}
             borderRadius={14}
             borderWidth={1}
-            borderColor="#1f2533"
+            borderColor={theme.border}
             overflow="hidden"
           >
             {/* Table Header */}
             <XStack
-              backgroundColor="#171b24"
+              backgroundColor={theme.surfaceRaised}
               paddingHorizontal={20}
               paddingVertical={14}
               borderBottomWidth={1}
               borderBottomColor="#1f2533"
               alignItems="center"
             >
-              <Text color="#9ca3af" fontSize={12} fontWeight="700" width={180}>
+              <Text color={theme.textMuted} fontSize={12} fontWeight="700" width={180}>
                 SUBMISSION ID / MODE
               </Text>
-              <Text color="#9ca3af" fontSize={12} fontWeight="700" width={160}>
+              <Text color={theme.textMuted} fontSize={12} fontWeight="700" width={160}>
                 SURVEY / VER
               </Text>
-              <Text color="#9ca3af" fontSize={12} fontWeight="700" flex={1}>
+              <Text color={theme.textMuted} fontSize={12} fontWeight="700" flex={1}>
                 CUSTOMER IDENTITY
               </Text>
-              <Text color="#9ca3af" fontSize={12} fontWeight="700" width={100}>
+              <Text color={theme.textMuted} fontSize={12} fontWeight="700" width={100}>
                 LANG
               </Text>
-              <Text color="#9ca3af" fontSize={12} fontWeight="700" width={130}>
+              <Text color={theme.textMuted} fontSize={12} fontWeight="700" width={130}>
                 REWARD
               </Text>
-              <Text color="#9ca3af" fontSize={12} fontWeight="700" width={150}>
+              <Text color={theme.textMuted} fontSize={12} fontWeight="700" width={150}>
                 TIMESTAMP
               </Text>
-              <Text color="#9ca3af" fontSize={12} fontWeight="700" width={90} textAlign="right">
+              <Text color={theme.textMuted} fontSize={12} fontWeight="700" width={90} textAlign="right">
                 ACTION
               </Text>
             </XStack>
@@ -515,7 +525,7 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
                   >
                     {/* Submission ID & Mode Badge */}
                     <YStack width={180} gap={4}>
-                      <Text color="#f9fafb" fontSize={13} fontWeight="600" fontFamily="monospace">
+                      <Text color={theme.text} fontSize={13} fontWeight="600" fontFamily="monospace">
                         {resp.id}
                       </Text>
                       <XStack alignItems="center" gap={6}>
@@ -552,7 +562,7 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
                             </Text>
                           </XStack>
                         )}
-                        <Text color="#6b7280" fontSize={11}>
+                        <Text color={theme.textMuted} fontSize={11}>
                           {resp.originRoute || 'direct'}
                         </Text>
                       </XStack>
@@ -560,17 +570,17 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
 
                     {/* Survey & Version */}
                     <YStack width={160} gap={4}>
-                      <Text color="#d1d5db" fontSize={13} fontWeight="600">
+                      <Text color={theme.textSecondary} fontSize={13} fontWeight="600">
                         /{resp.surveySlug}
                       </Text>
                       <XStack alignItems="center" gap={4}>
-                        <Text color="#D4AF37" fontSize={11} fontWeight="700">
+                        <Text color={theme.accent} fontSize={11} fontWeight="700">
                           v{resp.versionNumber}
                         </Text>
-                        <Text color="#4b5563" fontSize={11}>
+                        <Text color={theme.textMuted} fontSize={11}>
                           •
                         </Text>
-                        <Text color="#9ca3af" fontSize={11}>
+                        <Text color={theme.textMuted} fontSize={11}>
                           {resp.questionsAnsweredCount} answers
                         </Text>
                       </XStack>
@@ -579,7 +589,7 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
                     {/* Customer Identity */}
                     <YStack flex={1} gap={3} paddingRight={12}>
                       <XStack alignItems="center" gap={8}>
-                        <Text color="#f9fafb" fontSize={13} fontWeight="500">
+                        <Text color={theme.text} fontSize={13} fontWeight="500">
                           {resp.phone || resp.userId || 'Guest Shopper'}
                         </Text>
                         {resp.userId && (
@@ -588,7 +598,7 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
                           </Text>
                         )}
                       </XStack>
-                      <Text color="#6b7280" fontSize={11} fontFamily="monospace" numberOfLines={1}>
+                      <Text color={theme.textMuted} fontSize={11} fontFamily="monospace" numberOfLines={1}>
                         FP: {resp.virtualUserId}
                       </Text>
                     </YStack>
@@ -596,18 +606,18 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
                     {/* Language */}
                     <YStack width={100}>
                       <XStack
-                        backgroundColor="#171b24"
+                        backgroundColor={theme.surfaceRaised}
                         paddingHorizontal={8}
                         paddingVertical={3}
                         borderRadius={6}
                         borderWidth={1}
-                        borderColor="#1f2533"
+                        borderColor={theme.border}
                         alignSelf="flex-start"
                         alignItems="center"
                         gap={4}
                       >
-                        <LuGlobe size={12} color="#9ca3af" />
-                        <Text color="#f9fafb" fontSize={11} fontWeight="600">
+                        <LuGlobe size={12} color={theme.textMuted} />
+                        <Text color={theme.text} fontSize={11} fontWeight="600">
                           {resp.language.toUpperCase()}
                         </Text>
                       </XStack>
@@ -616,26 +626,26 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
                     {/* Mudras Reward */}
                     <YStack width={130} gap={2}>
                       <XStack alignItems="center" gap={6}>
-                        <LuCoins size={15} color="#D4AF37" />
-                        <Text color="#D4AF37" fontSize={14} fontWeight="800">
+                        <LuCoins size={15} color={theme.accent} />
+                        <Text color={theme.accent} fontSize={14} fontWeight="800">
                           +{resp.earnedMudras}
                         </Text>
                       </XStack>
-                      <Text color="#6b7280" fontSize={10}>
+                      <Text color={theme.textMuted} fontSize={10}>
                         Mudras credited
                       </Text>
                     </YStack>
 
                     {/* Timestamp */}
                     <YStack width={150} gap={2}>
-                      <Text color="#9ca3af" fontSize={12}>
+                      <Text color={theme.textMuted} fontSize={12}>
                         {new Date(resp.submittedAt).toLocaleDateString('en-IN', {
                           day: '2-digit',
                           month: 'short',
                           year: 'numeric',
                         })}
                       </Text>
-                      <Text color="#6b7280" fontSize={11}>
+                      <Text color={theme.textMuted} fontSize={11}>
                         {new Date(resp.submittedAt).toLocaleTimeString('en-IN', {
                           hour: '2-digit',
                           minute: '2-digit',
@@ -660,8 +670,8 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
                           if (onInspectResponse) onInspectResponse(resp);
                         }}
                       >
-                        <LuEye size={14} color="#D4AF37" />
-                        <Text color="#f9fafb" fontSize={12} fontWeight="600">
+                        <LuEye size={14} color={theme.accent} />
+                        <Text color={theme.text} fontSize={12} fontWeight="600">
                           View
                         </Text>
                       </XStack>
@@ -686,7 +696,7 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
         >
           <YStack
             flex={1}
-            backgroundColor="rgba(0, 0, 0, 0.85)"
+            backgroundColor={theme.overlay}
             justifyContent="center"
             alignItems="center"
             padding={24}
@@ -695,10 +705,10 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
               width="100%"
               maxWidth={880}
               maxHeight="90vh"
-              backgroundColor="#12151c"
+              backgroundColor={theme.surface}
               borderRadius={18}
               borderWidth={1}
-              borderColor="#2b3242"
+              borderColor={theme.border}
               overflow="hidden"
             >
               {/* Modal Header */}
@@ -709,12 +719,12 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
                 borderBottomColor="#1f2533"
                 justifyContent="space-between"
                 alignItems="center"
-                backgroundColor="#171b24"
+                backgroundColor={theme.surfaceRaised}
               >
                 <XStack alignItems="center" gap={12}>
                   <YStack>
                     <XStack alignItems="center" gap={8}>
-                      <Text color="#D4AF37" fontSize={12} fontWeight="700" letterSpacing={0.5}>
+                      <Text color={theme.accent} fontSize={12} fontWeight="700" letterSpacing={0.5}>
                         RESPONSE INSPECTOR
                       </Text>
                       {inspectedResponse.isTest ? (
@@ -745,7 +755,7 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
                         </XStack>
                       )}
                     </XStack>
-                    <Text color="#f9fafb" fontSize={18} fontWeight="700" fontFamily="monospace">
+                    <Text color={theme.text} fontSize={18} fontWeight="700" fontFamily="monospace">
                       {inspectedResponse.id}
                     </Text>
                   </YStack>
@@ -759,13 +769,13 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
                   hoverStyle={{ backgroundColor: '#2b3242' }}
                   onPress={() => setInspectedResponse(null)}
                 >
-                  <LuX size={18} color="#9ca3af" />
+                  <LuX size={18} color={theme.textMuted} />
                 </XStack>
               </XStack>
 
               {/* Inspector Meta Bar */}
               <XStack
-                backgroundColor="#151922"
+                backgroundColor={theme.surfaceRaised}
                 paddingHorizontal={24}
                 paddingVertical={12}
                 borderBottomWidth={1}
@@ -774,42 +784,42 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
                 flexWrap="wrap"
               >
                 <YStack gap={2}>
-                  <Text color="#6b7280" fontSize={11}>
+                  <Text color={theme.textMuted} fontSize={11}>
                     SURVEY SLUG
                   </Text>
-                  <Text color="#f9fafb" fontSize={13} fontWeight="600">
+                  <Text color={theme.text} fontSize={13} fontWeight="600">
                     /{inspectedResponse.surveySlug} (v{inspectedResponse.versionNumber})
                   </Text>
                 </YStack>
                 <YStack gap={2}>
-                  <Text color="#6b7280" fontSize={11}>
+                  <Text color={theme.textMuted} fontSize={11}>
                     CUSTOMER
                   </Text>
-                  <Text color="#f9fafb" fontSize={13} fontWeight="600">
+                  <Text color={theme.text} fontSize={13} fontWeight="600">
                     {inspectedResponse.phone || inspectedResponse.userId || 'Guest'}
                   </Text>
                 </YStack>
                 <YStack gap={2}>
-                  <Text color="#6b7280" fontSize={11}>
+                  <Text color={theme.textMuted} fontSize={11}>
                     LANGUAGE
                   </Text>
-                  <Text color="#f9fafb" fontSize={13} fontWeight="600">
+                  <Text color={theme.text} fontSize={13} fontWeight="600">
                     {inspectedResponse.language.toUpperCase()}
                   </Text>
                 </YStack>
                 <YStack gap={2}>
-                  <Text color="#6b7280" fontSize={11}>
+                  <Text color={theme.textMuted} fontSize={11}>
                     MUDRAS EARNED
                   </Text>
-                  <Text color="#D4AF37" fontSize={13} fontWeight="800">
+                  <Text color={theme.accent} fontSize={13} fontWeight="800">
                     +{inspectedResponse.earnedMudras} Mudras
                   </Text>
                 </YStack>
                 <YStack gap={2}>
-                  <Text color="#6b7280" fontSize={11}>
+                  <Text color={theme.textMuted} fontSize={11}>
                     SUBMITTED AT
                   </Text>
-                  <Text color="#9ca3af" fontSize={13}>
+                  <Text color={theme.textMuted} fontSize={13}>
                     {new Date(inspectedResponse.submittedAt).toLocaleString('en-IN')}
                   </Text>
                 </YStack>
@@ -817,7 +827,7 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
 
               {/* Inspector Tab Switcher */}
               <XStack
-                backgroundColor="#12151c"
+                backgroundColor={theme.surface}
                 paddingHorizontal={24}
                 paddingTop={12}
                 borderBottomWidth={1}
@@ -897,15 +907,15 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
                       return (
                         <YStack
                           key={key}
-                          backgroundColor="#171b24"
+                          backgroundColor={theme.surfaceRaised}
                           borderRadius={12}
                           borderWidth={1}
-                          borderColor="#1f2533"
+                          borderColor={theme.border}
                           padding={16}
                           gap={8}
                         >
                           <XStack justifyContent="space-between" alignItems="center">
-                            <Text color="#D4AF37" fontSize={11} fontWeight="700" fontFamily="monospace">
+                            <Text color={theme.accent} fontSize={11} fontWeight="700" fontFamily="monospace">
                               {key}
                             </Text>
                             {question && (
@@ -915,25 +925,25 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
                                 paddingVertical={2}
                                 borderRadius={4}
                               >
-                                <Text color="#9ca3af" fontSize={10} fontWeight="600">
+                                <Text color={theme.textMuted} fontSize={10} fontWeight="600">
                                   {question.questionType}
                                 </Text>
                               </XStack>
                             )}
                           </XStack>
 
-                          <Text color="#f9fafb" fontSize={14} fontWeight="600">
+                          <Text color={theme.text} fontSize={14} fontWeight="600">
                             {title}
                           </Text>
 
                           {/* Render Answer Value */}
                           {isImageUpload ? (
                             <XStack
-                              backgroundColor="#12151c"
+                              backgroundColor={theme.surface}
                               borderRadius={8}
                               padding={12}
                               borderWidth={1}
-                              borderColor="#2b3242"
+                              borderColor={theme.border}
                               alignItems="center"
                               justifyContent="space-between"
                               gap={12}
@@ -941,10 +951,10 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
                               <XStack alignItems="center" gap={10}>
                                 <LuImage size={24} color="#60a5fa" />
                                 <YStack>
-                                  <Text color="#f9fafb" fontSize={13} fontWeight="600">
+                                  <Text color={theme.text} fontSize={13} fontWeight="600">
                                     Customer Photo Upload
                                   </Text>
-                                  <Text color="#6b7280" fontSize={11} fontFamily="monospace" numberOfLines={1}>
+                                  <Text color={theme.textMuted} fontSize={11} fontFamily="monospace" numberOfLines={1}>
                                     {val}
                                   </Text>
                                 </YStack>
@@ -959,8 +969,8 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
                                 alignItems="center"
                                 gap={6}
                               >
-                                <LuExternalLink size={13} color="#D4AF37" />
-                                <Text color="#D4AF37" fontSize={12} fontWeight="600">
+                                <LuExternalLink size={13} color={theme.accent} />
+                                <Text color={theme.accent} fontSize={12} fontWeight="600">
                                   Presigned View
                                 </Text>
                               </XStack>
@@ -975,9 +985,9 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
                                   paddingVertical={4}
                                   borderRadius={6}
                                   borderWidth={1}
-                                  borderColor="rgba(212, 175, 55, 0.3)"
+                                  borderColor={theme.accent}
                                 >
-                                  <Text color="#D4AF37" fontSize={12} fontWeight="600">
+                                  <Text color={theme.accent} fontSize={12} fontWeight="600">
                                     {String(item)}
                                   </Text>
                                 </XStack>
@@ -997,28 +1007,28 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
                 {/* TAB 2: HIDDEN CONTEXT FIELDS */}
                 {inspectorTab === 'hidden' && (
                   <YStack gap={14}>
-                    <Text color="#9ca3af" fontSize={13}>
+                    <Text color={theme.textMuted} fontSize={13}>
                       These contextual fields were automatically resolved from URL parameters or fallback static defaults without showing in client UI:
                     </Text>
 
                     {Object.keys(inspectedResponse.hiddenFields || {}).length === 0 ? (
                       <YStack
-                        backgroundColor="#171b24"
+                        backgroundColor={theme.surfaceRaised}
                         padding={32}
                         borderRadius={10}
                         alignItems="center"
                         gap={8}
                       >
-                        <Text color="#6b7280" fontSize={13}>
+                        <Text color={theme.textMuted} fontSize={13}>
                           No hidden parameters were captured for this submission.
                         </Text>
                       </YStack>
                     ) : (
                       <YStack
-                        backgroundColor="#171b24"
+                        backgroundColor={theme.surfaceRaised}
                         borderRadius={12}
                         borderWidth={1}
-                        borderColor="#1f2533"
+                        borderColor={theme.border}
                         overflow="hidden"
                       >
                         {Object.entries(inspectedResponse.hiddenFields || {}).map(([param, val], idx) => {
@@ -1035,7 +1045,7 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
                               alignItems="center"
                             >
                               <XStack alignItems="center" gap={10}>
-                                <Text color="#D4AF37" fontSize={13} fontWeight="700" fontFamily="monospace">
+                                <Text color={theme.accent} fontSize={13} fontWeight="700" fontFamily="monospace">
                                   ?{param}=
                                 </Text>
                               </XStack>
@@ -1072,11 +1082,11 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
                       </XStack>
                     </XStack>
                     <YStack
-                      backgroundColor="#090b0e"
+                      backgroundColor={theme.surfaceRaised}
                       padding={16}
                       borderRadius={10}
                       borderWidth={1}
-                      borderColor="#1f2533"
+                      borderColor={theme.border}
                     >
                       <Text color="#a5b4fc" fontSize={12} fontFamily="monospace" style={{ whiteSpace: 'pre' }}>
                         {JSON.stringify(inspectedResponse, null, 2)}

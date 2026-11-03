@@ -1,5 +1,9 @@
 import React, { useState } from 'react';
 import { YStack, XStack, Text } from 'tamagui';
+import { Pressable } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSurveyAdminTheme, surveyAdminStyles } from './surveyAdminTheme';
+import { useResponsive } from '../../../theme';
 import {
   LuLayers,
   LuPencil,
@@ -43,12 +47,19 @@ export type SurveyAdminTab =
 export interface SurveyAdminSuiteProps {
   initialTab?: SurveyAdminTab;
   initialSurveyId?: string;
+  disableSafeArea?: boolean;
 }
 
 export const SurveyAdminSuite: React.FC<SurveyAdminSuiteProps> = ({
   initialTab = 'questions',
   initialSurveyId = 'survey-taste-discovery-id',
+  disableSafeArea = false,
 }) => {
+  const theme = useSurveyAdminTheme();
+  const { isMobile } = useResponsive();
+  const insets = useSafeAreaInsets();
+  const topInset = disableSafeArea ? 0 : insets.top;
+  const bottomInset = disableSafeArea ? 0 : insets.bottom;
   // Master Shared State across the suite
   const [activeTab, setActiveTab] = useState<SurveyAdminTab>(initialTab);
   const [questions, setQuestions] = useState<AdminQuestionItem[]>(MOCK_ADMIN_QUESTIONS);
@@ -100,14 +111,14 @@ export const SurveyAdminSuite: React.FC<SurveyAdminSuiteProps> = ({
   };
 
   return (
-    <YStack flex={1} backgroundColor="#0b0d11" minHeight="100vh">
+    <YStack flex={1} backgroundColor={theme.bg} minHeight="100vh">
       {/* ──────────────────────────────────────────────────────────── */}
       {/* MASTER TOP NAVIGATION BAR                                    */}
       {/* ──────────────────────────────────────────────────────────── */}
       <YStack
-        backgroundColor="#0d1017"
+        backgroundColor={theme.surface}
         borderBottomWidth={1}
-        borderBottomColor="#1f2533"
+        borderBottomColor={theme.border}
         paddingHorizontal={24}
         paddingTop={14}
         gap={12}
@@ -116,19 +127,19 @@ export const SurveyAdminSuite: React.FC<SurveyAdminSuiteProps> = ({
           {/* Brand & Suite Title */}
           <XStack alignItems="center" gap={10}>
             <XStack
-              backgroundColor="rgba(212, 175, 55, 0.15)"
+              backgroundColor={theme.accentSubtle}
               padding={8}
               borderRadius={10}
               borderWidth={1}
-              borderColor="rgba(212, 175, 55, 0.4)"
+              borderColor={theme.accent}
             >
-              <LuSparkles size={20} color="#D4AF37" />
+              <LuSparkles size={20} color={theme.accent} />
             </XStack>
             <YStack>
-              <Text color="#D4AF37" fontSize={11} fontWeight="800" letterSpacing={1}>
+              <Text color={theme.accent} fontSize={11} fontWeight="800" letterSpacing={1}>
                 VAYYARI ADMIN
               </Text>
-              <Text color="#f9fafb" fontSize={18} fontWeight="800">
+              <Text color={theme.text} fontSize={18} fontWeight="800">
                 Survey & Questionnaire Suite
               </Text>
             </YStack>
@@ -137,33 +148,33 @@ export const SurveyAdminSuite: React.FC<SurveyAdminSuiteProps> = ({
           {/* Quick Stats Pill */}
           <XStack alignItems="center" gap={10}>
             <XStack
-              backgroundColor="#12151c"
+              backgroundColor={theme.surfaceRaised}
               paddingHorizontal={12}
               paddingVertical={6}
               borderRadius={8}
               borderWidth={1}
-              borderColor="#1f2533"
+              borderColor={theme.border}
               gap={6}
               alignItems="center"
             >
-              <Text color="#9ca3af" fontSize={12}>
+              <Text color={theme.textMuted} fontSize={12}>
                 Questions Bank:
               </Text>
-              <Text color="#D4AF37" fontSize={12} fontWeight="700">
+              <Text color={theme.accent} fontSize={12} fontWeight="700">
                 {questions.length}
               </Text>
             </XStack>
             <XStack
-              backgroundColor="#12151c"
+              backgroundColor={theme.surfaceRaised}
               paddingHorizontal={12}
               paddingVertical={6}
               borderRadius={8}
               borderWidth={1}
-              borderColor="#1f2533"
+              borderColor={theme.border}
               gap={6}
               alignItems="center"
             >
-              <Text color="#9ca3af" fontSize={12}>
+              <Text color={theme.textMuted} fontSize={12}>
                 Surveys:
               </Text>
               <Text color="#60a5fa" fontSize={12} fontWeight="700">
@@ -177,7 +188,7 @@ export const SurveyAdminSuite: React.FC<SurveyAdminSuiteProps> = ({
         <XStack gap={28} alignItems="center" flexWrap="wrap">
           {/* PILLAR 1: QUESTIONNAIRE MANAGEMENT */}
           <XStack alignItems="center" gap={8}>
-            <Text color="#6b7280" fontSize={11} fontWeight="700" letterSpacing={0.5}>
+            <Text color={theme.textMuted} fontSize={11} fontWeight="700" letterSpacing={0.5}>
               QUESTIONNAIRE:
             </Text>
             <XStack
@@ -185,14 +196,14 @@ export const SurveyAdminSuite: React.FC<SurveyAdminSuiteProps> = ({
               paddingVertical={10}
               paddingHorizontal={14}
               borderBottomWidth={2}
-              borderBottomColor={activeTab === 'questions' ? '#D4AF37' : 'transparent'}
+              borderBottomColor={activeTab === 'questions' ? theme.accent : 'transparent'}
               alignItems="center"
               gap={6}
               onPress={() => setActiveTab('questions')}
             >
-              <LuLayers size={14} color={activeTab === 'questions' ? '#D4AF37' : '#9ca3af'} />
+              <LuLayers size={14} color={activeTab === 'questions' ? theme.accent : theme.textMuted} />
               <Text
-                color={activeTab === 'questions' ? '#f9fafb' : '#9ca3af'}
+                color={activeTab === 'questions' ? theme.text : theme.textMuted}
                 fontSize={13}
                 fontWeight={activeTab === 'questions' ? '700' : '500'}
               >
@@ -205,7 +216,7 @@ export const SurveyAdminSuite: React.FC<SurveyAdminSuiteProps> = ({
               paddingVertical={10}
               paddingHorizontal={14}
               borderBottomWidth={2}
-              borderBottomColor={activeTab === 'question_editor' ? '#D4AF37' : 'transparent'}
+              borderBottomColor={activeTab === 'question_editor' ? theme.accent : 'transparent'}
               alignItems="center"
               gap={6}
               onPress={() => {
@@ -216,9 +227,9 @@ export const SurveyAdminSuite: React.FC<SurveyAdminSuiteProps> = ({
                 setActiveTab('question_editor');
               }}
             >
-              <LuPencil size={14} color={activeTab === 'question_editor' ? '#D4AF37' : '#9ca3af'} />
+              <LuPencil size={14} color={activeTab === 'question_editor' ? theme.accent : theme.textMuted} />
               <Text
-                color={activeTab === 'question_editor' ? '#f9fafb' : '#9ca3af'}
+                color={activeTab === 'question_editor' ? theme.text : theme.textMuted}
                 fontSize={13}
                 fontWeight={activeTab === 'question_editor' ? '700' : '500'}
               >
@@ -233,7 +244,7 @@ export const SurveyAdminSuite: React.FC<SurveyAdminSuiteProps> = ({
 
           {/* PILLAR 2: SURVEY MANAGEMENT */}
           <XStack alignItems="center" gap={8}>
-            <Text color="#6b7280" fontSize={11} fontWeight="700" letterSpacing={0.5}>
+            <Text color={theme.textMuted} fontSize={11} fontWeight="700" letterSpacing={0.5}>
               SURVEY MANAGEMENT:
             </Text>
             <XStack
@@ -241,14 +252,14 @@ export const SurveyAdminSuite: React.FC<SurveyAdminSuiteProps> = ({
               paddingVertical={10}
               paddingHorizontal={14}
               borderBottomWidth={2}
-              borderBottomColor={activeTab === 'builder' ? '#D4AF37' : 'transparent'}
+              borderBottomColor={activeTab === 'builder' ? theme.accent : 'transparent'}
               alignItems="center"
               gap={6}
               onPress={() => setActiveTab('builder')}
             >
-              <LuSlidersHorizontal size={14} color={activeTab === 'builder' ? '#D4AF37' : '#9ca3af'} />
+              <LuSlidersHorizontal size={14} color={activeTab === 'builder' ? theme.accent : theme.textMuted} />
               <Text
-                color={activeTab === 'builder' ? '#f9fafb' : '#9ca3af'}
+                color={activeTab === 'builder' ? theme.text : theme.textMuted}
                 fontSize={13}
                 fontWeight={activeTab === 'builder' ? '700' : '500'}
               >
@@ -261,14 +272,14 @@ export const SurveyAdminSuite: React.FC<SurveyAdminSuiteProps> = ({
               paddingVertical={10}
               paddingHorizontal={14}
               borderBottomWidth={2}
-              borderBottomColor={activeTab === 'preview' ? '#D4AF37' : 'transparent'}
+              borderBottomColor={activeTab === 'preview' ? theme.accent : 'transparent'}
               alignItems="center"
               gap={6}
               onPress={() => setActiveTab('preview')}
             >
-              <LuPlay size={14} color={activeTab === 'preview' ? '#D4AF37' : '#9ca3af'} />
+              <LuPlay size={14} color={activeTab === 'preview' ? theme.accent : theme.textMuted} />
               <Text
-                color={activeTab === 'preview' ? '#f9fafb' : '#9ca3af'}
+                color={activeTab === 'preview' ? theme.text : theme.textMuted}
                 fontSize={13}
                 fontWeight={activeTab === 'preview' ? '700' : '500'}
               >
@@ -281,14 +292,14 @@ export const SurveyAdminSuite: React.FC<SurveyAdminSuiteProps> = ({
               paddingVertical={10}
               paddingHorizontal={14}
               borderBottomWidth={2}
-              borderBottomColor={activeTab === 'responses' ? '#D4AF37' : 'transparent'}
+              borderBottomColor={activeTab === 'responses' ? theme.accent : 'transparent'}
               alignItems="center"
               gap={6}
               onPress={() => setActiveTab('responses')}
             >
-              <LuFileText size={14} color={activeTab === 'responses' ? '#D4AF37' : '#9ca3af'} />
+              <LuFileText size={14} color={activeTab === 'responses' ? theme.accent : theme.textMuted} />
               <Text
-                color={activeTab === 'responses' ? '#f9fafb' : '#9ca3af'}
+                color={activeTab === 'responses' ? theme.text : theme.textMuted}
                 fontSize={13}
                 fontWeight={activeTab === 'responses' ? '700' : '500'}
               >
