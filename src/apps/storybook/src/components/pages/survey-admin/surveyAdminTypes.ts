@@ -68,6 +68,12 @@ export interface AdminQuestionItem {
   questionKey: string;
   revisionNumber: number;
   questionType: QuestionType;
+  /**
+   * Default coins awarded when answering this question.
+   * Can be overridden per survey step in the Survey Builder (survey_version_questions).
+   * When not overridden, this question-level value serves as the fallback default.
+   */
+  defaultPoints?: number;
   points: number;
   isHidden: boolean;
   hiddenConfig?: {

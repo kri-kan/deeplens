@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { TextInput, StyleSheet, Pressable, Modal } from 'react-native';
+import { TextInput, StyleSheet, Pressable, Modal, ScrollView as RNScrollView } from 'react-native';
 import { YStack, XStack, Text, ScrollView } from 'tamagui';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -231,7 +231,8 @@ export const AdminSurveyQuestionsPage: React.FC<AdminSurveyQuestionsPageProps> =
         questionKey: selectedQuestion.questionKey,
         revisionNumber: nextRevNum,
         questionType: selectedQuestion.questionType,
-        points: selectedQuestion.points,
+        defaultPoints: selectedQuestion.defaultPoints ?? selectedQuestion.points,
+        points: selectedQuestion.defaultPoints ?? selectedQuestion.points,
         aspectRatio: selectedQuestion.aspectRatio,
       },
     };
@@ -294,18 +295,21 @@ export const AdminSurveyQuestionsPage: React.FC<AdminSurveyQuestionsPageProps> =
   ];
 
   return (
-    <YStack flex={1} backgroundColor={tokens.background} paddingTop={topInset}>
+    <YStack flex={1} width="100%" maxWidth="100%" overflow="hidden" backgroundColor={tokens.background} paddingTop={topInset}>
       {/* ── 1. Canonical Vayyari Top App Bar ── */}
       <XStack
         justifyContent="space-between"
         alignItems="center"
-        paddingHorizontal="$4"
-        paddingVertical="$3"
+        paddingHorizontal={16}
+        paddingVertical={12}
         backgroundColor={tokens.surface}
         borderBottomWidth={1}
         borderBottomColor={tokens.border}
+        width="100%"
+        maxWidth="100%"
+        gap={10}
       >
-        <XStack alignItems="center" gap="$3">
+        <XStack flex={1} minWidth={0} alignItems="center" gap={10}>
           {onNavigateBack ? (
             <Pressable
               onPress={onNavigateBack}
@@ -313,32 +317,33 @@ export const AdminSurveyQuestionsPage: React.FC<AdminSurveyQuestionsPageProps> =
               accessibilityLabel="Navigate back"
               style={({ pressed }) => [
                 styles.iconButton,
-                { backgroundColor: pressed ? tokens.surfaceRaised : 'transparent' },
+                { backgroundColor: pressed ? tokens.surfaceRaised : 'transparent', flexShrink: 0 },
               ]}
             >
-              <LuArrowLeft size={20} color={tokens.text} />
+              <LuArrowLeft size={18} color={tokens.text} />
             </Pressable>
           ) : null}
-          <YStack>
-            <XStack alignItems="center" gap="$2">
-              <Text fontSize={17} fontWeight="800" color={tokens.text} letterSpacing={0.2}>
+          <YStack flex={1} minWidth={0} gap={2}>
+            <XStack alignItems="center" gap={8} flexWrap="nowrap">
+              <Text fontSize={16} fontWeight="800" color={tokens.text} letterSpacing={0.2} numberOfLines={1}>
                 Questions Bank
               </Text>
               <XStack
                 backgroundColor={tokens.accentSubtle}
-                paddingHorizontal={8}
+                paddingHorizontal={7}
                 paddingVertical={2}
                 borderRadius={tokens.radius.full}
                 borderWidth={1}
                 borderColor={tokens.accent}
+                flexShrink={0}
               >
-                <Text fontSize={10} fontWeight="800" color={tokens.accent}>
+                <Text fontSize={9} fontWeight="800" color={tokens.accent}>
                   REVISIONS
                 </Text>
               </XStack>
             </XStack>
-            <Text fontSize={11} color={tokens.textMuted}>
-              Atomic repository, revision history &amp; hidden route parameters
+            <Text fontSize={11} color={tokens.textMuted} numberOfLines={1} ellipsizeMode="tail">
+              Atomic repository, revisions &amp; hidden route parameters
             </Text>
           </YStack>
         </XStack>
@@ -352,13 +357,14 @@ export const AdminSurveyQuestionsPage: React.FC<AdminSurveyQuestionsPageProps> =
               styles.primaryButton,
               {
                 backgroundColor: tokens.accent,
+                flexShrink: 0,
                 transform: [{ scale: pressed ? 0.98 : 1 }],
               },
             ]}
           >
-            <LuPlus size={15} color={tokens.accentForeground} strokeWidth={2.5} />
+            <LuPlus size={14} color={tokens.accentForeground} strokeWidth={2.5} />
             <Text fontSize={12} fontWeight="800" color={tokens.accentForeground}>
-              New Question
+              {isMobile ? 'New' : 'New Question'}
             </Text>
           </Pressable>
         )}
@@ -369,38 +375,66 @@ export const AdminSurveyQuestionsPage: React.FC<AdminSurveyQuestionsPageProps> =
         backgroundColor={tokens.surface}
         borderBottomWidth={1}
         borderBottomColor={tokens.border}
-        paddingHorizontal="$4"
-        paddingVertical="$3"
-        gap="$2.5"
+        paddingTop={12}
+        paddingBottom={10}
+        gap={10}
+        width="100%"
+        maxWidth="100%"
       >
-        <XStack
-          alignItems="center"
-          backgroundColor={tokens.surfaceRaised}
-          borderRadius={tokens.radius.md}
-          borderWidth={1}
-          borderColor={tokens.border}
-          paddingHorizontal="$3"
-          height={38}
-          gap="$2"
-        >
-          <LuSearch size={16} color={tokens.textMuted} />
-          <TextInput
-            style={[styles.searchInput, { color: tokens.text }]}
-            placeholder="Search by question key, title, kicker, or param..."
-            placeholderTextColor={tokens.textMuted}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          {searchQuery.length > 0 && (
-            <Pressable onPress={() => setSearchQuery('')}>
-              <LuX size={15} color={tokens.textMuted} />
-            </Pressable>
-          )}
-        </XStack>
+        {/* Search input container with guaranteed 4 borders */}
+        <YStack paddingHorizontal={16} width="100%">
+          <XStack
+            alignItems="center"
+            backgroundColor={tokens.surfaceRaised}
+            borderRadius={8}
+            borderWidth={1}
+            borderColor={tokens.border}
+            borderStyle="solid"
+            paddingHorizontal={12}
+            height={40}
+            gap={8}
+            overflow="hidden"
+            width="100%"
+          >
+            <LuSearch size={16} color={tokens.textMuted} style={{ flexShrink: 0 }} />
+            <TextInput
+              style={[
+                styles.searchInput,
+                {
+                  color: tokens.text,
+                  backgroundColor: 'transparent',
+                  borderWidth: 0,
+                  outlineStyle: 'none',
+                  flex: 1,
+                  height: '100%',
+                },
+              ]}
+              placeholder="Search by question key, title, kicker, or param..."
+              placeholderTextColor={tokens.textMuted}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchQuery.length > 0 && (
+              <Pressable onPress={() => setSearchQuery('')} hitSlop={8} style={{ flexShrink: 0 }}>
+                <LuX size={15} color={tokens.textMuted} />
+              </Pressable>
+            )}
+          </XStack>
+        </YStack>
 
-        {/* Filter Pills */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <XStack gap="$2" alignItems="center">
+        {/* Filter Pills: Horizontal scroll container strictly constrained to 100% width */}
+        <YStack width="100%" maxWidth="100%" overflow="hidden">
+          <RNScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ width: '100%', maxWidth: '100%' }}
+            contentContainerStyle={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingHorizontal: 16,
+              gap: 8,
+            }}
+          >
             {filterTabs.map((tab) => {
               const isActive = typeFilter === tab.id;
               return (
@@ -440,8 +474,8 @@ export const AdminSurveyQuestionsPage: React.FC<AdminSurveyQuestionsPageProps> =
                 </Pressable>
               );
             })}
-          </XStack>
-        </ScrollView>
+          </RNScrollView>
+        </YStack>
       </YStack>
 
       {/* ── 3. Questions Cards List ── */}
@@ -490,8 +524,8 @@ export const AdminSurveyQuestionsPage: React.FC<AdminSurveyQuestionsPageProps> =
                 gap="$3"
               >
                 {/* Header Row: Key + Badges */}
-                <XStack justifyContent="space-between" alignItems="center" flexWrap="wrap" gap="$2">
-                  <XStack alignItems="center" gap="$2" flexWrap="wrap">
+                <XStack justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={8} width="100%">
+                  <XStack flex={1} minWidth={180} alignItems="center" gap={6} flexWrap="wrap">
                     {/* Slug Key Badge */}
                     <XStack
                       backgroundColor={tokens.surfaceRaised}
@@ -534,11 +568,22 @@ export const AdminSurveyQuestionsPage: React.FC<AdminSurveyQuestionsPageProps> =
                       </Text>
                     </XStack>
 
-                    {/* Mudras Points */}
-                    <XStack alignItems="center" gap={4}>
-                      <LuCoins size={13} color={tokens.accent} />
+                    {/* Default Coins Badge */}
+                    <XStack
+                      alignItems="center"
+                      gap={4}
+                      backgroundColor={tokens.accentSubtle}
+                      borderWidth={1}
+                      borderColor={tokens.accent}
+                      paddingHorizontal={8}
+                      paddingVertical={2}
+                      borderRadius={tokens.radius.full}
+                    >
+                      <LuCoins size={12} color={tokens.accent} />
                       <Text fontSize={11} fontWeight="700" color={tokens.accent}>
-                        {question.points > 0 ? `+${question.points}` : '0 Mudras'}
+                        {question.isHidden
+                          ? '0 Default Coins (Hidden)'
+                          : `${question.defaultPoints ?? question.points ?? 0} Default Coins`}
                       </Text>
                     </XStack>
                   </XStack>
@@ -567,6 +612,11 @@ export const AdminSurveyQuestionsPage: React.FC<AdminSurveyQuestionsPageProps> =
                       {question.statements.subtitle.en}
                     </Text>
                   ) : null}
+                  <XStack alignItems="center" gap={4} marginTop={2}>
+                    <Text fontSize={10} color={tokens.textMuted}>
+                      Default fallback reward · Can be overridden per step in Survey Builder
+                    </Text>
+                  </XStack>
                 </YStack>
 
                 {/* Hidden Parameter Configuration info */}
@@ -928,10 +978,11 @@ const styles = StyleSheet.create({
   primaryButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 8,
     gap: 6,
+    flexShrink: 0,
   },
   modalCancelButton: {
     paddingHorizontal: 14,
@@ -942,8 +993,11 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 13,
-    paddingVertical: 4,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
     outlineWidth: 0,
+    outlineStyle: 'none',
+    borderWidth: 0,
     backgroundColor: 'transparent',
   } as any,
   filterPill: {
@@ -954,6 +1008,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     gap: 6,
+    flexShrink: 0,
   },
   cardActionButton: {
     flexDirection: 'row',

@@ -1231,7 +1231,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                               >
                                 <LuCoins size={11} color={theme.accent} />
                                 <Text color={theme.accent} fontSize={10} fontWeight="800">
-                                  +{question.points}
+                                  +{question.defaultPoints ?? question.points}
                                 </Text>
                               </XStack>
                             )}
@@ -1752,7 +1752,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                               >
                                 <LuCoins size={10} color={theme.accent} />
                                 <Text color={theme.accent} fontSize={10} fontWeight="800">
-                                  +{q.points}
+                                  +{q.defaultPoints ?? q.points}
                                 </Text>
                               </XStack>
                             </XStack>

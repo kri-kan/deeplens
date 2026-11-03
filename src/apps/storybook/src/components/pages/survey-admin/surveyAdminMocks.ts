@@ -22,6 +22,7 @@ export const MOCK_ADMIN_QUESTIONS: AdminQuestionItem[] = [
     questionKey: 'q_saree_occasion',
     revisionNumber: 2,
     questionType: 'single_select',
+    defaultPoints: 175,
     points: 175,
     isHidden: false,
     aspectRatio: '4:3',
@@ -125,6 +126,7 @@ export const MOCK_ADMIN_QUESTIONS: AdminQuestionItem[] = [
     questionKey: 'q_craftsmanship_likert',
     revisionNumber: 1,
     questionType: 'likert',
+    defaultPoints: 175,
     points: 175,
     isHidden: false,
     statements: {
@@ -223,6 +225,7 @@ export const MOCK_ADMIN_QUESTIONS: AdminQuestionItem[] = [
     questionKey: 'q_fabric_preference',
     revisionNumber: 2,
     questionType: 'multi_select',
+    defaultPoints: 175,
     points: 175,
     isHidden: false,
     statements: {
@@ -313,6 +316,7 @@ export const MOCK_ADMIN_QUESTIONS: AdminQuestionItem[] = [
     questionKey: 'q_feedback_text',
     revisionNumber: 1,
     questionType: 'text_input',
+    defaultPoints: 175,
     points: 175,
     isHidden: false,
     statements: {
@@ -349,6 +353,7 @@ export const MOCK_ADMIN_QUESTIONS: AdminQuestionItem[] = [
     questionKey: 'q_blouse_upload',
     revisionNumber: 1,
     questionType: 'file_upload',
+    defaultPoints: 175,
     points: 175,
     isHidden: false,
     statements: {
@@ -385,6 +390,7 @@ export const MOCK_ADMIN_QUESTIONS: AdminQuestionItem[] = [
     questionKey: 'q_order_id_hidden',
     revisionNumber: 1,
     questionType: 'text_input',
+    defaultPoints: 0,
     points: 0,
     isHidden: true,
     hiddenConfig: {
@@ -406,7 +412,7 @@ export const MOCK_ADMIN_QUESTIONS: AdminQuestionItem[] = [
         te: 'ఆర్డర్ గుర్తింపు సంఖ్య',
         hi: 'ऑर्डर ट्रैकिंग पहचानकर्ता',
         ta: 'ஆர்டர் கண்காணிப்பு எண்',
-        ml: 'ഓർഡർ ട്രാക്കിംഗ് ഐഡന്റിഫയർ',
+        ml: 'ഓർഡർ ട്രാക്കിംഗ് ఐഡന്റിഫയർ',
         kn: 'ಆರ್ಡರ್ ಟ್ರ್ಯಾಕಿಂಗ್ ಐಡೆಂಟಿಫೈಯರ್',
       },
       subtitle: {
@@ -438,6 +444,7 @@ export const MOCK_QUESTION_REVISIONS: Record<string, AdminQuestionRevision[]> = 
         questionKey: 'q_saree_occasion',
         revisionNumber: 1,
         questionType: 'single_select',
+        defaultPoints: 175,
         points: 175,
       },
     },
@@ -450,6 +457,7 @@ export const MOCK_QUESTION_REVISIONS: Record<string, AdminQuestionRevision[]> = 
         questionKey: 'q_saree_occasion',
         revisionNumber: 2,
         questionType: 'single_select',
+        defaultPoints: 175,
         points: 175,
         aspectRatio: '4:3',
       },

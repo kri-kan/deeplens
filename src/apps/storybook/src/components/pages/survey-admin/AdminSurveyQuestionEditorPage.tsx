@@ -338,7 +338,8 @@ export const AdminSurveyQuestionEditorPage: React.FC<
       return {
         ...prev,
         isHidden: nextIsHidden,
-        // When hidden, automatically force points to 0
+        // When hidden, automatically force points and defaultPoints to 0
+        defaultPoints: nextIsHidden ? 0 : prev.points === 0 ? 175 : prev.points,
         points: nextIsHidden ? 0 : prev.points === 0 ? 175 : prev.points,
         hiddenConfig: nextIsHidden
           ? prev.hiddenConfig || {
@@ -1017,10 +1018,10 @@ export const AdminSurveyQuestionEditorPage: React.FC<
               </Text>
             </YStack>
 
-            {/* Mudras Points */}
-            <YStack width={180} gap={6}>
+            {/* Default Reward Coins */}
+            <YStack width={220} gap={6}>
               <Text color={theme.text} fontSize={13} fontWeight="700">
-                Reward Mudras <Text color="#ef4444">*</Text>
+                Default Coins <Text color="#ef4444">*</Text>
               </Text>
               <TextInput
                 style={[
@@ -1030,19 +1031,21 @@ export const AdminSurveyQuestionEditorPage: React.FC<
                 ]}
                 keyboardType="numeric"
                 editable={!question.isHidden}
-                value={question.points.toString()}
+                value={(question.defaultPoints ?? question.points).toString()}
                 onChangeText={(val) => {
                   const num = parseInt(val, 10);
+                  const parsed = isNaN(num) ? 0 : num;
                   setQuestion((prev) => ({
                     ...prev,
-                    points: isNaN(num) ? 0 : num,
+                    defaultPoints: parsed,
+                    points: parsed,
                   }));
                 }}
               />
               <Text color={theme.textMuted} fontSize={11}>
                 {question.isHidden
                   ? 'Locked to 0 for hidden parameters.'
-                  : 'Mudras granted upon response.'}
+                  : 'Default fallback coins. Overridable per survey step in Survey Builder.'}
               </Text>
             </YStack>
 
@@ -2387,7 +2390,9 @@ export const AdminSurveyQuestionEditorPage: React.FC<
               •
             </Text>
             <Text color={theme.textMuted} fontSize={12}>
-              {question.isHidden ? '0 Mudras (Hidden)' : `${question.points} Mudras`}
+              {question.isHidden
+                ? '0 Default Coins (Hidden)'
+                : `${question.defaultPoints ?? question.points} Default Coins`}
             </Text>
           </XStack>
 
