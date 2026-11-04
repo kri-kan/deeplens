@@ -170,12 +170,12 @@
 
 ### Task 6: End-to-End Verification
 
-- [ ] **Step 1: Test `VF1FCB4` removal**
+- [x] **Step 1: Test `VF1FCB4` removal**
   Verify product `VF1FCB4` is absent from catalog, database, and search API.
   Verify original September products are intact with media.
-- [ ] **Step 2: Test Multi-Stage Review Gating**
+- [x] **Step 2: Test Multi-Stage Review Gating**
   Trigger test group with > 30 media. Verify it enters `needs_review` with `review_stage = 'zoning'` and appears in Review Inbox.
-- [ ] **Step 3: Test Stage Filter Switching**
+- [x] **Step 3: Test Stage Filter Switching**
   Switch between `All`, `Zoning`, `Media Sync`, `Qualification`, `Catalog Ingestion`, `Enrichment` and verify accurate filtering.
-- [ ] **Step 4: Test Actions**
+- [x] **Step 4: Test Actions**
   Test **Approve & Create**, **Ignore**, and **Inspect Zone** (with focus scroll).
