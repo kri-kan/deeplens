@@ -146,10 +146,10 @@
 - Modify: `src/vayyari/app/utilities/whatsapp/index.tsx` (Top bar alert badge)
 - Modify: `src/vayyari/app/utilities/whatsapp/zones/[jid].tsx` (Add `focusGroupId` auto-scroll and highlight)
 
-- [ ] **Step 1: Implement WhatsApp Admin Header Alert Badge**
+- [x] **Step 1: Implement WhatsApp Admin Header Alert Badge**
   In `src/vayyari/app/utilities/whatsapp/index.tsx`, fetch `getReviewBadgeCount()`.
   If count > 0, display amber warning badge `⚠️ X Items Need Review` navigating to `/utilities/whatsapp/review-inbox`.
-- [ ] **Step 2: Build `WhatsAppReviewInboxPage.tsx` with Stage Pills**
+- [x] **Step 2: Build `WhatsAppReviewInboxPage.tsx` with Stage Pills**
   - Horizontal filter pills: `All (X)`, `Zoning (A)`, `Media Sync (B)`, `Qualification (C)`, `Ingestion (D)`, `Enrichment (E)`.
   - Item cards displaying:
     - Vendor and chat name.
@@ -160,7 +160,7 @@
       - **"Approve & Create"**: One-click force promotion.
       - **"Ignore / Not a Product"**: Marks `status = 'ignored'`.
       - **"Dismiss / Mark Reviewed"**: Clears flag.
-- [ ] **Step 3: Implement `focusGroupId` deep-linking in `zones/[jid].tsx`**
+- [x] **Step 3: Implement `focusGroupId` deep-linking in `zones/[jid].tsx`**
   When `focusGroupId` param is present in URL:
   - Auto-expand that group card.
   - Scroll list to that card.
