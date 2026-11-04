@@ -86,21 +86,21 @@
 - Modify: `src/DeepLens.Service/DeepLens.WorkerService/Workers/WhatsAppGroupWorker.cs`
 - Modify: `src/whatsapp-processor/src/services/product-created-consumer.service.ts`
 
-- [ ] **Step 1: Stage 1 (`zoning`) Gating in `group-readiness.service.ts`**
+- [x] **Step 1: Stage 1 (`zoning`) Gating in `group-readiness.service.ts`**
   In staging buffer poller, check media count cap:
   If `mediaCount > 30`:
   Set `status = 'needs_review'`, `review_stage = 'zoning'`, `error_detail = 'High media count (${mediaCount} > 30). Human zoning review/split required.'`
   Do not emit to Kafka.
-- [ ] **Step 2: Stage 2 (`media_sync`) Gating in `group-readiness.service.ts`**
+- [x] **Step 2: Stage 2 (`media_sync`) Gating in `group-readiness.service.ts`**
   If undownloaded media has stalled > 15m or `mediaCount < 2` with failed downloads:
   Set `status = 'needs_review'`, `review_stage = 'media_sync'`, `error_detail = 'Insufficient media (${mediaCount} < 2) or media download stalled.'`
-- [ ] **Step 3: Stage 3 (`qualification`) Gating in `group-readiness.service.ts`**
+- [x] **Step 3: Stage 3 (`qualification`) Gating in `group-readiness.service.ts`**
   If chat has no vendor assigned or description is invalid/missing:
   Set `status = 'needs_review'`, `review_stage = 'qualification'`, `error_detail = 'Chat missing vendor assignment or description invalid.'`
-- [ ] **Step 4: Stage 4 (`catalog_ingestion`) Circuit Breaker in `WhatsAppGroupWorker.cs`**
+- [x] **Step 4: Stage 4 (`catalog_ingestion`) Circuit Breaker in `WhatsAppGroupWorker.cs`**
   In `WhatsAppGroupWorker.cs`, if `evt.MediaFiles.Count > 35`:
   Abort transaction, set `wa.message_groups.status = 'needs_review'`, `review_stage = 'catalog_ingestion'`, `error_detail = 'Ingestion blocked: Media count (${count} > 35) exceeds safety threshold.'`
-- [ ] **Step 5: Stage 5 (`enrichment`) Status Preservation in `product-created-consumer.service.ts`**
+- [x] **Step 5: Stage 5 (`enrichment`) Status Preservation in `product-created-consumer.service.ts`**
   In `product-created-consumer.service.ts`, preserve `status = 'needs_review'` during write-back so consumer never wipes out human review flags.
 
 ---
