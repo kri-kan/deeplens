@@ -107,6 +107,8 @@ export interface StoreProduct {
   previousLifecycleStatus?: string | null;
   takeDownExpiresAt?: string | null;
   isReEvaluationPending?: boolean;
+  isReviewPending?: boolean;
+  reviewReason?: string;
   waitlistCount?: number;
   siblingSwatches?: any[];
   swatchesCount?: number;
@@ -165,6 +167,24 @@ class StoreAdminService {
     }
 
     return headers;
+  }
+
+  private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
+    const headers = await this.getAuthHeaders();
+    const baseUrl = getStoreApiUrl();
+    const res = await fetch(`${baseUrl}${path}`, {
+      ...options,
+      headers: {
+        ...headers,
+        ...(options.headers as Record<string, string>),
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error(`Request to ${path} failed with status: ${res.status}`);
+    }
+
+    return res.json();
   }
 
   async batchPublish(products: PublishProductItem[]): Promise<{ count: number; status: string }> {
@@ -470,6 +490,13 @@ class StoreAdminService {
     } catch {
       return [];
     }
+  }
+
+  async dismissReview(productId: string): Promise<{ status: string; productId: string }> {
+    return this.request<{ status: string; productId: string }>(
+      `/api/v1/admin/products/${productId}/dismiss-review`,
+      { method: 'PATCH' }
+    );
   }
 
   async getDailyAcquisitions(range = 10, granularity: GrowthGranularity = 'day'): Promise<DailyGrowthSummary> {
