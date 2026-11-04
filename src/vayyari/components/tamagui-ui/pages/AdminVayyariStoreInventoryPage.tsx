@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   FlatList,
   RefreshControl,
+  TouchableOpacity,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,6 +29,7 @@ import {
   LuPalette,
   LuLayers,
   LuX,
+  LuCheck,
 } from '../icons/lu';
 import { useTheme } from '@/theme';
 import {
@@ -57,8 +59,14 @@ export const LIFECYCLE_FILTERS: { id: StoreLifecycleFilter; label: string; icon:
   { id: 'out_of_stock', label: 'Out of Stock', icon: '⚫' },
 ];
 
+export interface StoreInventoryProductItem extends VayyariStarredProductItem {
+  isReviewPending?: boolean;
+  reviewReason?: string;
+}
+
 export interface AdminVayyariStoreInventoryPageProps {
-  products?: VayyariStarredProductItem[];
+  products?: StoreInventoryProductItem[];
+  reviewCount?: number;
   loading?: boolean;
   refreshing?: boolean;
   isLoadingMore?: boolean;
@@ -70,11 +78,13 @@ export interface AdminVayyariStoreInventoryPageProps {
   onNavigateToStoreCuration?: (productId: string) => void;
   onOpenPdp?: (productId: string) => void;
   onResyncProduct?: (productId: string) => void;
+  onDismissReview?: (productId: string) => Promise<void>;
   disableSafeArea?: boolean;
 }
 
 export function AdminVayyariStoreInventoryPage({
   products = [],
+  reviewCount = 0,
   loading = false,
   refreshing = false,
   isLoadingMore = false,
@@ -86,6 +96,7 @@ export function AdminVayyariStoreInventoryPage({
   onNavigateToStoreCuration,
   onOpenPdp,
   onResyncProduct,
+  onDismissReview,
   disableSafeArea = false,
 }: AdminVayyariStoreInventoryPageProps) {
   const { tokens } = useTheme();
@@ -96,6 +107,8 @@ export function AdminVayyariStoreInventoryPage({
   const [filters, setFilters] = useState<StoreInventoryFilterState>(DEFAULT_STORE_INVENTORY_FILTER_STATE);
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
   const [resyncToast, setResyncToast] = useState<string | null>(null);
+  const [showNeedsReviewOnly, setShowNeedsReviewOnly] = useState(false);
+  const [dismissingId, setDismissingId] = useState<string | null>(null);
 
   const activeFilterCount = useMemo(() => {
     return getActiveStoreInventoryFilterCount(filters);
@@ -147,10 +160,15 @@ export function AdminVayyariStoreInventoryPage({
   const resetFilters = () => {
     setFilters({ ...DEFAULT_STORE_INVENTORY_FILTER_STATE });
     setSearchQuery('');
+    setShowNeedsReviewOnly(false);
   };
 
   const filteredProducts = useMemo(() => {
     let list = products.filter((p) => {
+      if (showNeedsReviewOnly && !p.isReviewPending) {
+        return false;
+      }
+
       const matchCat =
         filters.category === 'All' ||
         p.category.toLowerCase().includes(filters.category.toLowerCase());
@@ -190,7 +208,7 @@ export function AdminVayyariStoreInventoryPage({
     }
 
     return list;
-  }, [products, filters, searchQuery]);
+  }, [products, filters, searchQuery, showNeedsReviewOnly]);
 
   const handleResync = (productId: string, code: string) => {
     onResyncProduct?.(productId);
@@ -198,7 +216,7 @@ export function AdminVayyariStoreInventoryPage({
     setTimeout(() => setResyncToast(null), 2500);
   };
 
-  const renderItem = ({ item: product }: { item: VayyariStarredProductItem }) => {
+  const renderItem = ({ item: product }: { item: StoreInventoryProductItem }) => {
     const swatchesCount = product.swatchesCount || product.siblingSwatches?.length || 1;
     const siblingSwatches = product.siblingSwatches || [];
 
@@ -218,9 +236,9 @@ export function AdminVayyariStoreInventoryPage({
             />
 
             {/* Active Live Badge (Top-Left) */}
-            <View style={styles.liveBadge}>
+            <View style={[styles.liveBadge, product.isReviewPending && { backgroundColor: '#B45309' }]}>
               <Text fontSize={9} fontWeight="800" color="#fff">
-                🟢 In Store
+                {product.isReviewPending ? '⚡ Needs Review' : '🟢 In Store'}
               </Text>
             </View>
 
@@ -299,29 +317,71 @@ export function AdminVayyariStoreInventoryPage({
               </Text>
             </XStack>
 
-            {/* Prominent Qualify & Group CTA Button */}
-            <Pressable
-              hitSlop={4}
-              onPress={(e) => {
-                e.stopPropagation();
-                onNavigateToStoreCuration?.(product.id);
-              }}
-              style={({ pressed }) => [
-                styles.curateActionBtn,
-                {
-                  backgroundColor: pressed ? tokens.accentSubtle : tokens.surfaceRaised,
-                  borderColor: `${tokens.accent}60`,
-                  borderWidth: 1,
-                },
-              ]}
-            >
-              <XStack alignItems="center" justifyContent="center" gap={4}>
-                <LuSparkles size={11} color={tokens.accent} />
-                <Text fontSize={10} fontWeight="800" color={tokens.accent}>
-                  Curate in Store ➔
-                </Text>
-              </XStack>
-            </Pressable>
+            {/* Action Buttons: Curate & Group / Mark Reviewed */}
+            <XStack alignItems="center" gap={4} marginTop={4}>
+              <Pressable
+                hitSlop={4}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  onNavigateToStoreCuration?.(product.id);
+                }}
+                style={({ pressed }) => [
+                  styles.curateActionBtn,
+                  {
+                    flex: 1,
+                    backgroundColor: pressed ? tokens.accentSubtle : tokens.surfaceRaised,
+                    borderColor: `${tokens.accent}60`,
+                    borderWidth: 1,
+                  },
+                ]}
+              >
+                <XStack alignItems="center" justifyContent="center" gap={4}>
+                  <LuSparkles size={11} color={tokens.accent} />
+                  <Text fontSize={10} fontWeight="800" color={tokens.accent} numberOfLines={1}>
+                    {product.isReviewPending ? 'Curate' : 'Curate in Store ➔'}
+                  </Text>
+                </XStack>
+              </Pressable>
+
+              {product.isReviewPending && onDismissReview && (
+                <Pressable
+                  hitSlop={4}
+                  onPress={async (e) => {
+                    e.stopPropagation();
+                    setDismissingId(product.id);
+                    try {
+                      await onDismissReview(product.id);
+                    } finally {
+                      setDismissingId(null);
+                    }
+                  }}
+                  style={({ pressed }) => [
+                    styles.curateActionBtn,
+                    {
+                      flex: 1,
+                      backgroundColor: pressed ? '#FEF3C7' : '#FFFBEB',
+                      borderColor: '#F59E0B',
+                      borderWidth: 1,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Mark Reviewed"
+                >
+                  <XStack alignItems="center" justifyContent="center" gap={3}>
+                    {dismissingId === product.id ? (
+                      <ActivityIndicator size="small" color="#B45309" />
+                    ) : (
+                      <>
+                        <LuCheck size={11} color="#B45309" />
+                        <Text fontSize={10} fontWeight="800" color="#B45309" numberOfLines={1}>
+                          Mark Reviewed
+                        </Text>
+                      </>
+                    )}
+                  </XStack>
+                </Pressable>
+              )}
+            </XStack>
           </YStack>
         </Pressable>
       </View>
@@ -377,22 +437,60 @@ export function AdminVayyariStoreInventoryPage({
           </YStack>
         </XStack>
 
-        {onNavigateToStorePublish && (
+        <XStack alignItems="center" gap={8}>
           <Pressable
-            onPress={onNavigateToStorePublish}
+            onPress={() => setShowNeedsReviewOnly((prev) => !prev)}
             style={({ pressed }) => [
-              styles.navPublishBtn,
-              { backgroundColor: pressed ? tokens.accentSubtle : tokens.surfaceRaised },
+              styles.navReviewBtn,
+              {
+                backgroundColor: showNeedsReviewOnly ? '#FEF3C7' : pressed ? tokens.accentSubtle : tokens.surfaceRaised,
+                borderColor: showNeedsReviewOnly ? '#F59E0B' : tokens.border,
+                borderWidth: 1,
+              },
             ]}
+            accessibilityRole="button"
+            accessibilityLabel={`Review queue (${reviewCount} products need review)`}
           >
-            <XStack alignItems="center" gap={4}>
-              <LuPlus size={12} color={tokens.accent} />
-              <Text fontSize={11} fontWeight="800" color={tokens.accent}>
-                Publish More
+            <XStack alignItems="center" gap={5}>
+              <LuSparkles size={13} color={showNeedsReviewOnly ? '#B45309' : tokens.accent} />
+              <Text fontSize={11} fontWeight="800" color={showNeedsReviewOnly ? '#B45309' : tokens.accent}>
+                Review
               </Text>
+              {reviewCount > 0 && (
+                <XStack
+                  backgroundColor="#D97706"
+                  paddingHorizontal={5}
+                  paddingVertical={1.5}
+                  borderRadius={10}
+                  minWidth={18}
+                  alignItems="center"
+                  justifyContent="center"
+                >
+                  <Text fontSize={9} fontWeight="900" color="#fff">
+                    {reviewCount}
+                  </Text>
+                </XStack>
+              )}
             </XStack>
           </Pressable>
-        )}
+
+          {onNavigateToStorePublish && (
+            <Pressable
+              onPress={onNavigateToStorePublish}
+              style={({ pressed }) => [
+                styles.navPublishBtn,
+                { backgroundColor: pressed ? tokens.accentSubtle : tokens.surfaceRaised },
+              ]}
+            >
+              <XStack alignItems="center" gap={4}>
+                <LuPlus size={12} color={tokens.accent} />
+                <Text fontSize={11} fontWeight="800" color={tokens.accent}>
+                  Publish More
+                </Text>
+              </XStack>
+            </Pressable>
+          )}
+        </XStack>
       </XStack>
 
       {/* ── TOAST NOTIFICATION ── */}
@@ -470,6 +568,27 @@ export function AdminVayyariStoreInventoryPage({
           )}
         </XStack>
 
+        {/* Active Needs Review Banner */}
+        {showNeedsReviewOnly && (
+          <XStack
+            backgroundColor="#FEF3C7"
+            paddingHorizontal={12}
+            paddingVertical={6}
+            borderRadius={6}
+            justifyContent="space-between"
+            alignItems="center"
+          >
+            <Text fontSize={11} fontWeight="700" color="#92400E">
+              Showing products with pending updates ({reviewCount})
+            </Text>
+            <TouchableOpacity onPress={() => setShowNeedsReviewOnly(false)}>
+              <Text fontSize={11} fontWeight="800" color="#B45309">
+                Clear
+              </Text>
+            </TouchableOpacity>
+          </XStack>
+        )}
+
         {/* Category Horizontal Scroll */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
           {CATEGORIES.map((cat) => {
@@ -540,14 +659,22 @@ export function AdminVayyariStoreInventoryPage({
         <YStack alignItems="center" justifyContent="center" flex={1} gap={10} paddingHorizontal={20}>
           <LuStore size={40} color={tokens.textMuted} />
           <Text fontSize={14} fontWeight="800" color={tokens.text}>
-            No Products in Store
+            {showNeedsReviewOnly ? 'No Pending Reviews' : 'No Products in Store'}
           </Text>
           <Text fontSize={12} color={tokens.textMuted} textAlign="center" maxWidth={280}>
-            {activeFilterCount > 0
+            {showNeedsReviewOnly
+              ? 'All products are currently up to date with catalog updates.'
+              : activeFilterCount > 0
               ? 'No in-store products matched your active filters. Try resetting filters.'
               : 'Publish starred products from the catalog to populate your online storefront.'}
           </Text>
-          {activeFilterCount > 0 ? (
+          {showNeedsReviewOnly ? (
+            <Pressable onPress={() => setShowNeedsReviewOnly(false)} style={styles.resetPillBtn}>
+              <Text fontSize={11} fontWeight="800" color={tokens.accent}>
+                View All In-Store Products
+              </Text>
+            </Pressable>
+          ) : activeFilterCount > 0 ? (
             <Pressable onPress={resetFilters} style={styles.resetPillBtn}>
               <Text fontSize={11} fontWeight="800" color={tokens.accent}>
                 Reset Filters
@@ -626,6 +753,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
+  },
+  navReviewBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   toastBanner: {
     marginHorizontal: 12,

@@ -1,12 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import { AdminVayyariStoreInventoryPage } from '@/components/tamagui-ui/pages/AdminVayyariStoreInventoryPage';
+import {
+  AdminVayyariStoreInventoryPage,
+  StoreInventoryProductItem,
+} from '@/components/tamagui-ui/pages/AdminVayyariStoreInventoryPage';
 import { storeAdminService, StoreProduct } from '@/services/storeAdminService';
-import { VayyariStarredProductItem } from '@/components/tamagui-ui/pages/AdminVayyariStorePublishPage';
 
 export default function StoreInventoryScreen() {
   const router = useRouter();
-  const [products, setProducts] = useState<VayyariStarredProductItem[]>([]);
+  const [products, setProducts] = useState<StoreInventoryProductItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -20,7 +23,7 @@ export default function StoreInventoryScreen() {
       const data = await storeAdminService.getInStoreProducts();
       // Group by catalog product (parentCatalogId or parentProductCode) so each catalog product
       // displays a clean tile with the swatches count (how many separate SKUs made from that catalog product)
-      const catalogProductMap = new Map<string, VayyariStarredProductItem>();
+      const catalogProductMap = new Map<string, StoreInventoryProductItem>();
 
       for (const p of data) {
         const groupKey = p.parentCatalogId || p.parentProductCode || p.id;
@@ -50,6 +53,8 @@ export default function StoreInventoryScreen() {
             publishedAt: p.publishedAt,
             swatchesCount,
             siblingSwatches: p.siblingSwatches || [],
+            isReviewPending: p.isReviewPending ?? false,
+            reviewReason: p.reviewReason,
           });
         } else {
           const existing = catalogProductMap.get(groupKey)!;
@@ -57,6 +62,10 @@ export default function StoreInventoryScreen() {
             existing.siblingSwatches = p.siblingSwatches;
           }
           existing.swatchesCount = Math.max(existing.swatchesCount || 1, swatchesCount);
+          if (p.isReviewPending) {
+            existing.isReviewPending = true;
+            existing.reviewReason = p.reviewReason || existing.reviewReason;
+          }
         }
       }
 
@@ -73,9 +82,31 @@ export default function StoreInventoryScreen() {
     fetchProducts();
   }, [fetchProducts]);
 
+  const reviewCount = useMemo(() => {
+    return products.filter((p) => p.isReviewPending).length;
+  }, [products]);
+
+  const handleDismissReview = async (productId: string) => {
+    const previousProducts = products;
+    // Optimistically update local state: set isReviewPending = false
+    setProducts((prev) =>
+      prev.map((item) => (item.id === productId ? { ...item, isReviewPending: false } : item))
+    );
+
+    try {
+      await storeAdminService.dismissReview(productId);
+    } catch (err) {
+      console.error('Failed to dismiss review for product:', productId, err);
+      // Rollback on failure
+      setProducts(previousProducts);
+      Alert.alert('Error', 'Failed to dismiss review. Please try again.');
+    }
+  };
+
   return (
     <AdminVayyariStoreInventoryPage
       products={products}
+      reviewCount={reviewCount}
       loading={loading}
       refreshing={refreshing}
       onRefresh={() => fetchProducts(true)}
@@ -86,6 +117,7 @@ export default function StoreInventoryScreen() {
       onResyncProduct={async (id: string) => {
         console.log('Resyncing product:', id);
       }}
+      onDismissReview={handleDismissReview}
     />
   );
 }
