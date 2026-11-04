@@ -47,7 +47,11 @@ import {
   buildDeltaSyncPayload,
   validateNewColorGroupStock,
 } from '@/utils/publishDeltaRules';
-import { storeAdminService } from '@/services/storeAdminService';
+import {
+  storeAdminService,
+  PublishMediaItem,
+  PublishProductItem,
+} from '@/services/storeAdminService';
 import {
   AdminProductMediaCarousel,
   MediaSlideItem,
@@ -212,6 +216,28 @@ function TaxonomySpecRow({
   );
 }
 
+function getMediaFilename(photo: MediaSlideItem, index: number): string {
+  if ((photo as any).filename) return (photo as any).filename;
+  if ((photo as any).title) return (photo as any).title;
+  if ((photo as any).storagePath) {
+    const parts = (photo as any).storagePath.split('/');
+    return parts[parts.length - 1];
+  }
+  if (photo.url) {
+    try {
+      const parsed = new URL(photo.url);
+      const parts = parsed.pathname.split('/');
+      const last = parts[parts.length - 1];
+      if (last && last.includes('.')) return last;
+    } catch {
+      const parts = photo.url.split('/');
+      const last = parts[parts.length - 1]?.split('?')[0];
+      if (last && last.includes('.')) return last;
+    }
+  }
+  return `photo_${index + 1}.webp`;
+}
+
 export function AdminProductDetailPage({
   product,
   onBack,
@@ -255,18 +281,19 @@ export function AdminProductDetailPage({
       : null
   );
   const [isFullscreenPreviewOpen, setIsFullscreenPreviewOpen] = useState(false);
-  const [queueTab, setQueueTab] = useState<'all' | 'publish_updates'>(initialQueueTab || 'all');
   const [isDeltaModalOpen, setIsDeltaModalOpen] = useState(false);
   const [isSyncingDelta, setIsSyncingDelta] = useState(false);
   const [deltaSyncToast, setDeltaSyncToast] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   // Delta detection & badge metrics
-  const hasDeltaUpdates = hasPendingStoreUpdates(product);
+  const isStorePublished = Boolean(product?.isPublishedToStore ?? product?.isPublished);
+  const hasDeltaUpdates = isStorePublished && hasPendingStoreUpdates(product);
   const deltaCount = getMediaDeltaCount(product);
   const deltaBadgeText = formatMediaDeltaBadge(deltaCount);
 
-  // Unassigned / newly merged delta photos
-  const unassignedPhotos = React.useMemo(() => {
+  // Newly added delta photos
+  const addedPhotos = React.useMemo(() => {
     if (product?.unassignedMedia && product.unassignedMedia.length > 0) {
       return product.unassignedMedia;
     }
@@ -275,85 +302,122 @@ export function AdminProductDetailPage({
     if (synced > 0 && all.length > synced) {
       return all.slice(synced);
     }
-    if (hasDeltaUpdates) {
-      return all.slice(Math.max(0, all.length - (deltaCount || 1)));
+    if (hasDeltaUpdates && deltaCount > 0) {
+      return all.slice(Math.max(0, all.length - deltaCount));
     }
     return [];
   }, [product, hasDeltaUpdates, deltaCount]);
 
-  // Allocation state for each photo: mediaId -> allocation settings
-  const [allocations, setAllocations] = useState<Record<string, {
-    allocationType: 'existing_color' | 'new_color' | 'shared_pool';
-    colorGroupId?: string;
-    newGroupName?: string;
-    newGroupHex?: string;
-    newGroupStock?: string;
-  }>>({});
-  const [allocationError, setAllocationError] = useState<string | null>(null);
+  // Pruned photos & count
+  const prunedPhotos = React.useMemo(() => {
+    if ((product as any)?.prunedMedia && Array.isArray((product as any).prunedMedia)) {
+      return (product as any).prunedMedia as MediaSlideItem[];
+    }
+    return [];
+  }, [product]);
 
-  const handleUpdateAllocation = (
-    mediaId: string,
-    updates: Partial<{
-      allocationType: 'existing_color' | 'new_color' | 'shared_pool';
-      colorGroupId?: string;
-      newGroupName?: string;
-      newGroupHex?: string;
-      newGroupStock?: string;
-    }>
-  ) => {
-    setAllocations((prev) => ({
+  const prunedCount = React.useMemo(() => {
+    if (prunedPhotos.length > 0) return prunedPhotos.length;
+    const synced = product?.syncedMediaCount ?? 0;
+    const current = product?.media?.length ?? product?.mediaCount ?? 0;
+    if (synced > 0 && synced > current) {
+      return synced - current;
+    }
+    if (deltaCount < 0) {
+      return Math.abs(deltaCount);
+    }
+    return 0;
+  }, [prunedPhotos, product?.syncedMediaCount, product?.media, product?.mediaCount, deltaCount]);
+
+  // Track checked state per added photo (default checked: true)
+  const [selectedPhotoIds, setSelectedPhotoIds] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (isDeltaModalOpen && addedPhotos.length > 0) {
+      const initialMap: Record<string, boolean> = {};
+      addedPhotos.forEach((photo, idx) => {
+        const key = photo.id || photo.url || `photo-${idx}`;
+        initialMap[key] = true;
+      });
+      setSelectedPhotoIds(initialMap);
+    }
+  }, [isDeltaModalOpen, addedPhotos]);
+
+  const togglePhotoSelection = (key: string) => {
+    setSelectedPhotoIds((prev) => ({
       ...prev,
-      [mediaId]: {
-        ...(prev[mediaId] || { allocationType: 'shared_pool' }),
-        ...updates,
-      },
+      [key]: prev[key] === undefined ? false : !prev[key],
     }));
   };
 
-  const handleCompleteDeltaSync = async () => {
+  const handleConfirmSync = async () => {
     if (!product) return;
-    setAllocationError(null);
-
-    const allocationItems: any[] = [];
-    for (const photo of unassignedPhotos) {
-      const alloc = allocations[photo.id] || { allocationType: 'shared_pool' };
-      if (alloc.allocationType === 'new_color') {
-        const stock = parseInt(alloc.newGroupStock || '', 10);
-        if (!stock || stock <= 0 || isNaN(stock)) {
-          setAllocationError(`Initial stock quantity is mandatory for new color group "${alloc.newGroupName || 'New Color'}" (must be > 0)`);
-          return;
-        }
-        allocationItems.push(
-          allocateMediaToNewColor(photo, {
-            id: `cg-${Date.now()}-${photo.id.slice(-4)}`,
-            name: alloc.newGroupName || 'New Colorway',
-            colorHex: alloc.newGroupHex || '#1B4D3E',
-            stockQuantity: stock,
-          })
-        );
-      } else if (alloc.allocationType === 'existing_color' && alloc.colorGroupId) {
-        allocationItems.push(allocateMediaToExistingColor(photo, alloc.colorGroupId));
-      } else {
-        allocationItems.push(allocateMediaToSharedPool(photo));
-      }
-    }
-
-    const payload = buildDeltaSyncPayload(product.id, allocationItems);
+    setSyncError(null);
     setIsSyncingDelta(true);
+
     try {
+      // 1. Existing store photos (those not in addedPhotos)
+      const addedKeys = new Set(addedPhotos.map((p, idx) => p.id || p.url || `photo-${idx}`));
+      const existingMedia = (product.media || []).filter((p, idx) => {
+        const key = p.id || p.url || `photo-${idx}`;
+        return !addedKeys.has(key);
+      });
+
+      // 2. Filter added photos by checked state
+      const checkedAddedMedia = addedPhotos.filter((p, idx) => {
+        const key = p.id || p.url || `photo-${idx}`;
+        return selectedPhotoIds[key] !== false;
+      });
+
+      const finalMedia = [...existingMedia, ...checkedAddedMedia];
+
+      const finalMediaUrls = finalMedia
+        .map((m) => m.url)
+        .filter((u): u is string => Boolean(u));
+
+      const finalMediaItems: PublishMediaItem[] = finalMedia
+        .map((m): PublishMediaItem | null => {
+          if (!m.url) return null;
+          return {
+            catalogMediaId: m.id && m.id !== '00000000-0000-0000-0000-000000000000' ? m.id : undefined,
+            url: m.url,
+            mediaType: m.mediaType === 'video' ? 2 : 1,
+          };
+        })
+        .filter((item): item is PublishMediaItem => item !== null);
+
+      const publishItem: PublishProductItem = {
+        vayyariProductId: product.id,
+        productCode: product.productCode || 'PROD',
+        title: product.title || 'Product',
+        description: product.exclusiveDescription,
+        categoryName: product.category || 'Saree',
+        fabric: product.fabric || 'Silk',
+        baseCost: Number(product.vendorPrice) || 8000,
+        mediaUrls: finalMediaUrls,
+        mediaItems: finalMediaItems,
+      };
+
+      await storeAdminService.batchPublish([publishItem]);
+
+      const nowIso = new Date().toISOString();
+      product.store_publish_updated_at = nowIso;
+      product.storePublishUpdatedAt = nowIso;
+      product.syncedMediaCount = finalMedia.length;
+
       if (onSyncDelta) {
-        await onSyncDelta(payload);
-      } else {
-        await storeAdminService.triggerDeltaSync(product.id, payload);
+        try {
+          await onSyncDelta(publishItem);
+        } catch {
+          // non-blocking
+        }
       }
-      product.store_publish_updated_at = new Date().toISOString();
-      product.storePublishUpdatedAt = product.store_publish_updated_at;
-      product.syncedMediaCount = (product.media?.length || 0);
-      setDeltaSyncToast(`🚀 Successfully synced ${allocationItems.length} delta photos to Store!`);
+
+      setDeltaSyncToast(`🚀 Successfully synced updates for ${product.productCode || product.title} to Store!`);
       setIsDeltaModalOpen(false);
-      setTimeout(() => setDeltaSyncToast(null), 3000);
+      setTimeout(() => setDeltaSyncToast(null), 3500);
     } catch (err: any) {
-      setAllocationError(err?.message || 'Failed to sync delta to Store.Api');
+      setSyncError(err?.message || 'Failed to sync updates to Store.Api');
     } finally {
       setIsSyncingDelta(false);
     }
@@ -459,84 +523,11 @@ export function AdminProductDetailPage({
           }}
         />
 
-        {/* Publish Updates Queue Filter Bar */}
-        <XStack
-          marginHorizontal={16}
-          marginTop={10}
-          marginBottom={4}
-          backgroundColor={tokens.surface}
-          borderRadius={tokens.radius.sm}
-          borderWidth={1}
-          borderColor={tokens.border}
-          padding={4}
-          gap={6}
-        >
-          <TouchableOpacity
-            accessibilityRole="tab"
-            accessibilityLabel="All Details Tab"
-            onPress={() => setQueueTab('all')}
-            style={{ flex: 1 }}
-          >
-            <XStack
-              paddingVertical={7}
-              borderRadius={tokens.radius.xs}
-              backgroundColor={queueTab === 'all' ? tokens.surfaceRaised : 'transparent'}
-              alignItems="center"
-              justifyContent="center"
-            >
-              <Text
-                fontSize={12}
-                fontWeight={queueTab === 'all' ? '800' : '600'}
-                color={queueTab === 'all' ? tokens.text : tokens.textMuted}
-              >
-                Catalog View
-              </Text>
-            </XStack>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            testID="tab-publish-updates"
-            accessibilityRole="tab"
-            accessibilityLabel="Publish Updates Queue Tab"
-            onPress={() => setQueueTab('publish_updates')}
-            style={{ flex: 1 }}
-          >
-            <XStack
-              paddingVertical={7}
-              borderRadius={tokens.radius.xs}
-              backgroundColor={queueTab === 'publish_updates' ? `${tokens.accent}14` : 'transparent'}
-              alignItems="center"
-              justifyContent="center"
-              gap={6}
-            >
-              <Text
-                fontSize={12}
-                fontWeight={queueTab === 'publish_updates' ? '800' : '600'}
-                color={queueTab === 'publish_updates' ? tokens.accent : tokens.textMuted}
-              >
-                Publish Updates
-              </Text>
-              {hasDeltaUpdates && (
-                <XStack
-                  backgroundColor="#F59E0B"
-                  paddingHorizontal={6}
-                  paddingVertical={2}
-                  borderRadius={10}
-                >
-                  <Text fontSize={9.5} fontWeight="900" color="#ffffff">
-                    {deltaBadgeText}
-                  </Text>
-                </XStack>
-              )}
-            </XStack>
-          </TouchableOpacity>
-        </XStack>
-
         {/* Media Delta / Publish Updates Available Banner */}
         {hasDeltaUpdates && (
           <XStack
             marginHorizontal={16}
-            marginTop={6}
+            marginTop={10}
             marginBottom={4}
             padding={12}
             borderRadius={tokens.radius.sm}
@@ -575,14 +566,14 @@ export function AdminProductDetailPage({
                   </XStack>
                 </XStack>
                 <Text fontSize={11} color={tokens.textMuted} numberOfLines={2}>
-                  Newly merged photos require allocation to a color group or shared group shots pool before syncing to Store.Api.
+                  Catalog media changes detected. Review and sync media updates to Store.Api.
                 </Text>
               </YStack>
             </XStack>
 
             <TouchableOpacity
               accessibilityRole="button"
-              accessibilityLabel="Allocate & Sync Updates"
+              accessibilityLabel="Review Media Updates"
               activeOpacity={0.8}
               onPress={() => setIsDeltaModalOpen(true)}
             >
@@ -595,31 +586,11 @@ export function AdminProductDetailPage({
                 gap={4}
               >
                 <Text fontSize={11} fontWeight="800" color="#ffffff">
-                  Allocate Photos
+                  Review Updates
                 </Text>
                 <LuArrowRight size={12} color="#ffffff" />
               </XStack>
             </TouchableOpacity>
-          </XStack>
-        )}
-
-        {/* Success Toast */}
-        {deltaSyncToast && (
-          <XStack
-            marginHorizontal={16}
-            marginTop={6}
-            marginBottom={4}
-            padding={10}
-            borderRadius={tokens.radius.sm}
-            backgroundColor="#10B981"
-            alignItems="center"
-            justifyContent="center"
-            gap={6}
-          >
-            <LuCheck size={14} color="#ffffff" />
-            <Text fontSize={12} fontWeight="800" color="#ffffff">
-              {deltaSyncToast}
-            </Text>
           </XStack>
         )}
         {needsZoningReview && (
@@ -1619,7 +1590,7 @@ export function AdminProductDetailPage({
         </XStack>
       </Modal>
 
-      {/* Media Delta Allocation Modal */}
+      {/* Media Diff Selector Modal */}
       <Modal
         visible={isDeltaModalOpen}
         transparent
@@ -1643,27 +1614,28 @@ export function AdminProductDetailPage({
               padding={16}
               gap={12}
             >
-              {/* Modal Drag Handle & Header */}
+              {/* Modal Drag Handle */}
               <XStack justifyContent="center">
                 <YStack width={36} height={4} borderRadius={2} backgroundColor={tokens.border} />
               </XStack>
 
+              {/* Header: "Review Catalog Media Updates (+N new, -M pruned)" */}
               <XStack alignItems="center" justifyContent="space-between">
-                <XStack alignItems="center" gap={8}>
+                <XStack alignItems="center" gap={8} flex={1}>
                   <LuSparkles size={18} color="#D97706" />
-                  <YStack>
+                  <YStack flex={1}>
                     <Text fontSize={15} fontWeight="800" color={tokens.text}>
-                      Allocate Media Delta ({unassignedPhotos.length} Photos)
+                      Review Catalog Media Updates (+{addedPhotos.length} new, -{prunedCount} pruned)
                     </Text>
                     <Text fontSize={11} color={tokens.textMuted}>
-                      Assign newly merged vendor photos to colorways or universal shared pool.
+                      Select newly added photos to sync. Unchecked photos will be omitted from this update.
                     </Text>
                   </YStack>
                 </XStack>
 
                 <TouchableOpacity
                   accessibilityRole="button"
-                  accessibilityLabel="Close allocation modal"
+                  accessibilityLabel="Close media diff modal"
                   onPress={() => setIsDeltaModalOpen(false)}
                 >
                   <XStack
@@ -1679,7 +1651,7 @@ export function AdminProductDetailPage({
                 </TouchableOpacity>
               </XStack>
 
-              {allocationError && (
+              {syncError && (
                 <XStack
                   backgroundColor="#FEE2E2"
                   borderWidth={1}
@@ -1691,312 +1663,212 @@ export function AdminProductDetailPage({
                 >
                   <LuTriangleAlert size={16} color="#DC2626" />
                   <Text fontSize={11} fontWeight="700" color="#B91C1C" flex={1}>
-                    {allocationError}
+                    {syncError}
                   </Text>
                 </XStack>
               )}
 
-              {/* Scrollable list of unassigned photos */}
+              {/* Scrollable list of Added and Pruned Photos */}
               <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
-                <YStack gap={12} paddingVertical={4}>
-                  {unassignedPhotos.map((photo, idx) => {
-                    const currentAlloc = allocations[photo.id] || {
-                      allocationType: 'shared_pool',
-                    };
-                    const colorGroups = product.colorGroups || [
-                      { id: 'cg-default-1', name: 'Emerald Green', colorHex: '#1B4D3E' },
-                    ];
+                <YStack gap={14} paddingVertical={4}>
+                  {/* Added Photos Section */}
+                  <YStack gap={8}>
+                    <XStack alignItems="center" justifyContent="space-between">
+                      <Text fontSize={12} fontWeight="800" color={tokens.text} letterSpacing={0.2}>
+                        Added Photos ({addedPhotos.length})
+                      </Text>
+                      {addedPhotos.length > 0 && (
+                        <TouchableOpacity
+                          onPress={() => {
+                            const allSelected = addedPhotos.every(
+                              (p, idx) => selectedPhotoIds[p.id || p.url || `photo-${idx}`] !== false
+                            );
+                            const updated: Record<string, boolean> = {};
+                            addedPhotos.forEach((p, idx) => {
+                              updated[p.id || p.url || `photo-${idx}`] = !allSelected;
+                            });
+                            setSelectedPhotoIds(updated);
+                          }}
+                        >
+                          <Text fontSize={11} fontWeight="700" color={tokens.accent}>
+                            {addedPhotos.every(
+                              (p, idx) => selectedPhotoIds[p.id || p.url || `photo-${idx}`] !== false
+                            )
+                              ? 'Deselect All'
+                              : 'Select All'}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    </XStack>
 
-                    return (
-                      <YStack
-                        key={photo.id || idx}
+                    {addedPhotos.length === 0 ? (
+                      <XStack
+                        padding={12}
                         backgroundColor={tokens.surfaceRaised}
                         borderRadius={tokens.radius.sm}
-                        padding={12}
-                        gap={10}
                         borderWidth={1}
                         borderColor={tokens.border}
+                        alignItems="center"
+                        justifyContent="center"
                       >
-                        <XStack alignItems="center" gap={10}>
-                          {photo.url ? (
-                            <Image
-                              source={{ uri: photo.url }}
-                              style={{ width: 54, height: 54, borderRadius: 6, backgroundColor: '#000' }}
-                              contentFit="cover"
-                            />
-                          ) : (
-                            <YStack width={54} height={54} borderRadius={6} backgroundColor="#cbd5e1" />
-                          )}
-                          <YStack flex={1}>
-                            <Text fontSize={12} fontWeight="700" color={tokens.text}>
-                              Photo #{idx + 1} {(photo as any).title ? `• ${(photo as any).title}` : ''}
-                            </Text>
-                            <Text fontSize={10} color={tokens.textMuted}>
-                              Merged from incoming vendor chat
-                            </Text>
-                          </YStack>
-                        </XStack>
+                        <Text fontSize={11} color={tokens.textMuted}>
+                          No newly added photos detected.
+                        </Text>
+                      </XStack>
+                    ) : (
+                      addedPhotos.map((photo, idx) => {
+                        const key = photo.id || photo.url || `photo-${idx}`;
+                        const isChecked = selectedPhotoIds[key] !== false;
+                        const filename = getMediaFilename(photo, idx);
 
-                        {/* Allocation Target Radio / Pill Selector */}
-                        <XStack gap={6} flexWrap="wrap">
-                          {/* 1. Existing Color */}
+                        return (
                           <TouchableOpacity
-                            accessibilityRole="button"
-                            accessibilityLabel="Allocate to existing color group"
-                            onPress={() =>
-                              handleUpdateAllocation(photo.id, {
-                                allocationType: 'existing_color',
-                                colorGroupId: colorGroups[0]?.id,
-                              })
-                            }
-                            style={{ flex: 1, minWidth: 100 }}
+                            key={key}
+                            activeOpacity={0.8}
+                            onPress={() => togglePhotoSelection(key)}
+                            accessibilityRole="checkbox"
+                            accessibilityState={{ checked: isChecked }}
+                            accessibilityLabel={`Include ${filename} in update sync`}
                           >
                             <XStack
-                              paddingVertical={6}
-                              paddingHorizontal={8}
-                              borderRadius={6}
-                              borderWidth={1}
-                              borderColor={
-                                currentAlloc.allocationType === 'existing_color'
-                                  ? tokens.accent
-                                  : tokens.border
-                              }
-                              backgroundColor={
-                                currentAlloc.allocationType === 'existing_color'
-                                  ? `${tokens.accent}14`
-                                  : tokens.surface
-                              }
+                              backgroundColor={tokens.surfaceRaised}
+                              borderRadius={tokens.radius.sm}
+                              padding={10}
                               alignItems="center"
-                              justifyContent="center"
-                              gap={4}
-                            >
-                              <Text
-                                fontSize={10.5}
-                                fontWeight={currentAlloc.allocationType === 'existing_color' ? '800' : '600'}
-                                color={
-                                  currentAlloc.allocationType === 'existing_color'
-                                    ? tokens.accent
-                                    : tokens.text
-                                }
-                              >
-                                Existing Color
-                              </Text>
-                            </XStack>
-                          </TouchableOpacity>
-
-                          {/* 2. New Color Group */}
-                          <TouchableOpacity
-                            accessibilityRole="button"
-                            accessibilityLabel="Allocate to brand new color group"
-                            onPress={() =>
-                              handleUpdateAllocation(photo.id, {
-                                allocationType: 'new_color',
-                                newGroupName: currentAlloc.newGroupName || 'New Colorway',
-                                newGroupHex: currentAlloc.newGroupHex || '#1B4D3E',
-                                newGroupStock: currentAlloc.newGroupStock || '10',
-                              })
-                            }
-                            style={{ flex: 1, minWidth: 100 }}
-                          >
-                            <XStack
-                              paddingVertical={6}
-                              paddingHorizontal={8}
-                              borderRadius={6}
+                              gap={10}
                               borderWidth={1}
-                              borderColor={
-                                currentAlloc.allocationType === 'new_color'
-                                  ? tokens.accent
-                                  : tokens.border
-                              }
-                              backgroundColor={
-                                currentAlloc.allocationType === 'new_color'
-                                  ? `${tokens.accent}14`
-                                  : tokens.surface
-                              }
-                              alignItems="center"
-                              justifyContent="center"
-                              gap={4}
+                              borderColor={isChecked ? tokens.accent : tokens.border}
                             >
-                              <Text
-                                fontSize={10.5}
-                                fontWeight={currentAlloc.allocationType === 'new_color' ? '800' : '600'}
-                                color={
-                                  currentAlloc.allocationType === 'new_color'
-                                    ? tokens.accent
-                                    : tokens.text
-                                }
+                              {/* Checkbox */}
+                              <XStack
+                                width={22}
+                                height={22}
+                                borderRadius={6}
+                                borderWidth={1.5}
+                                borderColor={isChecked ? tokens.accent : tokens.border}
+                                backgroundColor={isChecked ? tokens.accent : 'transparent'}
+                                alignItems="center"
+                                justifyContent="center"
                               >
-                                + New Color
-                              </Text>
-                            </XStack>
-                          </TouchableOpacity>
+                                {isChecked && <LuCheck size={14} color="#ffffff" />}
+                              </XStack>
 
-                          {/* 3. Shared Group Photos Pool */}
-                          <TouchableOpacity
-                            accessibilityRole="button"
-                            accessibilityLabel="Allocate to shared multi-color pool"
-                            onPress={() =>
-                              handleUpdateAllocation(photo.id, {
-                                allocationType: 'shared_pool',
-                              })
-                            }
-                            style={{ flex: 1, minWidth: 100 }}
-                          >
-                            <XStack
-                              paddingVertical={6}
-                              paddingHorizontal={8}
-                              borderRadius={6}
-                              borderWidth={1}
-                              borderColor={
-                                currentAlloc.allocationType === 'shared_pool'
-                                  ? '#D97706'
-                                  : tokens.border
-                              }
-                              backgroundColor={
-                                currentAlloc.allocationType === 'shared_pool'
-                                  ? '#FEF3C7'
-                                  : tokens.surface
-                              }
-                              alignItems="center"
-                              justifyContent="center"
-                              gap={4}
-                            >
-                              <LuStar size={10} color="#D97706" />
-                              <Text
-                                fontSize={10.5}
-                                fontWeight={currentAlloc.allocationType === 'shared_pool' ? '800' : '600'}
-                                color={
-                                  currentAlloc.allocationType === 'shared_pool'
-                                    ? '#B45309'
-                                    : tokens.text
-                                }
-                              >
-                                Shared Pool
-                              </Text>
-                            </XStack>
-                          </TouchableOpacity>
-                        </XStack>
-
-                        {/* Existing Color selector */}
-                        {currentAlloc.allocationType === 'existing_color' && (
-                          <XStack gap={6} flexWrap="wrap" paddingTop={4}>
-                            {colorGroups.map((cg) => {
-                              const isSelected = (currentAlloc.colorGroupId || colorGroups[0]?.id) === cg.id;
-                              return (
-                                <TouchableOpacity
-                                  key={cg.id}
-                                  onPress={() =>
-                                    handleUpdateAllocation(photo.id, {
-                                      colorGroupId: cg.id,
-                                    })
-                                  }
-                                >
-                                  <XStack
-                                    paddingHorizontal={8}
-                                    paddingVertical={4}
-                                    borderRadius={6}
-                                    borderWidth={1}
-                                    borderColor={isSelected ? tokens.accent : tokens.border}
-                                    backgroundColor={isSelected ? `${tokens.accent}14` : tokens.surface}
-                                    alignItems="center"
-                                    gap={6}
-                                  >
-                                    <View
-                                      style={{
-                                        width: 10,
-                                        height: 10,
-                                        borderRadius: 5,
-                                        backgroundColor: cg.colorHex || '#1B4D3E',
-                                      }}
-                                    />
-                                    <Text
-                                      fontSize={10.5}
-                                      fontWeight={isSelected ? '800' : '600'}
-                                      color={isSelected ? tokens.accent : tokens.text}
-                                    >
-                                      {cg.name}
-                                    </Text>
-                                  </XStack>
-                                </TouchableOpacity>
-                              );
-                            })}
-                          </XStack>
-                        )}
-
-                        {/* New Color inputs (including MANDATORY initial stock) */}
-                        {currentAlloc.allocationType === 'new_color' && (
-                          <YStack gap={8} paddingTop={4}>
-                            <XStack gap={8}>
-                              <YStack flex={1.5} gap={2}>
-                                <Text fontSize={10} fontWeight="700" color={tokens.textMuted}>
-                                  Colorway Name:
-                                </Text>
-                                <TextInput
-                                  value={currentAlloc.newGroupName || ''}
-                                  onChangeText={(name) =>
-                                    handleUpdateAllocation(photo.id, { newGroupName: name })
-                                  }
-                                  placeholder="e.g. Royal Sapphire"
-                                  placeholderTextColor={tokens.textMuted}
-                                  style={{
-                                    height: 34,
-                                    backgroundColor: tokens.surface,
-                                    borderWidth: 1,
-                                    borderColor: tokens.border,
-                                    borderRadius: 6,
-                                    paddingHorizontal: 8,
-                                    fontSize: 12,
-                                    color: tokens.text,
-                                  }}
+                              {/* Thumbnail */}
+                              {photo.url ? (
+                                <Image
+                                  source={{ uri: photo.url }}
+                                  style={{ width: 48, height: 48, borderRadius: 6, backgroundColor: '#000' }}
+                                  contentFit="cover"
                                 />
+                              ) : (
+                                <YStack width={48} height={48} borderRadius={6} backgroundColor="#cbd5e1" />
+                              )}
+
+                              {/* Info */}
+                              <YStack flex={1}>
+                                <Text fontSize={12} fontWeight="700" color={tokens.text} numberOfLines={1}>
+                                  {filename}
+                                </Text>
+                                <Text fontSize={10} color={tokens.textMuted}>
+                                  Photo #{idx + 1} • {photo.mediaType === 'video' ? 'Video' : 'Image'}
+                                </Text>
                               </YStack>
 
-                              <YStack flex={1} gap={2}>
-                                <Text fontSize={10} fontWeight="700" color={tokens.textMuted}>
-                                  Initial Stock * :
+                              {/* Status Badge */}
+                              <XStack
+                                backgroundColor="rgba(16, 185, 129, 0.15)"
+                                paddingHorizontal={6}
+                                paddingVertical={2}
+                                borderRadius={4}
+                              >
+                                <Text fontSize={9.5} fontWeight="800" color="#059669">
+                                  + NEW
                                 </Text>
-                                <TextInput
-                                  value={currentAlloc.newGroupStock || ''}
-                                  onChangeText={(stock) =>
-                                    handleUpdateAllocation(photo.id, { newGroupStock: stock })
-                                  }
-                                  keyboardType="numeric"
-                                  placeholder="Qty (Req.)"
-                                  placeholderTextColor={tokens.textMuted}
-                                  style={{
-                                    height: 34,
-                                    backgroundColor: tokens.surface,
-                                    borderWidth: 1.5,
-                                    borderColor: currentAlloc.newGroupStock && parseInt(currentAlloc.newGroupStock, 10) > 0 ? '#10B981' : '#F59E0B',
-                                    borderRadius: 6,
-                                    paddingHorizontal: 8,
-                                    fontSize: 12,
-                                    fontWeight: '800',
-                                    color: tokens.text,
-                                  }}
-                                />
-                              </YStack>
+                              </XStack>
                             </XStack>
-                          </YStack>
-                        )}
+                          </TouchableOpacity>
+                        );
+                      })
+                    )}
+                  </YStack>
 
-                        {/* Shared pool description */}
-                        {currentAlloc.allocationType === 'shared_pool' && (
-                          <Text fontSize={10} color="#B45309" fontStyle="italic">
-                            ★ Appended to PDP gallery for ALL color variants. Stored once in MinIO store-assets/products/{product.id}/shared/.
+                  {/* Pruned Photos Section */}
+                  {prunedCount > 0 && (
+                    <YStack gap={8}>
+                      <Text fontSize={12} fontWeight="800" color="#DC2626" letterSpacing={0.2}>
+                        Pruned Photos (-{prunedCount})
+                      </Text>
+
+                      <XStack
+                        backgroundColor="#FEF2F2"
+                        borderWidth={1}
+                        borderColor="#FECACA"
+                        borderRadius={tokens.radius.sm}
+                        padding={12}
+                        alignItems="center"
+                        gap={10}
+                      >
+                        <LuTrash2 size={18} color="#DC2626" />
+                        <YStack flex={1}>
+                          <Text fontSize={11} fontWeight="800" color="#B91C1C">
+                            These photos will be removed from the store.
                           </Text>
-                        )}
-                      </YStack>
-                    );
-                  })}
+                          <Text fontSize={10} color="#991B1B">
+                            {prunedCount} catalog photo{prunedCount === 1 ? '' : 's'} removed or unmerged from catalog and will be purged upon syncing.
+                          </Text>
+                        </YStack>
+                      </XStack>
+
+                      {prunedPhotos.map((photo, idx) => {
+                        const filename = getMediaFilename(photo, idx);
+                        return (
+                          <XStack
+                            key={photo.id || idx}
+                            backgroundColor={tokens.surfaceRaised}
+                            borderRadius={tokens.radius.sm}
+                            padding={10}
+                            alignItems="center"
+                            gap={10}
+                            borderWidth={1}
+                            borderColor="#FECACA"
+                            opacity={0.7}
+                          >
+                            {photo.url ? (
+                              <Image
+                                source={{ uri: photo.url }}
+                                style={{ width: 44, height: 44, borderRadius: 6, backgroundColor: '#000' }}
+                                contentFit="cover"
+                              />
+                            ) : (
+                              <YStack width={44} height={44} borderRadius={6} backgroundColor="#cbd5e1" />
+                            )}
+                            <YStack flex={1}>
+                              <Text
+                                fontSize={11}
+                                fontWeight="600"
+                                color={tokens.textMuted}
+                                numberOfLines={1}
+                                textDecorationLine="line-through"
+                              >
+                                {filename}
+                              </Text>
+                              <Text fontSize={9.5} color="#DC2626">
+                                To be removed
+                              </Text>
+                            </YStack>
+                          </XStack>
+                        );
+                      })}
+                    </YStack>
+                  )}
                 </YStack>
               </ScrollView>
 
-              {/* Sync Action Button */}
+              {/* Actions */}
               <XStack gap={10} justifyContent="flex-end" marginTop={8}>
                 <TouchableOpacity
                   accessibilityRole="button"
-                  accessibilityLabel="Cancel allocation"
+                  accessibilityLabel="Cancel update sync"
                   onPress={() => setIsDeltaModalOpen(false)}
                 >
                   <XStack paddingHorizontal={14} paddingVertical={9} borderRadius={tokens.radius.sm}>
@@ -2008,9 +1880,9 @@ export function AdminProductDetailPage({
 
                 <TouchableOpacity
                   accessibilityRole="button"
-                  accessibilityLabel="Complete and Sync to Store"
+                  accessibilityLabel="Confirm & Sync Updates"
                   disabled={isSyncingDelta}
-                  onPress={handleCompleteDeltaSync}
+                  onPress={handleConfirmSync}
                 >
                   <XStack
                     paddingHorizontal={16}
@@ -2023,7 +1895,7 @@ export function AdminProductDetailPage({
                   >
                     <LuSparkles size={14} color="#ffffff" />
                     <Text fontSize={13} fontWeight="800" color="#ffffff">
-                      {isSyncingDelta ? 'Syncing to Store...' : 'Complete & Sync to Store ➔'}
+                      {isSyncingDelta ? 'Syncing Updates...' : 'Confirm & Sync Updates'}
                     </Text>
                   </XStack>
                 </TouchableOpacity>
@@ -2032,6 +1904,38 @@ export function AdminProductDetailPage({
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+
+      {/* Floating Success Feedback */}
+      {deltaSyncToast && (
+        <XStack
+          position="absolute"
+          bottom={Math.max(24, bottomInset + 16)}
+          left={16}
+          right={16}
+          backgroundColor="#10B981"
+          paddingVertical={10}
+          paddingHorizontal={14}
+          borderRadius={tokens.radius.sm}
+          alignItems="center"
+          justifyContent="space-between"
+          shadowColor="#000"
+          shadowOffset={{ width: 0, height: 4 }}
+          shadowOpacity={0.2}
+          shadowRadius={8}
+          elevation={6}
+          zIndex={999}
+        >
+          <XStack alignItems="center" gap={8} flex={1}>
+            <LuCheck size={16} color="#fff" />
+            <Text fontSize={12} fontWeight="800" color="#fff" flex={1}>
+              {deltaSyncToast}
+            </Text>
+          </XStack>
+          <TouchableOpacity onPress={() => setDeltaSyncToast(null)} hitSlop={8}>
+            <LuX size={16} color="#fff" />
+          </TouchableOpacity>
+        </XStack>
+      )}
 
       {/* Fullscreen Media Viewer Modal */}
       <AdminProductFullscreenViewer
