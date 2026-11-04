@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   FlatList,
   RefreshControl,
+  TouchableOpacity,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,6 +26,7 @@ import {
   LuRotateCcw,
   LuChevronDown,
   LuChevronUp,
+  LuX,
 } from '../icons/lu';
 import { useTheme } from '@/theme';
 
@@ -224,7 +226,11 @@ export function AdminVayyariStorePublishPage({
     setIsPublishing(true);
     try {
       await onPublishBatch?.(selectedIds);
-      setPublishSuccessToast(`🚀 Successfully published ${selectedIds.length} products to Store!`);
+      setPublishSuccessToast(
+        activeQueue === 'publish_updates'
+          ? `🚀 Successfully synced updates for ${selectedIds.length} product${selectedIds.length === 1 ? '' : 's'} to Store!`
+          : `🚀 Successfully published ${selectedIds.length} product${selectedIds.length === 1 ? '' : 's'} to Store!`
+      );
       setSelectedIds([]);
       setTimeout(() => setPublishSuccessToast(null), 3500);
     } catch (err) {
@@ -422,15 +428,6 @@ export function AdminVayyariStorePublishPage({
           </XStack>
         </Pressable>
       </XStack>
-
-      {/* ── SUCCESS TOAST ── */}
-      {publishSuccessToast && (
-        <View style={[styles.toastBanner, { backgroundColor: '#10B981' }]}>
-          <Text fontSize={12} fontWeight="800" color="#fff" textAlign="center">
-            {publishSuccessToast}
-          </Text>
-        </View>
-      )}
 
       {/* ── SEARCH & FILTER CONTROLS ── */}
       <YStack backgroundColor={tokens.surface} paddingHorizontal={12} paddingVertical={8} gap={8} borderBottomWidth={1} borderBottomColor={tokens.border}>
@@ -721,11 +718,47 @@ export function AdminVayyariStorePublishPage({
             <XStack alignItems="center" justifyContent="center" gap={8}>
               <LuSparkles size={16} color={tokens.accentForeground} />
               <Text fontSize={14} fontWeight="800" color={tokens.accentForeground}>
-                {isPublishing ? 'Publishing to Store...' : `Publish ${selectedIds.length} Products to Store`}
+                {isPublishing
+                  ? (activeQueue === 'publish_updates' ? 'Syncing Updates...' : 'Publishing to Store...')
+                  : (activeQueue === 'publish_updates'
+                      ? `Publish Updates for ${selectedIds.length} Product${selectedIds.length === 1 ? '' : 's'}`
+                      : `Publish ${selectedIds.length} Product${selectedIds.length === 1 ? '' : 's'} to Store`)}
               </Text>
             </XStack>
           </Pressable>
         </YStack>
+      )}
+
+      {/* ── FLOATING SUCCESS TOAST ── */}
+      {publishSuccessToast && (
+        <XStack
+          position="absolute"
+          bottom={bottomInset + 80}
+          left={16}
+          right={16}
+          backgroundColor="#10B981"
+          paddingVertical={10}
+          paddingHorizontal={14}
+          borderRadius={tokens.radius.sm}
+          alignItems="center"
+          justifyContent="space-between"
+          shadowColor="#000"
+          shadowOffset={{ width: 0, height: 4 }}
+          shadowOpacity={0.2}
+          shadowRadius={8}
+          elevation={6}
+          zIndex={999}
+        >
+          <XStack alignItems="center" gap={8} flex={1}>
+            <LuSparkles size={16} color="#fff" />
+            <Text fontSize={12} fontWeight="800" color="#fff" flex={1}>
+              {publishSuccessToast}
+            </Text>
+          </XStack>
+          <TouchableOpacity onPress={() => setPublishSuccessToast(null)} hitSlop={8}>
+            <LuX size={16} color="#fff" />
+          </TouchableOpacity>
+        </XStack>
       )}
     </YStack>
   );
@@ -742,13 +775,6 @@ const styles = StyleSheet.create({
   navInventoryBtn: {
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 6,
-  },
-  toastBanner: {
-    marginHorizontal: 12,
-    marginTop: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
     borderRadius: 6,
   },
   searchInput: {
