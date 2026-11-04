@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, Alert, Image, FlatList, TouchableOpacity } from 'react-native';
 import {
   Text,
@@ -32,7 +32,7 @@ interface AuditLogEntry {
 export default function GroupZoneViewScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const { jid, name } = useLocalSearchParams<{ jid: string; name?: string }>();
+  const { jid, name, focusGroupId } = useLocalSearchParams<{ jid: string; name?: string; focusGroupId?: string }>();
 
   const [groups, setGroups] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,6 +49,9 @@ export default function GroupZoneViewScreen() {
 
   // Message details list expansion
   const [expandedGroups, setExpandedGroups] = useState<{ [key: string]: boolean }>({});
+
+  const scrollViewRef = useRef<ScrollView>(null);
+  const groupCardLayouts = useRef<{ [key: string]: number }>({});
 
   const fetchGroups = useCallback(async () => {
     if (!jid) return;
@@ -67,6 +70,19 @@ export default function GroupZoneViewScreen() {
     fetchGroups();
   }, [fetchGroups]);
 
+  useEffect(() => {
+    if (focusGroupId && groups.length > 0) {
+      setExpandedGroups(prev => ({ ...prev, [focusGroupId]: true }));
+      const timer = setTimeout(() => {
+        const y = groupCardLayouts.current[focusGroupId];
+        if (y !== undefined && scrollViewRef.current) {
+          scrollViewRef.current.scrollTo({ y: Math.max(0, y - 20), animated: true });
+        }
+      }, 350);
+      return () => clearTimeout(timer);
+    }
+  }, [focusGroupId, groups]);
+
   const onRefresh = () => {
     setRefreshing(true);
     fetchGroups();
@@ -82,6 +98,9 @@ export default function GroupZoneViewScreen() {
 
   // Group Status Mappers
   const getGroupStatus = (group: any) => {
+    if (group.status === 'needs_review') {
+      return { label: 'Needs Review', color: '#D97706', bgColor: 'rgba(217, 119, 6, 0.15)' };
+    }
     if (group.status === 'ignored') {
       return { label: 'Ignored', color: '#757575', bgColor: 'rgba(117, 117, 117, 0.1)' };
     }
@@ -243,6 +262,7 @@ export default function GroupZoneViewScreen() {
   return (
     <ScreenWrapper title={`${name || 'Chat'} Zones`}>
       <ScrollView
+        ref={scrollViewRef}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         contentContainerStyle={styles.container}
       >
@@ -255,11 +275,21 @@ export default function GroupZoneViewScreen() {
           groups.map((group, index) => {
             const statusConfig = getGroupStatus(group);
             const isExpanded = !!expandedGroups[group.groupId];
+            const isFocused = focusGroupId === group.groupId;
             const hasPrev = index > 0;
             const prevGroup = hasPrev ? groups[index - 1] : null;
 
             return (
-              <View key={group.groupId}>
+              <View
+                key={group.groupId}
+                onLayout={(e) => {
+                  const y = e.nativeEvent.layout.y;
+                  groupCardLayouts.current[group.groupId] = y;
+                  if (focusGroupId === group.groupId && scrollViewRef.current) {
+                    scrollViewRef.current.scrollTo({ y: Math.max(0, y - 20), animated: true });
+                  }
+                }}
+              >
                 {/* Merge Divider */}
                 {hasPrev && (
                   <View style={styles.mergeDividerContainer}>
@@ -277,7 +307,7 @@ export default function GroupZoneViewScreen() {
                 )}
 
                 {/* Group Card */}
-                <Card style={styles.zoneCard}>
+                <Card style={[styles.zoneCard, isFocused && styles.focusedCard]}>
                   <Card.Content style={{ paddingBottom: 8 }}>
                     {/* Header Row */}
                     <View style={styles.cardHeader}>
@@ -539,6 +569,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     elevation: 2,
     marginBottom: 8,
+  },
+  focusedCard: {
+    borderColor: '#d97706',
+    borderWidth: 2,
   },
   cardHeader: {
     flexDirection: 'row',
