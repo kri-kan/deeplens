@@ -275,7 +275,7 @@ export class GroupReadinessService {
 
             // Stage 3 Gating: qualification - If chat has no vendor assigned
             if (!vendorId) {
-                const errMsg = 'Chat missing vendor assignment or description invalid.';
+                const errMsg = 'Vendor not assigned to chat.';
                 await client.query(
                     `UPDATE wa.message_groups 
                      SET status = 'needs_review', 
@@ -285,14 +285,22 @@ export class GroupReadinessService {
                      WHERE group_id = $2`,
                     [errMsg, groupId]
                 );
-                await this.logAudit(groupId, 'flagged_needs_review', 'system', { status: currentStatus }, { status: 'needs_review', review_stage: 'qualification' });
+                await this.logAudit(groupId, 'flagged_needs_review', 'system', { status: currentStatus }, { status: 'needs_review', review_stage: 'qualification', error: errMsg });
                 return;
-            } else {
-                // Clear vendor error if vendor is now assigned and was qualification error
+            } else if (isValidDescription(description)) {
+                // Clear qualification error only when BOTH vendor is assigned and description qualifies
                 await client.query(
                     `UPDATE wa.message_groups 
                      SET error_detail = NULL, review_stage = NULL, status = CASE WHEN status = 'needs_review' AND review_stage = 'qualification' THEN 'staging' ELSE status END, updated_at = NOW() 
-                     WHERE group_id = $1 AND (error_detail LIKE 'Vendor not assigned%' OR (review_stage = 'qualification' AND error_detail = 'Chat missing vendor assignment or description invalid.'))`,
+                     WHERE group_id = $1 AND review_stage = 'qualification'`,
+                    [groupId]
+                );
+            } else if (currentStatus === 'needs_review' && groupRes.rows[0]?.review_stage === 'qualification') {
+                // Already in needs_review qualification and description is still invalid
+                await client.query(
+                    `UPDATE wa.message_groups 
+                     SET error_detail = 'Description invalid or too short (< 5 words).', updated_at = NOW() 
+                     WHERE group_id = $1`,
                     [groupId]
                 );
             }
@@ -714,9 +722,9 @@ export class GroupReadinessService {
                     }
 
                     // Stage 3: qualification Gating - missing vendor assignment or description invalid/missing
-                    if (!vendor_id || !isValidDescription(description)) {
-                        logger.warn({ groupId: group_id, hasVendor: Boolean(vendor_id), hasValidDesc: isValidDescription(description) }, 'Qualification check failed for staging group. Flagging for qualification review.');
-                        const errorDetail = 'Chat missing vendor assignment or description invalid.';
+                    if (!vendor_id) {
+                        logger.warn({ groupId: group_id }, 'Chat missing vendor assignment. Flagging for qualification review.');
+                        const errorDetail = 'Vendor not assigned to chat.';
                         await client.query(
                             `UPDATE wa.message_groups 
                              SET status = 'needs_review', 
@@ -726,7 +734,32 @@ export class GroupReadinessService {
                              WHERE group_id = $2`,
                             [errorDetail, group_id]
                         );
-                        await this.logAudit(group_id, 'flagged_needs_review', 'system_poller', { status: row.current_status }, { status: 'needs_review', review_stage: 'qualification' });
+                        await this.logAudit(group_id, 'flagged_needs_review', 'system_poller', { status: row.current_status }, { status: 'needs_review', review_stage: 'qualification', error: errorDetail });
+                        if (this.io) {
+                            this.io.emit('group_updated', {
+                                groupId: group_id,
+                                status: 'needs_review',
+                                reviewStage: 'qualification',
+                                mediaCount,
+                                textCount
+                            });
+                        }
+                        continue; // Do not emit to Kafka
+                    }
+
+                    if (!isValidDescription(description)) {
+                        logger.warn({ groupId: group_id, descriptionWords: description.split(/\s+/).length }, 'Description invalid or too short (< 5 words). Flagging for qualification review.');
+                        const errorDetail = 'Description invalid or too short (< 5 words).';
+                        await client.query(
+                            `UPDATE wa.message_groups 
+                             SET status = 'needs_review', 
+                                 review_stage = 'qualification', 
+                                 error_detail = $1, 
+                                 updated_at = NOW() 
+                             WHERE group_id = $2`,
+                            [errorDetail, group_id]
+                        );
+                        await this.logAudit(group_id, 'flagged_needs_review', 'system_poller', { status: row.current_status }, { status: 'needs_review', review_stage: 'qualification', error: errorDetail });
                         if (this.io) {
                             this.io.emit('group_updated', {
                                 groupId: group_id,
@@ -863,14 +896,29 @@ export class GroupReadinessService {
 
             // 2. Auto-recover vendor assignment error groups where chat now has vendor_id
             const vendorErrRes = await client.query(
-                `SELECT mg.group_id 
+                `SELECT mg.group_id, mg.description 
                  FROM wa.message_groups mg
                  JOIN wa.chats c ON mg.jid = c.jid
                  WHERE ((mg.status = 'error' AND mg.error_detail LIKE 'Vendor not assigned%')
-                        OR (mg.status = 'needs_review' AND mg.review_stage = 'qualification' AND (mg.error_detail LIKE 'Vendor not assigned%' OR mg.error_detail = 'Chat missing vendor assignment or description invalid.')))
+                        OR (mg.status = 'needs_review' AND mg.review_stage = 'qualification' AND (mg.error_detail = 'Vendor not assigned to chat.' OR mg.error_detail LIKE 'Vendor not assigned%' OR mg.error_detail = 'Chat missing vendor assignment or description invalid.')))
                    AND c.vendor_id IS NOT NULL`
             );
             for (const row of vendorErrRes.rows) {
+                // Verify BOTH vendor is assigned AND description is valid before resetting to staging!
+                // If description is missing/invalid, do NOT reset to staging. Keep in qualification review and update error_detail.
+                if (!isValidDescription(row.description)) {
+                    await client.query(
+                        `UPDATE wa.message_groups 
+                         SET status = 'needs_review', 
+                             review_stage = 'qualification', 
+                             error_detail = 'Description invalid or too short (< 5 words).', 
+                             updated_at = NOW() 
+                         WHERE group_id = $1`,
+                        [row.group_id]
+                    );
+                    continue;
+                }
+
                 await client.query(`UPDATE wa.message_groups SET status = 'staging', review_stage = NULL, error_detail = NULL, retry_count = 0, updated_at = NOW() WHERE group_id = $1`, [row.group_id]);
                 await this.checkAndEmitGroupEvent(row.group_id);
                 recoveredVendorErrors++;

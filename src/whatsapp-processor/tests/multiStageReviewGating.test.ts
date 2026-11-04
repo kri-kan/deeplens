@@ -65,34 +65,59 @@ describe('Multi-Stage Review Classification & Gating (Task 3)', () => {
         assert.equal(checkMediaSync(3, false, false), null);
     });
 
-    test('Stage 3 (qualification): missing vendor assignment or description invalid', () => {
+    test('Stage 3 (qualification): separate distinct errors for missing vendor vs invalid description', () => {
         const checkQualification = (vendorId: string | null | undefined, description: string) => {
-            if (!vendorId || !isValidDescription(description)) {
+            if (!vendorId) {
                 return {
                     status: 'needs_review',
                     review_stage: 'qualification',
-                    error_detail: 'Chat missing vendor assignment or description invalid.'
+                    error_detail: 'Vendor not assigned to chat.'
+                };
+            }
+            if (!isValidDescription(description)) {
+                return {
+                    status: 'needs_review',
+                    review_stage: 'qualification',
+                    error_detail: 'Description invalid or too short (< 5 words).'
                 };
             }
             return null;
         };
 
-        // Missing vendor
+        // Missing vendor gives distinct error
         assert.deepEqual(checkQualification(null, 'Beautiful designer silk lehenga choli set with dupatta'), {
             status: 'needs_review',
             review_stage: 'qualification',
-            error_detail: 'Chat missing vendor assignment or description invalid.'
+            error_detail: 'Vendor not assigned to chat.'
         });
 
-        // Invalid description
+        // Invalid description gives distinct error (< 5 words)
         assert.deepEqual(checkQualification('vendor-123', 'Top'), {
             status: 'needs_review',
             review_stage: 'qualification',
-            error_detail: 'Chat missing vendor assignment or description invalid.'
+            error_detail: 'Description invalid or too short (< 5 words).'
         });
 
-        // Valid qualification
+        // Valid qualification passes
         assert.equal(checkQualification('vendor-123', 'Beautiful designer silk lehenga choli set with dupatta'), null);
+    });
+
+    test('Stage 3 (qualification): error clearing and self-healing requires BOTH vendor and valid description', () => {
+        // Simulates checkAndEmitGroupEvent / runSelfHealingScan clearing logic
+        const shouldClearQualification = (vendorId: string | null | undefined, description: string | null | undefined) => {
+            return Boolean(vendorId) && isValidDescription(description);
+        };
+
+        // Chat has vendor, but description is short: MUST NOT clear qualification error!
+        assert.equal(shouldClearQualification('vendor-123', 'Red saree'), false);
+        assert.equal(shouldClearQualification('vendor-123', ''), false);
+        assert.equal(shouldClearQualification('vendor-123', null), false);
+
+        // Chat has no vendor, even if description is long: MUST NOT clear qualification error!
+        assert.equal(shouldClearQualification(null, 'Exclusive party wear silk saree with zari border'), false);
+
+        // BOTH vendor is assigned AND description is valid: CLEARS qualification error!
+        assert.equal(shouldClearQualification('vendor-123', 'Exclusive party wear silk saree with zari border'), true);
     });
 
     test('Stage 5 (enrichment): preserve needs_review during write-back', () => {
