@@ -1,7 +1,6 @@
 import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-native';
 import { WishlistPage } from '../../components/pages/WishlistPage';
-import { withFormFactor } from '../utils/FormFactorPreview';
 import { THEME_ARG_TYPES, THEME_ARGS } from '../../utils/storyTheme';
 
 const meta: Meta<any> = {
@@ -24,30 +23,9 @@ export const InteractiveFormFactors: Story = {
   render: (args) => <WishlistPage {...args} />,
 };
 
-export const DesktopView: Story = {
-  parameters: {
-    formFactorShell: { defaultFactor: 'desktop' },
-  },
-  render: (args) => <WishlistPage {...args} />,
-};
-
-export const TabletView: Story = {
-  parameters: {
-    formFactorShell: { defaultFactor: 'tablet' },
-  },
-  render: (args) => <WishlistPage {...args} />,
-};
-
-export const MobileView: Story = {
-  parameters: {
-    formFactorShell: { defaultFactor: 'mobile' },
-  },
-  render: (args) => <WishlistPage {...args} />,
-};
-
 export const EmptyWishlistView: Story = {
   args: {
     initialItems: [],
   },
-  decorators: [withFormFactor('desktop', 'Empty Wishlist View')],
+  render: (args) => <WishlistPage {...args} />,
 };

@@ -62,23 +62,3 @@ export const InteractiveFormFactors: Story = {
   render: renderWireframe,
 };
 
-export const DesktopView: Story = {
-  parameters: {
-    formFactorShell: { defaultFactor: 'desktop' },
-  },
-  render: renderWireframe,
-};
-
-export const TabletView: Story = {
-  parameters: {
-    formFactorShell: { defaultFactor: 'tablet' },
-  },
-  render: renderWireframe,
-};
-
-export const MobileView: Story = {
-  parameters: {
-    formFactorShell: { defaultFactor: 'mobile' },
-  },
-  render: renderWireframe,
-};

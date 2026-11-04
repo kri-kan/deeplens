@@ -22,23 +22,3 @@ export const InteractiveFormFactors: Story = {
   render: (args) => <HomePage {...args} />,
 };
 
-export const DesktopView: Story = {
-  parameters: {
-    formFactorShell: { defaultFactor: 'desktop' },
-  },
-  render: (args) => <HomePage {...args} />,
-};
-
-export const TabletView: Story = {
-  parameters: {
-    formFactorShell: { defaultFactor: 'tablet' },
-  },
-  render: (args) => <HomePage {...args} />,
-};
-
-export const MobileView: Story = {
-  parameters: {
-    formFactorShell: { defaultFactor: 'mobile' },
-  },
-  render: (args) => <HomePage {...args} />,
-};

@@ -54,16 +54,3 @@ export const InteractiveFormFactors: Story = {
   render: (args) => renderTemplate(args),
 };
 
-export const DesktopView: Story = {
-  parameters: {
-    formFactorShell: { defaultFactor: 'desktop' },
-  },
-  render: renderTemplate,
-};
-
-export const MobileView: Story = {
-  parameters: {
-    formFactorShell: { defaultFactor: 'mobile' },
-  },
-  render: renderTemplate,
-};

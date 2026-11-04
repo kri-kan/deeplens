@@ -22,23 +22,3 @@ export const InteractiveFormFactors: Story = {
   render: (args) => <CatalogPage {...args} />,
 };
 
-export const DesktopView: Story = {
-  parameters: {
-    formFactorShell: { defaultFactor: 'desktop' },
-  },
-  render: (args) => <CatalogPage {...args} />,
-};
-
-export const TabletView: Story = {
-  parameters: {
-    formFactorShell: { defaultFactor: 'tablet' },
-  },
-  render: (args) => <CatalogPage {...args} />,
-};
-
-export const MobileView: Story = {
-  parameters: {
-    formFactorShell: { defaultFactor: 'mobile' },
-  },
-  render: (args) => <CatalogPage {...args} />,
-};

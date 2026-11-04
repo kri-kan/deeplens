@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-native';
-import { ProductDetailPage } from '../../components/pages/ProductDetailPage';
+import { ProductDetailPage, PDP_PRESETS } from '../../components/pages/ProductDetailPage';
 import { DIVERSE_CATALOG_PRODUCTS, getProductBySku } from '../../data/catalog';
 import { withFormFactor } from '../utils/FormFactorPreview';
 import { THEME_ARG_TYPES, THEME_ARGS } from '../../utils/storyTheme';
@@ -23,27 +23,6 @@ export default meta;
 type Story = StoryObj<typeof ProductDetailPage>;
 
 export const InteractiveFormFactors: Story = {
-  render: (args) => <ProductDetailPage {...args} />,
-};
-
-export const DesktopView: Story = {
-  parameters: {
-    formFactorShell: { defaultFactor: 'desktop' },
-  },
-  render: (args) => <ProductDetailPage {...args} />,
-};
-
-export const TabletView: Story = {
-  parameters: {
-    formFactorShell: { defaultFactor: 'tablet' },
-  },
-  render: (args) => <ProductDetailPage {...args} />,
-};
-
-export const MobileView: Story = {
-  parameters: {
-    formFactorShell: { defaultFactor: 'mobile' },
-  },
   render: (args) => <ProductDetailPage {...args} />,
 };
 
@@ -79,5 +58,59 @@ export const BridalLehenga: Story = {
   decorators: [withFormFactor('mobile', 'VF2F4F Bridal Velvet Lehenga')],
   args: {
     product: getProductBySku('VF2F4F') || DIVERSE_CATALOG_PRODUCTS[3],
+  },
+};
+
+/**
+ * Grouped PDP View (Multi-Swatch with Dynamic Media Filtering & Mandatory Selection):
+ * Demonstrates:
+ * 1. Tapping a color swatch filters gallery to only that color's photos.
+ * 2. Tapping the active swatch unselects it, revealing all media across swatches.
+ * 3. Tapping 'Add to Bag' when unselected opens the Myntra-style bottom sheet.
+ */
+export const GroupedPDPViewInteractive: Story = {
+  name: 'Presentation: Grouped PDP (Multi-Swatch, Toggle Filter & Mandatory Sheet)',
+  decorators: [withFormFactor('mobile', 'Grouped PDP · VF2B56')],
+  args: {
+    product: getProductBySku('VF2B56') || DIVERSE_CATALOG_PRODUCTS[0],
+    presentationMode: 'grouped',
+  },
+};
+
+/**
+ * Split PDP View (Single-SKU Spotlight with Sibling SKUs Strip):
+ * Demonstrates:
+ * 1. Single swatch presented for this dedicated SKU.
+ * 2. Header pill: 'Available in 3 other colorways'.
+ * 3. Dedicated 'Color Variations in this Saree' row placed above 'You May Also Cherish'
+ *    with direct links to sibling SKU PDPs.
+ */
+export const SplitPDPSingleSwatchWithSiblingStrip: Story = {
+  name: 'Presentation: Split PDP (Single Swatch & Sibling SKUs Row)',
+  decorators: [withFormFactor('mobile', 'Split SKU PDP · VF2B5601')],
+  args: {
+    product: getProductBySku('VF2B56') || DIVERSE_CATALOG_PRODUCTS[0],
+    presentationMode: 'split',
+  },
+};
+
+/**
+ * A/B Testing Experiment Stories:
+ */
+export const VariantAControl: Story = {
+  name: 'Experiment: Variant A (Control - Classic Heritage)',
+  decorators: [withFormFactor('mobile', 'Variant A (Control)')],
+  args: {
+    product: getProductBySku('VF2B56') || DIVERSE_CATALOG_PRODUCTS[0],
+    config: PDP_PRESETS.control,
+  },
+};
+
+export const VariantBTreatment: Story = {
+  name: 'Experiment: Variant B (Treatment - Social Proof & Compact Merchandising)',
+  decorators: [withFormFactor('mobile', 'Variant B (Treatment)')],
+  args: {
+    product: getProductBySku('VF2B56') || DIVERSE_CATALOG_PRODUCTS[0],
+    config: PDP_PRESETS.treatment,
   },
 };
