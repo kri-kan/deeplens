@@ -24,7 +24,11 @@ const meta: Meta<typeof VayyariLogo> = {
     },
     variant: {
       control: 'select',
-      options: ['cinematic', 'horizontal', 'emblem', 'stacked', 'wordmark'],
+      options: ['initial-v', 'cinematic', 'horizontal', 'emblem', 'stacked', 'wordmark'],
+    },
+    iconWeight: {
+      control: 'radio',
+      options: ['bold', 'standard'],
     },
     tone: {
       control: 'radio',
@@ -96,12 +100,33 @@ export const Variants: StoryObj = {
             Brand Logo Lockup Formats
           </Text>
           <Text color="#8b949e" fontSize={12}>
-            Four unified lockup variants catering to responsive headers, app icons, and luxury banners.
+            Five unified lockup variants catering to responsive headers, initial-V monograms, app icons, and luxury banners.
           </Text>
         </YStack>
 
         <XStack flexWrap="wrap" gap={18}>
-          {/* 1. Horizontal Lockup */}
+          {/* 1. Initial-V Monogram Lockup (Featured) */}
+          <YStack
+            flex={1}
+            minWidth={300}
+            padding={20}
+            borderRadius={12}
+            backgroundColor="#141822"
+            borderColor="#d4af37"
+            borderWidth={1}
+            gap={14}
+            justifyContent="space-between"
+          >
+            <Text color="#d4af37" fontSize={11} fontWeight="700" textTransform="uppercase" letterSpacing={1}>
+              1. Initial-V Monogram (Featured)
+            </Text>
+            <VayyariLogo variant="initial-v" size={48} tone="dark" />
+            <Text color="#8b949e" fontSize={11}>
+              Emblem stands in place of initial letter V, with AYYARI beside upper arms and FASHIONS spanning the lower loops.
+            </Text>
+          </YStack>
+
+          {/* 2. Horizontal Lockup */}
           <YStack
             flex={1}
             minWidth={300}
@@ -114,7 +139,7 @@ export const Variants: StoryObj = {
             justifyContent="space-between"
           >
             <Text color="#8b949e" fontSize={11} fontWeight="700" textTransform="uppercase" letterSpacing={1}>
-              1. Horizontal Lockup (Primary Nav)
+              2. Horizontal Lockup (Primary Nav)
             </Text>
             <VayyariLogo variant="horizontal" size={36} tone="dark" />
             <Text color="#8b949e" fontSize={11}>
@@ -122,7 +147,7 @@ export const Variants: StoryObj = {
             </Text>
           </YStack>
 
-          {/* 2. Stacked Lockup */}
+          {/* 3. Stacked Lockup */}
           <YStack
             flex={1}
             minWidth={300}
@@ -136,7 +161,7 @@ export const Variants: StoryObj = {
             justifyContent="space-between"
           >
             <Text color="#8b949e" fontSize={11} fontWeight="700" textTransform="uppercase" letterSpacing={1} alignSelf="flex-start">
-              2. Stacked Lockup (Hero / Splash)
+              3. Stacked Lockup (Hero / Splash)
             </Text>
             <VayyariLogo variant="stacked" size={44} tone="dark" />
             <Text color="#8b949e" fontSize={11} textAlign="center">
@@ -144,7 +169,7 @@ export const Variants: StoryObj = {
             </Text>
           </YStack>
 
-          {/* 3. Emblem Only */}
+          {/* 4. Emblem Only */}
           <YStack
             flex={1}
             minWidth={300}
@@ -157,7 +182,7 @@ export const Variants: StoryObj = {
             justifyContent="space-between"
           >
             <Text color="#8b949e" fontSize={11} fontWeight="700" textTransform="uppercase" letterSpacing={1}>
-              3. Emblem Mark Only (Icon / Crest)
+              4. Emblem Mark Only (Icon / Crest)
             </Text>
             <XStack alignItems="center" gap={16}>
               <VayyariLogo variant="emblem" size={36} isGlowing={true} />
@@ -169,7 +194,7 @@ export const Variants: StoryObj = {
             </Text>
           </YStack>
 
-          {/* 4. Wordmark Only */}
+          {/* 5. Wordmark Only */}
           <YStack
             flex={1}
             minWidth={300}
@@ -182,7 +207,7 @@ export const Variants: StoryObj = {
             justifyContent="space-between"
           >
             <Text color="#8b949e" fontSize={11} fontWeight="700" textTransform="uppercase" letterSpacing={1}>
-              4. Wordmark Only (Typography)
+              5. Wordmark Only (Typography)
             </Text>
             <VayyariLogo variant="wordmark" size={32} tone="dark" />
             <Text color="#8b949e" fontSize={11}>
@@ -190,6 +215,215 @@ export const Variants: StoryObj = {
             </Text>
           </YStack>
         </XStack>
+      </YStack>
+    );
+  },
+};
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * INITIAL-V MONOGRAM SHOWCASE
+ * Emblem acts as initial letter 'V', with 'AYYARI' nestled beside upper arms
+ * and 'FASHIONS' spanning the remaining base of the emblem beneath it.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+export const InitialVMonogram: Story = {
+  args: {
+    size: 72,
+    variant: 'initial-v',
+    iconWeight: 'bold',
+    tone: 'light',
+    isGlowing: false,
+    glowMode: 'none',
+    showSubtitle: true,
+  },
+  render: (args) => {
+    return (
+      <YStack
+        gap={32}
+        maxWidth={880}
+        width="100%"
+        backgroundColor="#0c0e14"
+        padding={28}
+        borderRadius={20}
+        borderColor="#1e2638"
+        borderWidth={1}
+      >
+        {/* Header Overview */}
+        <YStack gap={4}>
+          <Text color="#ffffff" fontSize={22} fontWeight="800">
+            Initial-V Monogram Lockup
+          </Text>
+          <Text color="#8b949e" fontSize={13}>
+            Integrated typographic monogram where the bold gold crest emblem assumes the role of the initial &apos;V&apos;,
+            with &apos;AYYARI&apos; beside the upper arms and &apos;FASHIONS&apos; spanning the base below.
+          </Text>
+        </YStack>
+
+        {/* 1. Side-by-Side Thematic Comparison (Editorial Ivory vs Midnight Obsidian) */}
+        <XStack flexWrap="wrap" gap={20}>
+          {/* Light Theme: 1:1 match to reference design */}
+          <YStack
+            flex={1}
+            minWidth={340}
+            padding={32}
+            borderRadius={20}
+            backgroundColor="#FAF8F5"
+            borderColor="#e8decb"
+            borderWidth={1}
+            gap={20}
+            style={{
+              boxShadow: '0 10px 30px rgba(0,0,0,0.06)',
+            }}
+          >
+            <YStack gap={2}>
+              <Text color="#785b1a" fontSize={11} fontWeight="800" textTransform="uppercase" letterSpacing={1.2}>
+                Editorial Ivory (Official Reference)
+              </Text>
+              <Text color="#6b7280" fontSize={12}>
+                1:1 match with user specification, onyx luxury serif and bronze tracked subtitle.
+              </Text>
+            </YStack>
+
+            <XStack paddingVertical={16} alignItems="center" justifyContent="center">
+              <VayyariLogo
+                variant="initial-v"
+                size={args.size || 72}
+                iconWeight={args.iconWeight || 'bold'}
+                tone="light"
+                showSubtitle={args.showSubtitle}
+              />
+            </XStack>
+
+            <Text color="#8c7853" fontSize={11}>
+              Font: Cinzel 900 • Size: {Math.round((args.size || 72) * 0.53)}px • Subtitle: Jost 700
+            </Text>
+          </YStack>
+
+          {/* Dark Theme: Luxury AMOLED Black with Radiant Gold Glow */}
+          <YStack
+            flex={1}
+            minWidth={340}
+            padding={32}
+            borderRadius={20}
+            backgroundColor="#0C0E14"
+            borderColor="#222b3a"
+            borderWidth={1}
+            gap={20}
+            style={{
+              boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+            }}
+          >
+            <YStack gap={2}>
+              <Text color="#DDA91A" fontSize={11} fontWeight="800" textTransform="uppercase" letterSpacing={1.2}>
+                Midnight Obsidian (Night Haute Couture)
+              </Text>
+              <Text color="#8b949e" fontSize={12}>
+                Warm ivory lettering with radiant 24K gold glowing crest and tracked gold subtitle.
+              </Text>
+            </YStack>
+
+            <XStack paddingVertical={16} alignItems="center" justifyContent="center">
+              <VayyariLogo
+                variant="initial-v"
+                size={args.size || 72}
+                iconWeight={args.iconWeight || 'bold'}
+                tone="dark"
+                glowMode="bloom"
+                showSubtitle={args.showSubtitle}
+              />
+            </XStack>
+
+            <Text color="#8b949e" fontSize={11}>
+              Backdrop: #0C0E14 • Glow: Bloom • Gold Crest Emblem
+            </Text>
+          </YStack>
+        </XStack>
+
+        {/* 2. Emblem Weight Comparison: Bold vs Standard */}
+        <YStack
+          padding={28}
+          borderRadius={18}
+          backgroundColor="#121622"
+          borderColor="#20283c"
+          borderWidth={1}
+          gap={20}
+        >
+          <YStack gap={4}>
+            <Text color="#ffffff" fontSize={15} fontWeight="800">
+              Emblem Weight Variations
+            </Text>
+            <Text color="#8b949e" fontSize={12}>
+              Comparing the official bold crest icon against standard weight in the Initial-V layout.
+            </Text>
+          </YStack>
+
+          <XStack flexWrap="wrap" gap={24} justifyContent="space-around">
+            <YStack alignItems="center" gap={12} padding={20} borderRadius={14} backgroundColor="#0c0e14" flex={1} minWidth={240}>
+              <Text color="#DDA91A" fontSize={12} fontWeight="700">
+                Bold Crest (Official Icon Request)
+              </Text>
+              <VayyariLogo variant="initial-v" size={64} iconWeight="bold" tone="dark" />
+              <Text color="#6b7280" fontSize={11}>
+                iconWeight=&quot;bold&quot; (Enhanced stroke &amp; presence)
+              </Text>
+            </YStack>
+
+            <YStack alignItems="center" gap={12} padding={20} borderRadius={14} backgroundColor="#0c0e14" flex={1} minWidth={240}>
+              <Text color="#d4af37" fontSize={12} fontWeight="700">
+                Standard Crest (Classic)
+              </Text>
+              <VayyariLogo variant="initial-v" size={64} iconWeight="standard" tone="dark" />
+              <Text color="#6b7280" fontSize={11}>
+                iconWeight=&quot;standard&quot; (Delicate filigree)
+              </Text>
+            </YStack>
+          </XStack>
+        </YStack>
+
+        {/* 3. Scale Progression */}
+        <YStack
+          padding={28}
+          borderRadius={18}
+          backgroundColor="#FAF8F5"
+          borderColor="#e8decb"
+          borderWidth={1}
+          gap={20}
+        >
+          <YStack gap={4}>
+            <Text color="#121826" fontSize={15} fontWeight="800">
+              Scale Progression (Editorial Light)
+            </Text>
+            <Text color="#6b7280" fontSize={12}>
+              Proportional typography and letterspacing responsiveness from compact header to grand banner.
+            </Text>
+          </YStack>
+
+          <YStack gap={16}>
+            {[
+              { size: 40, label: 'Compact Header (40px)' },
+              { size: 56, label: 'Hero Section (56px)' },
+              { size: 72, label: 'Full Display (72px • Masterpiece)' },
+              { size: 92, label: 'Luxury Billboard (92px)' },
+            ].map((s) => (
+              <XStack
+                key={s.size}
+                alignItems="center"
+                justifyContent="space-between"
+                padding={18}
+                borderRadius={12}
+                backgroundColor="#ffffff"
+                borderColor="#eee3d3"
+                borderWidth={1}
+              >
+                <Text color="#785b1a" fontSize={12} fontWeight="800" minWidth={140}>
+                  {s.label}
+                </Text>
+                <VayyariLogo variant="initial-v" size={s.size} tone="light" />
+              </XStack>
+            ))}
+          </YStack>
+        </YStack>
       </YStack>
     );
   },
