@@ -60,6 +60,7 @@ export default function GroupZoneViewScreen() {
 
   // Message details list expansion
   const [expandedGroups, setExpandedGroups] = useState<{ [key: string]: boolean }>({});
+  const [visibleCount, setVisibleCount] = useState(30);
 
   const scrollViewRef = useRef<ScrollView>(null);
   const groupCardLayouts = useRef<{ [key: string]: number }>({});
@@ -83,6 +84,10 @@ export default function GroupZoneViewScreen() {
 
   useEffect(() => {
     if (focusGroupId && groups.length > 0) {
+      const targetIdx = groups.findIndex(g => g.groupId === focusGroupId);
+      if (targetIdx >= 0 && targetIdx >= visibleCount) {
+        setVisibleCount(targetIdx + 10);
+      }
       setExpandedGroups(prev => ({ ...prev, [focusGroupId]: true }));
       const timer = setTimeout(() => {
         const y = groupCardLayouts.current[focusGroupId];
@@ -92,7 +97,7 @@ export default function GroupZoneViewScreen() {
       }, 350);
       return () => clearTimeout(timer);
     }
-  }, [focusGroupId, groups]);
+  }, [focusGroupId, groups, visibleCount]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -264,14 +269,14 @@ export default function GroupZoneViewScreen() {
 
   if (loading && !refreshing && groups.length === 0) {
     return (
-      <ScreenWrapper title="Product Zones">
+      <ScreenWrapper title="Product Zones" onBack={() => router.back()} withScrollView={false}>
         <ActivityIndicator style={{ marginTop: 40 }} />
       </ScreenWrapper>
     );
   }
 
   return (
-    <ScreenWrapper title={`${name || 'Chat'} Zones`}>
+    <ScreenWrapper title={`${name || 'Chat'} Zones`} onBack={() => router.back()} withScrollView={false}>
       <ScrollView
         ref={scrollViewRef}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -283,7 +288,7 @@ export default function GroupZoneViewScreen() {
             <Text style={styles.emptySubtext}>Make sure message grouping is enabled and messages are arriving.</Text>
           </Surface>
         ) : (
-          groups.map((group, index) => {
+          groups.slice(0, visibleCount).map((group, index) => {
             const statusConfig = getGroupStatus(group);
             const isExpanded = !!expandedGroups[group.groupId];
             const isFocused = focusGroupId === group.groupId;
@@ -499,6 +504,19 @@ export default function GroupZoneViewScreen() {
               </View>
             );
           })
+        )}
+
+        {groups.length > visibleCount && (
+          <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+            <Button
+              mode="outlined"
+              icon="chevron-down"
+              onPress={() => setVisibleCount((prev) => prev + 30)}
+              style={{ borderRadius: 8, borderColor: theme.colors.primary }}
+            >
+              Load More Zones (Showing {Math.min(visibleCount, groups.length)} of {groups.length})
+            </Button>
+          </View>
         )}
       </ScrollView>
 

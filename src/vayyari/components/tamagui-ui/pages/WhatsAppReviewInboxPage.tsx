@@ -292,7 +292,7 @@ export const WhatsAppReviewInboxPage: React.FC<WhatsAppReviewInboxPageProps> = (
               accessibilityLabel="Inspect Zone"
             >
               <LuEye size={13} color="#60A5FA" />
-              <Text style={styles.inspectButtonText}>Inspect Zone</Text>
+              <Text style={styles.inspectButtonText}>Inspect in Chat</Text>
             </Pressable>
           ) : null}
 

@@ -124,12 +124,14 @@ describe('WhatsApp Review Inbox: Data Structures & Filtering', () => {
     assert.strictEqual(matched[0].groupId, 'grp-media-002');
   });
 
-  test('Deep linking path construction correctly embeds focusGroupId', () => {
+  test('Deep linking path construction correctly embeds highlightGroupId for chat timeline', () => {
     const item = mockInboxResponse.items[0];
-    const deepLinkPath = `/utilities/whatsapp/zones/${encodeURIComponent(item.jid)}?focusGroupId=${encodeURIComponent(item.groupId)}`;
-    assert.strictEqual(
-      deepLinkPath,
-      '/utilities/whatsapp/zones/123456789%40s.whatsapp.net?focusGroupId=grp-zoning-001'
-    );
+    const encodedJid = encodeURIComponent(item.jid);
+    const chatName = encodeURIComponent(item.chatName || item.vendorName || 'Chat');
+    const highlightGroup = encodeURIComponent(item.groupId);
+    const deepLinkPath = `/utilities/whatsapp/messages/${encodedJid}?name=${chatName}&chatName=${chatName}&highlightGroupId=${highlightGroup}&targetGroupId=${highlightGroup}&sourceGroupId=${highlightGroup}&initialZoningMode=true`;
+    assert.ok(deepLinkPath.includes('/utilities/whatsapp/messages/123456789%40s.whatsapp.net'));
+    assert.ok(deepLinkPath.includes('highlightGroupId=grp-zoning-001'));
+    assert.ok(deepLinkPath.includes('initialZoningMode=true'));
   });
 });

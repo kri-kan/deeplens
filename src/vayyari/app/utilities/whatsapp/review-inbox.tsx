@@ -49,8 +49,11 @@ export default function WhatsAppReviewInboxScreen() {
   };
 
   const handleInspectZone = (item: ReviewInboxItem) => {
+    const encodedJid = encodeURIComponent(item.jid);
+    const chatName = encodeURIComponent(item.chatName || item.vendorName || 'Chat');
+    const highlightGroup = encodeURIComponent(item.groupId);
     router.push(
-      `/utilities/whatsapp/zones/${encodeURIComponent(item.jid)}?focusGroupId=${encodeURIComponent(item.groupId)}` as any
+      `/utilities/whatsapp/messages/${encodedJid}?name=${chatName}&chatName=${chatName}&highlightGroupId=${highlightGroup}&targetGroupId=${highlightGroup}&sourceGroupId=${highlightGroup}&initialZoningMode=true` as any
     );
   };
 
