@@ -122,14 +122,16 @@ class UserJourneyTelemetryManager {
 
       posthog.init(apiKey, {
         api_host: this.getPosthogHost(),
-        ui_host: 'http://localhost:8000',
         bootstrap: {
           distinctID: this.deviceId,
         },
+        request_batching: true,
+        batch_size: 20,
+        batch_flush_interval_ms: 3000,
         autocapture: true,
         capture_pageview: true,
         capture_pageleave: true,
-        disable_session_recording: false,
+        disable_session_recording: true,
         session_recording: {
           maskAllInputs: true,
         },
@@ -144,7 +146,7 @@ class UserJourneyTelemetryManager {
             app: 'vayyari-store',
           });
         },
-      });
+      } as any);
       this.posthogInitialized = true;
       (window as any).posthog = posthog;
     } catch (err) {

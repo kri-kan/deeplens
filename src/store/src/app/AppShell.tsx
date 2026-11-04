@@ -1,5 +1,5 @@
 import React, { useState, Suspense, lazy } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions, TextInput, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from './NavigationContext';
 import { useCart } from '../context/CartContext';
@@ -189,7 +189,12 @@ export const AppShell: React.FC = () => {
               {/* Left: Brand Logo */}
               <View style={styles.headerLeft}>
                 <TouchableOpacity onPress={() => navigate('home')} style={styles.logoGroup} activeOpacity={0.8}>
-                  <Text style={styles.logoIcon}>✦</Text>
+                  <Image
+                    source={require('../../assets/icon.png')}
+                    style={styles.logoImage}
+                    resizeMode="contain"
+                    accessibilityLabel="Vayyari Logo"
+                  />
                   <Text style={styles.logoText}>VAYYARI</Text>
                 </TouchableOpacity>
 
@@ -326,7 +331,12 @@ export const AppShell: React.FC = () => {
           <View style={styles.mobileHeader}>
             <View style={styles.mobileTopBar}>
               <TouchableOpacity onPress={() => navigate('home')} style={styles.logoGroup} activeOpacity={0.8}>
-                <Text style={styles.logoIcon}>✦</Text>
+                <Image
+                  source={require('../../assets/icon.png')}
+                  style={styles.logoImage}
+                  resizeMode="contain"
+                  accessibilityLabel="Vayyari Logo"
+                />
                 <Text style={styles.logoText}>VAYYARI</Text>
               </TouchableOpacity>
 
@@ -528,7 +538,11 @@ const styles = StyleSheet.create({
   logoGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
+  },
+  logoImage: {
+    width: 28,
+    height: 28,
   },
   logoIcon: {
     color: '#D4AF37',
