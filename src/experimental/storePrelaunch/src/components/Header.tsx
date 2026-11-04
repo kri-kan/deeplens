@@ -78,8 +78,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenVIPModal, isVIP }) => {
               objectFit: 'contain',
               display: 'block',
               transition: 'all 0.3s ease',
-              filter:
-                'drop-shadow(0 2px 8px rgba(212, 175, 55, 0.3)) drop-shadow(0 4px 14px rgba(0, 0, 0, 0.65))',
+              filter: 'drop-shadow(0 2px 6px rgba(0, 0, 0, 0.65))',
             }}
           />
         </a>

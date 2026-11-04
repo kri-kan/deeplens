@@ -43,8 +43,6 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
             objectFit: 'contain',
             flexShrink: 0,
             display: 'block',
-            filter:
-              'drop-shadow(0 2px 8px rgba(212, 175, 55, 0.45)) drop-shadow(0 4px 12px rgba(0, 0, 0, 0.75))',
           }}
         />
       )}
@@ -56,7 +54,7 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
           alignItems: align === 'center' ? 'center' : 'flex-start',
         }}
       >
-        {/* VAYYARI in Radiant Neon Gold Haute Couture Serif */}
+        {/* VAYYARI in Haute Couture Serif */}
         <span
           style={{
             fontFamily: 'var(--font-heading)',
@@ -65,15 +63,14 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
             letterSpacing: '0.22em',
             lineHeight: 1,
             color: '#fff9e6',
-            textShadow:
-              '0 0 2px #ffffff, 0 0 8px #ffd23f, 0 0 18px rgba(255, 195, 30, 0.85), 0 0 36px rgba(245, 160, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.95)',
+            textShadow: '0 2px 6px rgba(0, 0, 0, 0.65)',
             display: 'block',
           }}
         >
           VAYYARI
         </span>
 
-        {/* FASHIONS in refined luminous tracking below */}
+        {/* FASHIONS in refined tracking below */}
         <span
           style={{
             fontFamily: 'var(--font-sans)',
@@ -81,12 +78,12 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
             fontWeight: 600,
             letterSpacing: subTracking,
             textTransform: 'uppercase',
-            color: '#ffe599',
+            color: '#d4af37',
             marginTop: isLarge ? '8px' : isSmall ? '4px' : '6px',
             marginLeft: align === 'center' ? 0 : '3px',
             display: 'block',
             lineHeight: 1,
-            textShadow: '0 0 8px rgba(255, 215, 0, 0.6), 0 2px 4px rgba(0, 0, 0, 0.9)',
+            textShadow: '0 1px 4px rgba(0, 0, 0, 0.65)',
           }}
         >
           FASHIONS
