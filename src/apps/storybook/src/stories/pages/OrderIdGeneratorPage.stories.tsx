@@ -167,32 +167,11 @@ export const WithDeletedToggled: Story = {
 };
 
 /**
- * 6. Responsive Tablet View
- * Demonstrates wide layout responsiveness.
- */
-export const TabletView: Story = {
-  name: '6. Tablet / Large Viewport',
-  decorators: [withFormFactor('tablet', 'Order ID Hub - Tablet')],
-  args: {
-    disableSafeArea: true,
-    initialRecentIds: MOCK_HISTORY,
-    initialGeneratedEntry: {
-      id: '849215',
-      source: 'instagram',
-      paymentMode: 'prepaid',
-      timestamp: new Date().toISOString(),
-      sourceHandle: '@luxury_kanjivaram',
-      isNew: true,
-    },
-  },
-};
-
-/**
- * 7. Loading / Shimmer State
+ * 6. Loading / Shimmer State
  * Demonstrates smooth animated pulse shimmer skeleton placeholders while loading recent order history.
  */
 export const LoadingShimmerState: Story = {
-  name: '7. Loading / Shimmer State',
+  name: '6. Loading / Shimmer State',
   decorators: [withFormFactor('mobile', 'Order ID Hub - Loading')],
   args: {
     disableSafeArea: true,
@@ -200,4 +179,5 @@ export const LoadingShimmerState: Story = {
     isLoadingHistory: true,
   },
 };
+
 

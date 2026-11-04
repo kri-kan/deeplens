@@ -102,24 +102,11 @@ export const ZeroMatchesEmptyState: Story = {
 };
 
 /**
- * 5. Tablet Responsive View
- * Displays the Admin Home Screen inside a wider viewport layout.
- */
-export const TabletView: Story = {
-  name: '5. Responsive Tablet View',
-  decorators: [withFormFactor('tablet', 'Admin Home Screen - Tablet')],
-  args: {
-    disableSafeArea: true,
-    initialMenuOpen: false,
-  },
-};
-
-/**
- * 6. Light Mode with Black Text Menus & Reduced Blur
+ * 5. Light Mode with Black Text Menus & Reduced Blur
  * Explicitly tests light mode with subtle 5px frosted blur and black text/icons for both emerging menus.
  */
 export const LightModeReducedBlur: Story = {
-  name: '6. Light Mode (Black Text Menus + 5px Blur)',
+  name: '5. Light Mode (Black Text Menus + 5px Blur)',
   decorators: [withFormFactor('mobile', 'Light Mode - Black Text Menus')],
   args: {
     colorScheme: 'light',
@@ -129,11 +116,11 @@ export const LightModeReducedBlur: Story = {
 };
 
 /**
- * 7. Dark Mode (Full Screen Validation)
+ * 6. Dark Mode (Full Screen Validation)
  * Tests entire Admin Home Screen under dark mode color scheme (dark surface, canvas, header, modules & dock).
  */
 export const DarkModeHomeScreen: Story = {
-  name: '7. Dark Mode (Rest State)',
+  name: '6. Dark Mode (Rest State)',
   decorators: [withFormFactor('mobile', 'Dark Mode - Admin Home Screen')],
   args: {
     colorScheme: 'dark',
@@ -143,11 +130,11 @@ export const DarkModeHomeScreen: Story = {
 };
 
 /**
- * 8. Dark Mode with Reduced Blur Overlay
+ * 7. Dark Mode with Reduced Blur Overlay
  * Tests dark theme with spun (X) button, frosted dark backdrop (5px blur), and high-contrast emerging action menus.
  */
 export const DarkModeReducedBlur: Story = {
-  name: '8. Dark Mode (Reduced 5px Blur Overlay)',
+  name: '7. Dark Mode (Reduced 5px Blur Overlay)',
   decorators: [withFormFactor('mobile', 'Dark Mode - 5px Subtle Blur Overlay')],
   args: {
     colorScheme: 'dark',
@@ -157,11 +144,11 @@ export const DarkModeReducedBlur: Story = {
 };
 
 /**
- * 9. Attached Create Order Screen (Launched via New Order)
+ * 8. Attached Create Order Screen (Launched via New Order)
  * Demonstrates the full Admin Order Creation Form that is linked when "New Order" is chosen.
  */
 export const AttachedCreateOrderForm: Story = {
-  name: '9. Attached Create Order Form (via New Order)',
+  name: '8. Attached Create Order Form (via New Order)',
   decorators: [withFormFactor('mobile', 'Attached Create Order Form')],
   args: {
     disableSafeArea: true,
@@ -170,17 +157,18 @@ export const AttachedCreateOrderForm: Story = {
 };
 
 /**
- * 10. Attached Order ID Generator & Existing Orders (Launched via Edit Order)
+ * 9. Attached Order ID Generator & Existing Orders (Launched via Edit Order)
  * Demonstrates the linked Generate ID screen giving access to existing orders, search filtering,
  * and order editing, with back navigation returning to Operations Hub.
  */
 export const AttachedEditOrderLookup: Story = {
-  name: '10. Attached Existing Orders & Generator (via Edit Order)',
+  name: '9. Attached Existing Orders & Generator (via Edit Order)',
   decorators: [withFormFactor('mobile', 'Attached Existing Orders & ID Generator')],
   args: {
     disableSafeArea: true,
     initialView: 'edit-order',
   },
 };
+
 
 

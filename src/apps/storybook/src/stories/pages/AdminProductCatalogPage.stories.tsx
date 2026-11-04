@@ -351,25 +351,12 @@ export const ThemeCampaignRamadan: Story = {
 };
 
 /**
- * Tablet Viewport: 4-5 column responsive grid layout.
- */
-export const TabletViewport: Story = {
-  name: '8. Tablet / Wide 4-Column Grid',
-  decorators: [withFormFactor('tablet', 'Product Catalog - Tablet')],
-  args: {
-    disableSafeArea: true,
-    columns: 4,
-    products: [...MOCK_PRODUCTS, ...MOCK_PRODUCTS],
-  },
-};
-
-/**
- * 9. AI Facet Filtering & Visualization Story:
+ * 8. AI Facet Filtering & Visualization Story:
  * Demonstrates active multi-dimensional filtering across craft (Banarasi Kadwa),
  * motif, and fabric, with dynamic filter chips and AI badges rendered on tiles.
  */
 export const AiFacetFilteringAndMatrix: Story = {
-  name: '9. AI Facet Filtering & Visualization',
+  name: '8. AI Facet Filtering & Visualization',
   decorators: [withFormFactor('mobile', 'Product Catalog - AI Facets')],
   args: {
     disableSafeArea: true,
@@ -381,4 +368,5 @@ export const AiFacetFilteringAndMatrix: Story = {
     ],
   },
 };
+
 

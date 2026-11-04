@@ -249,15 +249,3 @@ export const CleanZeroLedger: Story = {
   },
 };
 
-/**
- * 6. Responsive Tablet Layout
- * Demonstrates wide layout responsiveness.
- */
-export const TabletLedger: Story = {
-  name: '6. Tablet / Wide Viewport',
-  decorators: [withFormFactor('tablet', 'Order Ledger - Tablet')],
-  args: {
-    disableSafeArea: true,
-    initialFilter: 'All',
-  },
-};

@@ -30,7 +30,7 @@ type Story = StoryObj<any>;
  * Return Policy, COD Details, Damage Policy), the leading (+) chip, search bar, and recent copies card.
  */
 export const DefaultMobileView: Story = {
-  name: '1. Utilities Hub (Mobile Default)',
+  name: '1. Utilities Hub (Operational Copier)',
   decorators: [withFormFactor('mobile', 'Utilities Hub - Operational Copier')],
   args: {
     disableSafeArea: true,
@@ -50,14 +50,3 @@ export const DarkModeView: Story = {
   },
 };
 
-/**
- * 3. Responsive Tablet Layout
- * Shows the Utilities Hub inside a tablet viewport chassis.
- */
-export const TabletView: Story = {
-  name: '3. Responsive Tablet View',
-  decorators: [withFormFactor('tablet', 'Utilities Hub - Tablet Chassis')],
-  args: {
-    disableSafeArea: true,
-  },
-};

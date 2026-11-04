@@ -103,13 +103,4 @@ export const EmptyState: Story = {
   },
 };
 
-export const TabletView: Story = {
-  name: '5. Tablet Viewport',
-  decorators: [withFormFactor('tablet', 'All Orders - Tablet')],
-  args: {
-    disableSafeArea: true,
-    orders: MOCK_ALL_ORDERS,
-    totalCount: 142,
-  },
-};
 

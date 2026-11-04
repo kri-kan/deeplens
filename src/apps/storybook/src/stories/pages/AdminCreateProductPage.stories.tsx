@@ -188,29 +188,10 @@ export const DarkThemeNocturne: Story = {
 };
 
 /**
- * 6. Tablet Split Viewport: Two-column layout with media on left and inputs on right.
- */
-export const TabletSplitViewport: Story = {
-  name: '6. Tablet Split Viewport',
-  decorators: [withFormFactor('tablet', 'Add Product - Tablet Split')],
-  args: {
-    disableSafeArea: true,
-    isTabletSplit: true,
-    initialTitle: 'Chanderi Silk Cotton Saree with Tissue Zari',
-    initialDescription:
-      'Featherlight Chanderi weave featuring gold tissue border and traditional floral buttas.',
-    initialPrice: '3100',
-    initialCategory: 'saree',
-    initialMedia: MOCK_STAGED_MEDIA,
-    initialLinkedPosts: MOCK_LINKED_POSTS,
-  },
-};
-
-/**
- * 7. AI Autofill / Suggested State: Intelligently generated description and craft tagging.
+ * 6. AI Autofill / Suggested State: Intelligently generated description and craft tagging.
  */
 export const AiAutoFilled: Story = {
-  name: '7. AI Autofill / Suggested',
+  name: '6. AI Autofill / Suggested',
   decorators: [withFormFactor('mobile', 'Add Product - AI Suggested')],
   args: {
     disableSafeArea: true,
@@ -223,3 +204,4 @@ export const AiAutoFilled: Story = {
     initialLinkedPosts: MOCK_LINKED_POSTS,
   },
 };
+

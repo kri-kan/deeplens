@@ -259,36 +259,24 @@ export const ZeroSearchMatches: Story = {
 };
 
 /**
- * 5. Responsive Tablet Hub
- * Wide tablet viewport bento layout.
- */
-export const TabletHub: Story = {
-  name: '5. Tablet / Wide Viewport',
-  decorators: [withFormFactor('tablet', 'Operations Hub - Tablet')],
-  args: {
-    disableSafeArea: true,
-    groups: MOCK_GROUPS,
-  },
-};
-
-/**
- * 6. Admin Home Screen with Interactive Spinning (+) / (X) Quick Actions
+ * 5. Admin Home Screen with Interactive Spinning (+) / (X) Quick Actions
  * Matches Vayyari mobile app with bottom dock and center (+) button that spins to (X)
  * and opens blurred overlay with "New Order" and "Edit Order" actions.
  */
 export const AdminHomeWithQuickActionOverlay: Story = {
-  name: '6. Admin Home (Spinning + & Blurred Overlay)',
+  name: '5. Admin Home (Spinning + & Blurred Overlay)',
   decorators: [withFormFactor('mobile', 'Admin Home - Interactive + FAB')],
   render: () => <AdminHomeScreen disableSafeArea={true} initialMenuOpen={false} />,
 };
 
 /**
- * 7. Admin Home Screen - Overlay Open State
+ * 6. Admin Home Screen - Overlay Open State
  * Pre-opened quick order action overlay with background blur and 2 action menus.
  */
 export const AdminHomeOverlayOpen: Story = {
-  name: '7. Admin Home (Overlay Active - New/Edit Order)',
+  name: '6. Admin Home (Overlay Active - New/Edit Order)',
   decorators: [withFormFactor('mobile', 'Admin Home - Quick Actions Active')],
   render: () => <AdminHomeScreen disableSafeArea={true} initialMenuOpen={true} />,
 };
+
 
