@@ -1,10 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { getWhatsAppDbClient } from '../clients/db.client';
 import { groupReadinessService } from '../services/group-readiness.service';
+import { fetchReviewInboxData, dismissGroupReview } from '../services/review-inbox.service';
 import { logger } from '../utils/logger';
 import { randomUUID } from 'crypto';
 
-export function createGroupReviewRoutes(): Router {
+export function createGroupReviewRoutes(io?: any): Router {
     const router = Router();
 
     /**
@@ -23,6 +24,29 @@ export function createGroupReviewRoutes(): Router {
             logger.error({ err, groupId, event }, 'Failed to write group audit log from route');
         }
     }
+
+    /**
+     * GET /api/group-review/review-inbox
+     * Unified multi-stage review inbox with stage filtering and thumbnail resolution
+     */
+    router.get('/group-review/review-inbox', async (req: Request, res: Response) => {
+        const client = getWhatsAppDbClient();
+        if (!client) {
+            return res.status(500).json({ success: false, message: 'Database client not available' });
+        }
+        try {
+            const data = await fetchReviewInboxData(
+                client,
+                req.query.stage as string,
+                req.query.limit,
+                req.query.offset
+            );
+            res.json(data);
+        } catch (err: any) {
+            logger.error({ err: err.message }, 'Failed to fetch review inbox');
+            res.status(500).json({ success: false, message: err.message });
+        }
+    });
 
     /**
      * GET /api/group-review/:jid
@@ -197,6 +221,29 @@ export function createGroupReviewRoutes(): Router {
     });
 
     /**
+     * POST /api/group-review/:groupId/dismiss
+     * Dismisses a group review: marks group as archived, logs audit dismissed_review, and emits socket event
+     */
+    router.post('/group-review/:groupId/dismiss', async (req: Request, res: Response) => {
+        const { groupId } = req.params;
+        const client = getWhatsAppDbClient();
+        if (!client) {
+            return res.status(500).json({ success: false, message: 'Database client not available' });
+        }
+        try {
+            const socketIo = io || groupReadinessService.getSocketIo?.();
+            const result = await dismissGroupReview(client, groupId, socketIo);
+            res.json(result);
+        } catch (err: any) {
+            if (err.message === 'Group not found') {
+                return res.status(404).json({ success: false, message: 'Group not found' });
+            }
+            logger.error({ err: err.message, groupId }, 'Failed to dismiss review');
+            res.status(500).json({ success: false, message: err.message });
+        }
+    });
+
+    /**
      * POST /api/group-review/:groupId/ignore
      * Mark group as ignored/unignored
      */
@@ -214,7 +261,7 @@ export function createGroupReviewRoutes(): Router {
 
         try {
             const currentRes = await client.query(
-                `SELECT status FROM wa.message_groups WHERE group_id = $1`,
+                `SELECT status, review_stage, jid FROM wa.message_groups WHERE group_id = $1`,
                 [groupId]
             );
 
@@ -239,6 +286,16 @@ export function createGroupReviewRoutes(): Router {
                 { status: oldStatus },
                 { status: newStatus }
             );
+
+            const socketIo = io || groupReadinessService.getSocketIo?.();
+            if (socketIo) {
+                socketIo.emit('group_updated', {
+                    groupId,
+                    status: newStatus,
+                    reviewStage: currentRes.rows[0].review_stage,
+                    jid: currentRes.rows[0].jid
+                });
+            }
 
             if (!ignore) {
                 // If unignoring, re-evaluate group readiness

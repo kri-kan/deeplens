@@ -538,14 +538,77 @@ export const waProcessorService = {
     return get<PipelineEventsResponse>(
       `/admin/pipeline-events?filter=${encodeURIComponent(filter)}&limit=${limit}&offset=${offset}`
     );
+  },
+
+  // ---------- Multi-Stage Review Inbox ----------
+
+  fetchReviewInbox: async (stage = 'all', limit = 50, offset = 0): Promise<ReviewInboxResponse> => {
+    return get<ReviewInboxResponse>(
+      `/group-review/review-inbox?stage=${encodeURIComponent(stage)}&limit=${limit}&offset=${offset}`
+    );
+  },
+
+  dismissGroupReview: async (groupId: string): Promise<{ success: boolean; message: string }> => {
+    return post<{ success: boolean; message: string }>(
+      `/group-review/${encodeURIComponent(groupId)}/dismiss`
+    );
+  },
+
+  getReviewBadgeCount: async (): Promise<number> => {
+    try {
+      const res = await get<ReviewInboxResponse>(`/group-review/review-inbox?limit=1`);
+      return res?.stageCounts?.all ?? 0;
+    } catch {
+      return 0;
+    }
+  },
+
+  ignoreGroupReview: async (groupId: string, ignore = true): Promise<{ success: boolean; message: string }> => {
+    return post<{ success: boolean; message: string }>(
+      `/group-review/${encodeURIComponent(groupId)}/ignore`,
+      { ignore }
+    );
   }
 };
+
+export interface ReviewStageCounts {
+  all: number;
+  zoning: number;
+  media_sync: number;
+  qualification: number;
+  catalog_ingestion: number;
+  enrichment: number;
+}
+
+export interface ReviewInboxItem {
+  groupId: string;
+  jid: string;
+  chatName: string | null;
+  vendorName: string | null;
+  status: string;
+  reviewStage: string | null;
+  errorDetail: string | null;
+  mediaCount: number;
+  textCount: number;
+  description: string | null;
+  updatedAt: string;
+  createdAt: string;
+  sampleMediaUrls: string[];
+}
+
+export interface ReviewInboxResponse {
+  success: boolean;
+  stageCounts: ReviewStageCounts;
+  items: ReviewInboxItem[];
+  totalCount: number;
+}
 
 export interface PipelineMetricGauges {
   stagingCount: number;
   awaitingCreationCount: number;
   pendingMediaSyncCount: number;
   errorCount: number;
+  needsReviewCount?: number;
   reprocessCount24h: number;
 }
 
@@ -584,6 +647,7 @@ export interface PipelineActiveQueueItem {
   groupId: string;
   jid: string;
   status: string;
+  reviewStage?: string | null;
   hasPendingMedia: boolean;
   mediaCount: number;
   textCount: number;

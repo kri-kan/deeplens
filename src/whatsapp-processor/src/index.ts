@@ -47,7 +47,43 @@ async function initializeServices() {
 
     // --- Health & Root Check ---
     app.get('/', (req, res) => res.json({ status: 'ok', service: 'whatsapp-processor', tenant: TENANT_NAME }));
-    app.get('/health', (req, res) => res.json({ status: 'ok', tenant: TENANT_NAME }));
+    app.get('/health', async (req, res) => {
+        try {
+            const { messageQueue } = await import('./services/message-queue.service');
+            const { productCreatedConsumer } = await import('./services/product-created-consumer.service');
+            const waDb = getWhatsAppDbClient();
+
+            let dbHealthy = false;
+            try {
+                if (waDb) {
+                    await waDb.query('SELECT 1');
+                    dbHealthy = true;
+                }
+            } catch {
+                dbHealthy = false;
+            }
+
+            const kafkaQueueHealthy = messageQueue.isHealthy();
+            const productConsumerHealthy = productCreatedConsumer.isHealthy();
+            const isAllHealthy = dbHealthy && kafkaQueueHealthy;
+
+            const payload = {
+                status: isAllHealthy ? 'healthy' : 'degraded',
+                service: 'whatsapp-processor',
+                tenant: TENANT_NAME,
+                timestamp: new Date().toISOString(),
+                checks: {
+                    database: dbHealthy ? 'connected' : 'disconnected',
+                    kafkaMessageQueue: kafkaQueueHealthy ? 'connected' : 'connecting_or_disconnected',
+                    kafkaProductConsumer: productConsumerHealthy ? 'connected' : 'connecting_or_disconnected'
+                }
+            };
+
+            res.status(isAllHealthy ? 200 : 503).json(payload);
+        } catch (healthErr: any) {
+            res.status(500).json({ status: 'error', error: healthErr.message });
+        }
+    });
 
     // --- Swagger Docs ---
     setupSwagger(app);
@@ -72,7 +108,7 @@ async function initializeServices() {
     apiRouter.use('/admin', createAdminRoutes(waService));
     
     const { createGroupReviewRoutes } = await import('./routes/group-review.routes');
-    apiRouter.use('/', createGroupReviewRoutes());
+    apiRouter.use('/', createGroupReviewRoutes(io));
 
     const { createPipelineFailuresRoutes } = await import('./routes/pipeline-failures.routes');
     apiRouter.use('/admin', createPipelineFailuresRoutes());

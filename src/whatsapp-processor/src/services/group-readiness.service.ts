@@ -39,6 +39,10 @@ export class GroupReadinessService {
         this.io = io;
     }
 
+    public getSocketIo(): any {
+        return this.io;
+    }
+
     constructor() {
         this.kafka = new Kafka({
             clientId: 'group-readiness-service',
@@ -517,7 +521,7 @@ export class GroupReadinessService {
 
         await client.query(
             `UPDATE wa.message_groups 
-             SET status = 'product_create_sent', error_detail = NULL, process_as_product = TRUE, updated_at = NOW() 
+             SET status = 'product_create_sent', error_detail = NULL, review_stage = NULL, process_as_product = TRUE, updated_at = NOW() 
              WHERE group_id = $1`,
             [groupId]
         );

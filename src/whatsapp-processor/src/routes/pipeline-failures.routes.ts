@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { getWhatsAppDbClient } from '../clients/db.client';
 import { groupReadinessService } from '../services/group-readiness.service';
+import { fetchReviewInboxData } from '../services/review-inbox.service';
 import { isStandaloneEmoji } from '../services/zoning.service';
 import { logger } from '../utils/logger';
 import { randomUUID } from 'crypto';
@@ -109,18 +110,73 @@ export function createPipelineFailuresRoutes(): Router {
                  ORDER BY m.timestamp DESC LIMIT 100`
             );
 
+            // 6. Groups needing review with stage breakdown
+            const stageCountsRes = await client.query(`
+                SELECT 
+                    COUNT(*) as "all",
+                    COUNT(*) FILTER (WHERE review_stage = 'zoning') as "zoning",
+                    COUNT(*) FILTER (WHERE review_stage = 'media_sync') as "media_sync",
+                    COUNT(*) FILTER (WHERE review_stage = 'qualification') as "qualification",
+                    COUNT(*) FILTER (WHERE review_stage = 'catalog_ingestion') as "catalog_ingestion",
+                    COUNT(*) FILTER (WHERE review_stage = 'enrichment') as "enrichment"
+                FROM wa.message_groups
+                WHERE status = 'needs_review'
+            `);
+            const countsRow = stageCountsRes.rows[0] || {};
+            const stageCounts = {
+                all: parseInt(countsRow.all || '0', 10),
+                zoning: parseInt(countsRow.zoning || '0', 10),
+                media_sync: parseInt(countsRow.media_sync || '0', 10),
+                qualification: parseInt(countsRow.qualification || '0', 10),
+                catalog_ingestion: parseInt(countsRow.catalog_ingestion || '0', 10),
+                enrichment: parseInt(countsRow.enrichment || '0', 10),
+            };
+
+            const reqStage = ((req.query.stage as string) || 'all').toLowerCase().trim();
+            let stageFilterSql = '';
+            const needsReviewParams: any[] = [];
+            if (reqStage !== 'all' && ['zoning', 'media_sync', 'qualification', 'catalog_ingestion', 'enrichment'].includes(reqStage)) {
+                needsReviewParams.push(reqStage);
+                stageFilterSql = `AND mg.review_stage = $1`;
+            }
+
+            const needsReviewRes = await client.query(
+                `SELECT 
+                    mg.group_id as "groupId",
+                    mg.jid,
+                    c.name as "chatName",
+                    c.vendor_name as "vendorName",
+                    mg.status,
+                    mg.review_stage as "reviewStage",
+                    mg.error_detail as "errorDetail",
+                    mg.media_count as "mediaCount",
+                    mg.text_count as "textCount",
+                    mg.description,
+                    mg.updated_at as "updatedAt",
+                    mg.created_at as "createdAt"
+                 FROM wa.message_groups mg
+                 LEFT JOIN wa.chats c ON mg.jid = c.jid
+                 WHERE mg.status = 'needs_review' ${stageFilterSql}
+                 ORDER BY mg.updated_at DESC`,
+                needsReviewParams
+            );
+
             const summary = {
                 stuckSentCount: stuckSentRes.rows.length,
                 erroredCount: erroredRes.rows.length,
                 missingVendorChatsCount: missingVendorChatsRes.rows.length,
                 disabledAutoProcessCount: disabledAutoProcessRes.rows.length,
                 pendingMediaCount: pendingMediaRes.rows.length,
-                totalActionRequired: stuckSentRes.rows.length + erroredRes.rows.length + missingVendorChatsRes.rows.length
+                needsReviewCount: stageCounts.all,
+                stageCounts,
+                totalActionRequired: stuckSentRes.rows.length + erroredRes.rows.length + missingVendorChatsRes.rows.length + stageCounts.all
             };
 
             res.json({
                 success: true,
                 summary,
+                stageCounts,
+                needsReview: needsReviewRes.rows,
                 stuckSent: stuckSentRes.rows,
                 errored: erroredRes.rows,
                 missingVendorChats: missingVendorChatsRes.rows,
@@ -129,6 +185,30 @@ export function createPipelineFailuresRoutes(): Router {
             });
         } catch (err: any) {
             logger.error({ err: err.message }, 'Failed to fetch pipeline failures');
+            res.status(500).json({ success: false, message: err.message });
+        }
+    });
+
+    /**
+     * GET /api/admin/review-inbox
+     * Unified review inbox endpoint for administrative review queue
+     */
+    router.get('/review-inbox', async (req: Request, res: Response) => {
+        const client = getWhatsAppDbClient();
+        if (!client) {
+            return res.status(500).json({ success: false, message: 'Database client not available' });
+        }
+
+        try {
+            const data = await fetchReviewInboxData(
+                client,
+                req.query.stage as string,
+                req.query.limit,
+                req.query.offset
+            );
+            res.json(data);
+        } catch (err: any) {
+            logger.error({ err: err.message }, 'Failed to fetch review inbox');
             res.status(500).json({ success: false, message: err.message });
         }
     });
@@ -368,7 +448,8 @@ export function createPipelineFailuresRoutes(): Router {
                     COUNT(*) FILTER (WHERE status = 'staging') as "stagingCount",
                     COUNT(*) FILTER (WHERE status = 'product_create_sent' AND deeplens_product_id IS NULL) as "awaitingCreationCount",
                     COUNT(*) FILTER (WHERE has_pending_media = true) as "pendingMediaSyncCount",
-                    COUNT(*) FILTER (WHERE status IN ('error', 'enrichment_failed', 'media_missing')) as "errorCount"
+                    COUNT(*) FILTER (WHERE status IN ('error', 'enrichment_failed', 'media_missing')) as "errorCount",
+                    COUNT(*) FILTER (WHERE status = 'needs_review') as "needsReviewCount"
                 FROM wa.message_groups
             `);
 
@@ -384,6 +465,7 @@ export function createPipelineFailuresRoutes(): Router {
                 awaitingCreationCount: parseInt(metricsRes.rows[0]?.awaitingCreationCount || '0', 10),
                 pendingMediaSyncCount: parseInt(metricsRes.rows[0]?.pendingMediaSyncCount || '0', 10),
                 errorCount: parseInt(metricsRes.rows[0]?.errorCount || '0', 10),
+                needsReviewCount: parseInt(metricsRes.rows[0]?.needsReviewCount || '0', 10),
                 reprocessCount24h: parseInt(reprocess24hRes.rows[0]?.reprocessCount24h || '0', 10),
             };
 
@@ -463,8 +545,10 @@ export function createPipelineFailuresRoutes(): Router {
                 eventFilterSql = `AND gal.event IN ('product_create_sent', 'product_created', 'group_staged', 'force_published')`;
             } else if (filter === 'media_sync') {
                 eventFilterSql = `AND gal.event IN ('media_added', 'media_missing', 'redownload_requested', 'media_downloaded')`;
+            } else if (filter === 'needs_review') {
+                eventFilterSql = `AND (gal.event IN ('flagged_needs_review', 'dismissed_review') OR mg.status = 'needs_review')`;
             } else if (filter === 'errors') {
-                eventFilterSql = `AND (gal.event LIKE '%fail%' OR gal.event LIKE '%error%' OR mg.status IN ('error', 'enrichment_failed', 'media_missing'))`;
+                eventFilterSql = `AND (gal.event LIKE '%fail%' OR gal.event LIKE '%error%' OR mg.status IN ('error', 'enrichment_failed', 'media_missing', 'needs_review'))`;
             }
 
             const eventsQuery = `
@@ -527,6 +611,12 @@ export function createPipelineFailuresRoutes(): Router {
                 } else if (evt === 'media_added') {
                     category = 'media_sync';
                     purposeDescription = `Media Sync: Added late-arriving media to ${pCode || 'product'}`;
+                } else if (evt === 'flagged_needs_review') {
+                    category = 'lifecycle';
+                    purposeDescription = `Needs Review: Flagged at [${row.newValue?.review_stage || 'review'}] stage - ${row.newValue?.error || row.errorDetail || 'Operator review required'}`;
+                } else if (evt === 'dismissed_review') {
+                    category = 'lifecycle';
+                    purposeDescription = `Review Dismissed: Group marked archived by operator`;
                 } else if (evt.includes('error') || evt.includes('fail')) {
                     category = 'error';
                     purposeDescription = `Pipeline Alert: ${row.newValue?.error || row.errorDetail || 'Operation encountered an issue'}`;
@@ -564,6 +654,7 @@ export function createPipelineFailuresRoutes(): Router {
                     mg.group_id as "groupId",
                     mg.jid,
                     mg.status,
+                    mg.review_stage as "reviewStage",
                     mg.has_pending_media as "hasPendingMedia",
                     mg.media_count as "mediaCount",
                     mg.text_count as "textCount",
@@ -578,7 +669,7 @@ export function createPipelineFailuresRoutes(): Router {
                 FROM wa.message_groups mg
                 LEFT JOIN wa.chats c ON mg.jid = c.jid
                 LEFT JOIN public.products p ON mg.deeplens_product_id = p.id
-                WHERE mg.status IN ('staging', 'product_create_sent') 
+                WHERE mg.status IN ('staging', 'product_create_sent', 'needs_review') 
                    OR mg.has_pending_media = true
                    OR mg.status IN ('error', 'enrichment_failed')
                 ORDER BY mg.updated_at DESC
