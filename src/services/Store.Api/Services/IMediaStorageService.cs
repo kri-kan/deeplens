@@ -37,4 +37,28 @@ public interface IMediaStorageService
         Guid productId,
         ISet<string> survivingPublicUrls,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Generates a scoped presigned PUT URL for client-direct uploads.
+    /// </summary>
+    Task<string> GeneratePresignedUploadUrlAsync(
+        string bucket,
+        string objectKey,
+        int expirySeconds = 900);
+
+    /// <summary>
+    /// Generates a scoped presigned GET URL for temporary inspection.
+    /// </summary>
+    Task<string> GeneratePresignedDownloadUrlAsync(
+        string bucket,
+        string objectKey,
+        int expirySeconds = 1800);
+
+    /// <summary>
+    /// Checks whether an object physically exists in the target MinIO bucket.
+    /// </summary>
+    Task<bool> CheckObjectExistsAsync(
+        string bucket,
+        string objectKey,
+        CancellationToken ct = default);
 }

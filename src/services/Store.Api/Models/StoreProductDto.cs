@@ -40,7 +40,9 @@ public record StoreProductDto(
     [property: JsonPropertyName("waitlistCount")] int WaitlistCount = 0,
     [property: JsonPropertyName("siblingSwatches")] List<SiblingSwatchDto>? SiblingSwatches = null,
     [property: JsonPropertyName("swatchesCount")] int SwatchesCount = 0,
-    [property: JsonPropertyName("skus")] List<StoreSkuDto>? Skus = null
+    [property: JsonPropertyName("skus")] List<StoreSkuDto>? Skus = null,
+    [property: JsonPropertyName("isReviewPending")] bool IsReviewPending = false,
+    [property: JsonPropertyName("reviewReason")] string? ReviewReason = null
 );
 
 public record UpdateLifecycleRequest(

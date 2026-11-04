@@ -262,10 +262,89 @@ public class CurationServiceTests
         var publishedCount = await _curationService.BatchPublishProductsAsync(publishRequests, "admin@vayyari.com");
         publishedCount.Should().Be(1);
 
-        // 3. Verify published_at was updated to NOW() on conflict
+        // 3. Verify published_at was updated to NOW() on conflict and review pending is set
         var postCheck = await _curationService.GetProductByCodeAsync("VFX99901");
         postCheck.Should().NotBeNull();
         postCheck!.PublishedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(10));
+        postCheck.IsReviewPending.Should().BeTrue();
+        postCheck.ReviewReason.Should().Be("media_updated");
+
+        // 4. Verify review flag cascaded to sibling variant
+        var siblingCheck = await _curationService.GetProductByCodeAsync("VFX99902");
+        siblingCheck.Should().NotBeNull();
+        siblingCheck!.IsReviewPending.Should().BeTrue();
+        siblingCheck.ReviewReason.Should().Be("media_updated");
+    }
+
+    [Test]
+    public async Task DismissReviewAsync_ClearsReviewPendingOnProductAndSiblings()
+    {
+        // 1. Set review pending on both variants
+        await using var conn = new NpgsqlConnection(_storeConnStr);
+        await conn.OpenAsync();
+        await conn.ExecuteAsync(@"
+            UPDATE products 
+            SET is_review_pending = true, review_reason = 'media_updated' 
+            WHERE id IN (@V1, @V2);",
+            new { V1 = _testVariant1Id, V2 = _testVariant2Id });
+
+        // 2. Dismiss review on variant 1
+        var success = await _curationService.DismissReviewAsync(_testVariant1Id);
+        success.Should().BeTrue();
+
+        // 3. Verify both variants are cleared
+        var v1 = await _curationService.GetProductByCodeAsync("VFX99901");
+        v1.Should().NotBeNull();
+        v1!.IsReviewPending.Should().BeFalse();
+        v1.ReviewReason.Should().BeNull();
+
+        var v2 = await _curationService.GetProductByCodeAsync("VFX99902");
+        v2.Should().NotBeNull();
+        v2!.IsReviewPending.Should().BeFalse();
+        v2.ReviewReason.Should().BeNull();
+    }
+
+    [Test]
+    public async Task UpdateProductCurationAsync_ClearsReviewPendingOnProductAndSiblings()
+    {
+        // 1. Set review pending on both variants
+        await using var conn = new NpgsqlConnection(_storeConnStr);
+        await conn.OpenAsync();
+        await conn.ExecuteAsync(@"
+            UPDATE products 
+            SET is_review_pending = true, review_reason = 'media_updated' 
+            WHERE id IN (@V1, @V2);",
+            new { V1 = _testVariant1Id, V2 = _testVariant2Id });
+
+        // 2. Update curation on variant 1
+        var curationReq = new UpdateCurationRequest(
+            LifecycleStatus: null,
+            StockQuantity: null,
+            Mrp: null,
+            SalePrice: 1650,
+            Description: null,
+            ColorGroupId: null,
+            ColorwayName: null,
+            ColorHex: null,
+            SwatchTemplate: null,
+            ColorGroups: null,
+            MediaOrder: null,
+            Tags: null
+        );
+
+        var success = await _curationService.UpdateProductCurationAsync(_testVariant1Id, curationReq, "admin@vayyari.com");
+        success.Should().BeTrue();
+
+        // 3. Verify both variants are cleared
+        var v1 = await _curationService.GetProductByCodeAsync("VFX99901");
+        v1.Should().NotBeNull();
+        v1!.IsReviewPending.Should().BeFalse();
+        v1.ReviewReason.Should().BeNull();
+
+        var v2 = await _curationService.GetProductByCodeAsync("VFX99902");
+        v2.Should().NotBeNull();
+        v2!.IsReviewPending.Should().BeFalse();
+        v2.ReviewReason.Should().BeNull();
     }
 
 
@@ -278,6 +357,12 @@ public class CurationServiceTests
         public Task DeleteModifiedMediaAsync(string fileUrl, CancellationToken ct = default) => Task.CompletedTask;
         public Task EnsureBucketExistsAsync(CancellationToken ct = default) => Task.CompletedTask;
         public Task PruneOrphanedMediaAsync(Guid productId, ISet<string> survivingPublicUrls, CancellationToken ct = default) => Task.CompletedTask;
+        public Task<string> GeneratePresignedUploadUrlAsync(string bucket, string objectKey, int expirySeconds = 900)
+            => Task.FromResult($"http://fake-storage/{bucket}/{objectKey}?sig=upload");
+        public Task<string> GeneratePresignedDownloadUrlAsync(string bucket, string objectKey, int expirySeconds = 1800)
+            => Task.FromResult($"http://fake-storage/{bucket}/{objectKey}?sig=download");
+        public Task<bool> CheckObjectExistsAsync(string bucket, string objectKey, CancellationToken ct = default)
+            => Task.FromResult(true);
     }
 
     private class FakeStoreEventPublisher : IStoreEventPublisher

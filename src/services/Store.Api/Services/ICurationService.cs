@@ -15,4 +15,5 @@ public interface ICurationService
     Task<StoreMediaItemDto?> SaveModifiedMediaAsync(Guid productId, string mediaId, Stream imageStream, string mimeType, string? recipeJson, string authorEmail, CancellationToken ct = default);
     Task<StoreMediaItemDto?> DeleteModifiedMediaAsync(Guid productId, string mediaId, string authorEmail, CancellationToken ct = default);
     Task<StoreMediaItemDto?> ToggleMediaDisplaySourceAsync(Guid productId, string mediaId, string activeDisplaySource, string authorEmail, CancellationToken ct = default);
+    Task<bool> DismissReviewAsync(Guid id);
 }

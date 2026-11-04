@@ -15,6 +15,7 @@ public class MediaStorageService : IMediaStorageService
     private readonly ILogger<MediaStorageService> _logger;
     private readonly string _connectionString;
     private readonly string _bucketName;
+    private readonly string _customerVaultBucket;
     private readonly string _publicBaseUrl;
     private readonly string _derivativeTopic;
 
@@ -39,6 +40,10 @@ public class MediaStorageService : IMediaStorageService
             ?? config["Minio__BucketName"]
             ?? "store-assets";
 
+        _customerVaultBucket = config["Minio:CustomerVaultBucket"]
+            ?? config["Minio__CustomerVaultBucket"]
+            ?? "customer-vault";
+
         _publicBaseUrl = config["Minio:PublicBaseUrl"]
             ?? config["Minio__PublicBaseUrl"]
             ?? $"http://192.168.0.170:9000/{_bucketName}";
@@ -58,10 +63,17 @@ public class MediaStorageService : IMediaStorageService
                 await _minioClient.MakeBucketAsync(new MakeBucketArgs().WithBucket(_bucketName), ct);
                 _logger.LogInformation("Created MinIO bucket: {Bucket}", _bucketName);
             }
+
+            var vaultExists = await _minioClient.BucketExistsAsync(new BucketExistsArgs().WithBucket(_customerVaultBucket), ct);
+            if (!vaultExists)
+            {
+                await _minioClient.MakeBucketAsync(new MakeBucketArgs().WithBucket(_customerVaultBucket), ct);
+                _logger.LogInformation("Created private customer vault MinIO bucket: {Bucket}", _customerVaultBucket);
+            }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Could not verify/create MinIO bucket {Bucket}", _bucketName);
+            _logger.LogWarning(ex, "Could not verify/create MinIO buckets {Bucket}, {Vault}", _bucketName, _customerVaultBucket);
         }
     }
 
@@ -335,5 +347,55 @@ public class MediaStorageService : IMediaStorageService
         _logger.LogInformation(
             "PruneOrphanedMedia: pruned {DbDeleted} media_assets rows ({MinioDeleted} MinIO objects) for product {ProductId}",
             dbDeleted, minioDeleted, productId);
+    }
+
+    public async Task<string> GeneratePresignedUploadUrlAsync(
+        string bucket,
+        string objectKey,
+        int expirySeconds = 900)
+    {
+        var targetBucket = string.IsNullOrWhiteSpace(bucket) ? _customerVaultBucket : bucket;
+        var args = new PresignedPutObjectArgs()
+            .WithBucket(targetBucket)
+            .WithObject(objectKey)
+            .WithExpiry(expirySeconds);
+
+        return await _minioClient.PresignedPutObjectAsync(args);
+    }
+
+    public async Task<string> GeneratePresignedDownloadUrlAsync(
+        string bucket,
+        string objectKey,
+        int expirySeconds = 1800)
+    {
+        var targetBucket = string.IsNullOrWhiteSpace(bucket) ? _customerVaultBucket : bucket;
+        var args = new PresignedGetObjectArgs()
+            .WithBucket(targetBucket)
+            .WithObject(objectKey)
+            .WithExpiry(expirySeconds);
+
+        return await _minioClient.PresignedGetObjectAsync(args);
+    }
+
+    public async Task<bool> CheckObjectExistsAsync(
+        string bucket,
+        string objectKey,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            var targetBucket = string.IsNullOrWhiteSpace(bucket) ? _customerVaultBucket : bucket;
+            var args = new StatObjectArgs()
+                .WithBucket(targetBucket)
+                .WithObject(objectKey);
+
+            await _minioClient.StatObjectAsync(args, ct);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Object {Bucket}/{Key} does not exist or stat failed", bucket, objectKey);
+            return false;
+        }
     }
 }

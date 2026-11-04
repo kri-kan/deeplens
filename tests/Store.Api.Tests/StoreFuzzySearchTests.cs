@@ -140,6 +140,12 @@ public class StoreFuzzySearchTests
         public Task DeleteModifiedMediaAsync(string fileUrl, CancellationToken ct = default) => Task.CompletedTask;
         public Task EnsureBucketExistsAsync(CancellationToken ct = default) => Task.CompletedTask;
         public Task PruneOrphanedMediaAsync(Guid productId, ISet<string> survivingPublicUrls, CancellationToken ct = default) => Task.CompletedTask;
+        public Task<string> GeneratePresignedUploadUrlAsync(string bucket, string objectKey, int expirySeconds = 900)
+            => Task.FromResult($"http://fake-storage/{bucket}/{objectKey}?sig=upload");
+        public Task<string> GeneratePresignedDownloadUrlAsync(string bucket, string objectKey, int expirySeconds = 1800)
+            => Task.FromResult($"http://fake-storage/{bucket}/{objectKey}?sig=download");
+        public Task<bool> CheckObjectExistsAsync(string bucket, string objectKey, CancellationToken ct = default)
+            => Task.FromResult(true);
     }
 
     private class FakeStoreEventPublisher : IStoreEventPublisher

@@ -90,28 +90,29 @@ public class TelemetryService : ITelemetryService
                 Metadata = metadataJson
             }, tx);
 
-            // 2. Batch insert signals
+            // 2. Batch insert signals via single multi-row SQL command (1 network round-trip)
             if (request.Signals.Count > 0)
             {
-                const string insertSignalSql = @"
-                    INSERT INTO store_telemetry_signals (
-                        id, device_id, session_id, user_id, signal_type, properties, client_timestamp, server_timestamp, ip
-                    ) VALUES (
-                        gen_random_uuid(), @DeviceId, @SessionId, @UserId, @SignalType, @Properties::jsonb, @ClientTimestamp, NOW(), @Ip::inet
-                    );";
+                var sb = new System.Text.StringBuilder(
+                    "INSERT INTO store_telemetry_signals (id, device_id, session_id, user_id, signal_type, properties, client_timestamp, server_timestamp, ip) VALUES ");
+                var dp = new DynamicParameters();
+                dp.Add("ClientIp", clientIp);
 
-                var signalRows = request.Signals.Select(s => new
+                for (int i = 0; i < request.Signals.Count; i++)
                 {
-                    DeviceId = !string.IsNullOrWhiteSpace(s.DeviceId) ? s.DeviceId : effectiveDeviceId,
-                    SessionId = s.SessionId,
-                    UserId = s.UserId ?? request.Device?.UserId,
-                    SignalType = s.SignalType,
-                    Properties = s.Properties != null ? JsonSerializer.Serialize(s.Properties) : null,
-                    ClientTimestamp = s.ClientTimestamp ?? DateTime.UtcNow,
-                    Ip = clientIp
-                });
+                    if (i > 0) sb.Append(", ");
+                    sb.Append($"(gen_random_uuid(), @DeviceId{i}, @SessionId{i}, @UserId{i}, @SignalType{i}, @Properties{i}::jsonb, @ClientTimestamp{i}, NOW(), @ClientIp::inet)");
 
-                await conn.ExecuteAsync(insertSignalSql, signalRows, tx);
+                    var sig = request.Signals[i];
+                    dp.Add($"DeviceId{i}", !string.IsNullOrWhiteSpace(sig.DeviceId) ? sig.DeviceId : effectiveDeviceId);
+                    dp.Add($"SessionId{i}", sig.SessionId);
+                    dp.Add($"UserId{i}", sig.UserId ?? request.Device?.UserId);
+                    dp.Add($"SignalType{i}", sig.SignalType);
+                    dp.Add($"Properties{i}", sig.Properties != null ? JsonSerializer.Serialize(sig.Properties) : null);
+                    dp.Add($"ClientTimestamp{i}", sig.ClientTimestamp ?? DateTime.UtcNow);
+                }
+
+                await conn.ExecuteAsync(sb.ToString(), dp, tx);
             }
 
             await tx.CommitAsync(ct);

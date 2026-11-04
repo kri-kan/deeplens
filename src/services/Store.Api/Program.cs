@@ -43,6 +43,7 @@ builder.Services.AddSingleton<ICurationService, CurationService>();
 builder.Services.AddSingleton<ITelemetryService, TelemetryService>();
 builder.Services.AddSingleton<IWhatsAppCloudApiClient, WhatsAppCloudApiClient>();
 builder.Services.AddSingleton<IAuthService, AuthService>();
+builder.Services.AddSingleton<ISurveyService, SurveyService>();
 
 // Redis Cache Registration
 builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
@@ -792,6 +793,17 @@ app.MapGet("/api/v1/admin/products/re-evaluation-queue", async (ICurationService
 .WithName("AdminGetReEvaluationQueue")
 .WithOpenApi();
 
+// 4c. Dismiss Product Review (Clear review pending flag on product and siblings)
+app.MapPatch("/api/v1/admin/products/{id}/dismiss-review", async (Guid id, ICurationService curationService) =>
+{
+    var success = await curationService.DismissReviewAsync(id);
+    return success
+        ? Results.Ok(new { status = "ReviewDismissed", productId = id })
+        : Results.NotFound(new { message = $"Store product '{id}' not found." });
+})
+.WithName("AdminDismissProductReview")
+.WithOpenApi();
+
 // 5. Upload Client-Modified Media (WebP blob from Admin Canvas)
 app.MapPost("/api/v1/admin/products/{id}/media/{mediaId}/modified", async (Guid id, string mediaId, HttpRequest request, HttpContext ctx, ICurationService curationService) =>
 {
@@ -841,6 +853,131 @@ app.MapPatch("/api/v1/admin/products/{id}/media/{mediaId}/display-source", async
 })
 .WithName("AdminToggleMediaDisplaySource")
 .WithOpenApi();
+
+// =========================================================================
+// Survey Framework Endpoints (Client Runtime & Admin Curation)
+// =========================================================================
+
+// 1. Get Published Survey by Slug
+app.MapGet("/api/v1/surveys/{slug}", async (string slug, [FromQuery] int? version, ISurveyService surveyService) =>
+{
+    var survey = await surveyService.GetSurveyBySlugAsync(slug, version);
+    return survey != null ? Results.Ok(survey) : Results.NotFound(new { message = $"Survey '{slug}' not found" });
+})
+.WithName("GetSurveyBySlug")
+.WithOpenApi();
+
+// 1b. Generate Presigned Upload Ticket for File Upload Question
+app.MapPost("/api/v1/surveys/{slug}/upload-ticket", async (string slug, [FromBody] GenerateSurveyUploadTicketRequest request, ISurveyService surveyService) =>
+{
+    try
+    {
+        var ticket = await surveyService.GenerateUploadTicketAsync(slug, request);
+        return Results.Ok(ticket);
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { message = ex.Message });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { message = ex.Message });
+    }
+})
+.WithName("GenerateSurveyUploadTicket")
+.WithOpenApi();
+
+// 2. Submit Survey Response with Synchronous Wallet Ledger Credit
+app.MapPost("/api/v1/surveys/{slug}/submit", async (string slug, [FromBody] SubmitSurveyResponseRequest request, ISurveyService surveyService) =>
+{
+    if (string.IsNullOrWhiteSpace(request.VirtualUserId))
+    {
+        return Results.BadRequest(new { message = "virtualUserId is required for identity and wallet credit." });
+    }
+
+    try
+    {
+        var result = await surveyService.SubmitSurveyResponseAsync(slug, request);
+        return Results.Ok(result);
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { message = ex.Message });
+    }
+})
+.WithName("SubmitSurveyResponse")
+.WithOpenApi();
+
+// 3. Customer Mudras Wallet Balance
+app.MapGet("/api/v1/surveys/wallet/{virtualUserId}", async (string virtualUserId, [FromQuery] string? userId, ISurveyService surveyService) =>
+{
+    var wallet = await surveyService.GetWalletBalanceAsync(virtualUserId, userId);
+    return Results.Ok(wallet);
+})
+.WithName("GetCustomerSurveyWallet")
+.WithOpenApi();
+
+// 4. Admin: List Surveys
+app.MapGet("/api/v1/admin/surveys", async (ISurveyService surveyService) =>
+{
+    var surveys = await surveyService.ListSurveysAsync();
+    return Results.Ok(surveys);
+})
+.WithName("AdminListSurveys")
+.WithOpenApi();
+
+// 5. Admin: Get Survey Metadata
+app.MapGet("/api/v1/admin/surveys/{id:guid}", async (Guid id, ISurveyService surveyService) =>
+{
+    var survey = await surveyService.GetSurveyMetadataAsync(id);
+    return survey != null ? Results.Ok(survey) : Results.NotFound(new { message = $"Survey '{id}' not found" });
+})
+.WithName("AdminGetSurveyMetadata")
+.WithOpenApi();
+
+// 6. Admin: Update Draft Schema
+app.MapPut("/api/v1/admin/surveys/{id:guid}/draft", async (Guid id, [FromBody] JsonElement draftSchema, ISurveyService surveyService) =>
+{
+    var updated = await surveyService.UpdateDraftSchemaAsync(id, draftSchema);
+    return updated ? Results.Ok(new { success = true, surveyId = id }) : Results.NotFound(new { message = $"Survey '{id}' not found" });
+})
+.WithName("AdminUpdateSurveyDraft")
+.WithOpenApi();
+
+// 7. Admin: Publish Survey Version
+app.MapPost("/api/v1/admin/surveys/{id:guid}/publish", async (Guid id, [FromBody] AdminPublishVersionRequest request, ISurveyService surveyService) =>
+{
+    try
+    {
+        var version = await surveyService.PublishVersionAsync(id, request);
+        return Results.Ok(version);
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { message = ex.Message });
+    }
+})
+.WithName("AdminPublishSurveyVersion")
+.WithOpenApi();
+
+// 8. Admin: List Survey Responses
+app.MapGet("/api/v1/admin/surveys/{id:guid}/responses", async (Guid id, [FromQuery] int? version, [FromQuery] int? limit, [FromQuery] int? offset, ISurveyService surveyService) =>
+{
+    var responses = await surveyService.ListResponsesAsync(id, version, limit ?? 50, offset ?? 0);
+    return Results.Ok(responses);
+})
+.WithName("AdminListSurveyResponses")
+.WithOpenApi();
+
+// 9. Admin: Get Single Response Detail
+app.MapGet("/api/v1/admin/surveys/responses/{responseId:guid}", async (Guid responseId, ISurveyService surveyService) =>
+{
+    var detail = await surveyService.GetResponseDetailAsync(responseId);
+    return detail != null ? Results.Ok(detail) : Results.NotFound(new { message = $"Response '{responseId}' not found" });
+})
+.WithName("AdminGetSurveyResponseDetail")
+.WithOpenApi();
+
 
 try
 {

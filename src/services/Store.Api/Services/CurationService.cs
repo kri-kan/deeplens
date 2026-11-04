@@ -44,9 +44,18 @@ public class CurationService : ICurationService
 
         foreach (var req in requests)
         {
-            // 1. Check existing product by vayyari_product_id or product_code
-            const string findSql = @"SELECT id, mrp, sale_price, media_order::text AS MediaOrderJson FROM products WHERE vayyari_product_id = @VayyariId OR LOWER(product_code) = LOWER(@ProductCode) LIMIT 1;";
-            var existing = await conn.QuerySingleOrDefaultAsync<(Guid Id, decimal Mrp, decimal SalePrice, string? MediaOrderJson)?>(findSql, new 
+            // 1. Check existing product by vayyari_product_id, parent_catalog_id, or product_code
+            const string findSql = @"
+                SELECT id, mrp, sale_price, media_order::text AS MediaOrderJson, parent_catalog_id AS ParentCatalogId
+                FROM products 
+                WHERE vayyari_product_id = @VayyariId 
+                   OR parent_catalog_id = @VayyariId 
+                   OR LOWER(product_code) = LOWER(@ProductCode) 
+                   OR LOWER(parent_product_code) = LOWER(@ProductCode)
+                ORDER BY product_code ASC 
+                LIMIT 1;";
+
+            var existing = await conn.QuerySingleOrDefaultAsync<ExistingProductRecord>(findSql, new 
             { 
                 VayyariId = req.VayyariProductId,
                 ProductCode = req.ProductCode
@@ -55,7 +64,7 @@ public class CurationService : ICurationService
 
             var existingMedia = string.IsNullOrEmpty(existing?.MediaOrderJson)
                 ? new List<StoreMediaItemDto>()
-                : JsonSerializer.Deserialize<List<StoreMediaItemDto>>(existing.Value.MediaOrderJson, JsonOptions) ?? new();
+                : JsonSerializer.Deserialize<List<StoreMediaItemDto>>(existing.MediaOrderJson, JsonOptions) ?? new();
 
             // Prepare normalized incoming media items (supporting both mediaItems and legacy mediaUrls)
             var incomingItems = req.MediaItems != null && req.MediaItems.Count > 0
@@ -112,49 +121,92 @@ public class CurationService : ICurationService
             var tagsJson = JsonSerializer.Serialize(tags);
 
             // 3. Upsert product into deeplens_store.products
-            const string upsertSql = @"
-                INSERT INTO products (
-                    id, vayyari_product_id, product_code, title, description, category_name, fabric,
-                    base_cost, mrp, sale_price, lifecycle_status, stock_quantity,
-                    colorway_name, color_hex, swatch_template, media_order, tags, is_published, published_at,
-                    created_at, updated_at
-                ) VALUES (
-                    @Id, @VayyariProductId, @ProductCode, @Title, @Description, @CategoryName, @Fabric,
-                    @BaseCost, @Mrp, @SalePrice, 'available', 10,
-                    'Standard', '#1B4D3E', 'solid', @MediaOrder::jsonb, @Tags::jsonb, true, NOW(),
-                    NOW(), NOW()
-                )
-                ON CONFLICT (product_code) DO UPDATE SET
-                    product_code = EXCLUDED.product_code,
-                    title = EXCLUDED.title,
-                    description = COALESCE(EXCLUDED.description, products.description),
-                    category_name = EXCLUDED.category_name,
-                    fabric = COALESCE(EXCLUDED.fabric, products.fabric),
-                    base_cost = EXCLUDED.base_cost,
-                    mrp = CASE WHEN products.mrp > 0 THEN products.mrp ELSE EXCLUDED.mrp END,
-                    sale_price = CASE WHEN products.sale_price > 0 THEN products.sale_price ELSE EXCLUDED.sale_price END,
-                    media_order = EXCLUDED.media_order,
-                    tags = EXCLUDED.tags,
-                    is_published = true,
-                    published_at = NOW(),
-                    updated_at = NOW()
-                RETURNING id;";
-
-            var savedId = await conn.ExecuteScalarAsync<Guid>(upsertSql, new
+            Guid savedId;
+            if (existing != null)
             {
-                Id = productId,
-                VayyariProductId = req.VayyariProductId,
-                ProductCode = req.ProductCode,
-                Title = req.Title,
-                Description = req.Description,
-                CategoryName = req.CategoryName,
-                Fabric = req.Fabric,
-                BaseCost = req.BaseCost,
-                Mrp = mrp,
-                SalePrice = salePrice,
-                MediaOrder = mediaJson,
-                Tags = tagsJson
-            });
+                savedId = existing.Id;
+                const string updateSql = @"
+                    UPDATE products SET
+                        product_code = @ProductCode,
+                        title = @Title,
+                        description = COALESCE(@Description, description),
+                        category_name = @CategoryName,
+                        fabric = COALESCE(@Fabric, fabric),
+                        base_cost = @BaseCost,
+                        mrp = CASE WHEN mrp > 0 THEN mrp ELSE @Mrp END,
+                        sale_price = CASE WHEN sale_price > 0 THEN sale_price ELSE @SalePrice END,
+                        media_order = @MediaOrder::jsonb,
+                        tags = @Tags::jsonb,
+                        is_published = true,
+                        published_at = NOW(),
+                        is_review_pending = true,
+                        review_reason = 'media_updated',
+                        updated_at = NOW()
+                    WHERE id = @Id;";
+
+                await conn.ExecuteAsync(updateSql, new
+                {
+                    Id = savedId,
+                    ProductCode = req.ProductCode,
+                    Title = req.Title,
+                    Description = req.Description,
+                    CategoryName = req.CategoryName,
+                    Fabric = req.Fabric,
+                    BaseCost = req.BaseCost,
+                    Mrp = mrp,
+                    SalePrice = salePrice,
+                    MediaOrder = mediaJson,
+                    Tags = tagsJson
+                });
+
+                // Cascade review pending to sibling variants
+                const string cascadeReviewSql = @"
+                    UPDATE products 
+                    SET is_review_pending = true, review_reason = 'media_updated', updated_at = NOW()
+                    WHERE (parent_catalog_id = @VayyariId OR (@ParentCatalogId IS NOT NULL AND parent_catalog_id = @ParentCatalogId))
+                      AND id != @Id;";
+
+                await conn.ExecuteAsync(cascadeReviewSql, new
+                {
+                    VayyariId = req.VayyariProductId,
+                    ParentCatalogId = existing.ParentCatalogId,
+                    Id = savedId
+                });
+            }
+            else
+            {
+                savedId = productId;
+                const string insertSql = @"
+                    INSERT INTO products (
+                        id, vayyari_product_id, product_code, title, description, category_name, fabric,
+                        base_cost, mrp, sale_price, lifecycle_status, stock_quantity,
+                        colorway_name, color_hex, swatch_template, media_order, tags, is_published, published_at,
+                        is_review_pending, review_reason,
+                        created_at, updated_at
+                    ) VALUES (
+                        @Id, @VayyariProductId, @ProductCode, @Title, @Description, @CategoryName, @Fabric,
+                        @BaseCost, @Mrp, @SalePrice, 'available', 10,
+                        'Standard', '#1B4D3E', 'solid', @MediaOrder::jsonb, @Tags::jsonb, true, NOW(),
+                        false, NULL,
+                        NOW(), NOW()
+                    );";
+
+                await conn.ExecuteAsync(insertSql, new
+                {
+                    Id = savedId,
+                    VayyariProductId = req.VayyariProductId,
+                    ProductCode = req.ProductCode,
+                    Title = req.Title,
+                    Description = req.Description,
+                    CategoryName = req.CategoryName,
+                    Fabric = req.Fabric,
+                    BaseCost = req.BaseCost,
+                    Mrp = mrp,
+                    SalePrice = salePrice,
+                    MediaOrder = mediaJson,
+                    Tags = tagsJson
+                });
+            }
 
             // 4. Record audit entry
             const string auditSql = @"
@@ -225,6 +277,8 @@ public class CurationService : ICurationService
                 p.previous_lifecycle_status AS PreviousLifecycleStatus,
                 p.take_down_expires_at AS TakeDownExpiresAt,
                 COALESCE(p.is_re_evaluation_pending, false) AS IsReEvaluationPending,
+                COALESCE(p.is_review_pending, false) AS IsReviewPending,
+                p.review_reason AS ReviewReason,
                 COALESCE(w.waitlist_count, 0) AS WaitlistCount,
                 p.color_groups::text AS ColorGroupsJson,
                 p.media_order::text AS MediaOrderJson, 
@@ -402,6 +456,8 @@ public class CurationService : ICurationService
                 p.previous_lifecycle_status AS PreviousLifecycleStatus,
                 p.take_down_expires_at AS TakeDownExpiresAt,
                 COALESCE(p.is_re_evaluation_pending, false) AS IsReEvaluationPending,
+                COALESCE(p.is_review_pending, false) AS IsReviewPending,
+                p.review_reason AS ReviewReason,
                 COALESCE(w.waitlist_count, 0) AS WaitlistCount,
                 p.color_groups::text AS ColorGroupsJson,
                 p.media_order::text AS MediaOrderJson, 
@@ -462,6 +518,8 @@ public class CurationService : ICurationService
                 p.previous_lifecycle_status AS PreviousLifecycleStatus,
                 p.take_down_expires_at AS TakeDownExpiresAt,
                 COALESCE(p.is_re_evaluation_pending, false) AS IsReEvaluationPending,
+                COALESCE(p.is_review_pending, false) AS IsReviewPending,
+                p.review_reason AS ReviewReason,
                 COALESCE(w.waitlist_count, 0) AS WaitlistCount,
                 p.color_groups::text AS ColorGroupsJson,
                 p.media_order::text AS MediaOrderJson, 
@@ -545,6 +603,8 @@ public class CurationService : ICurationService
                 p.previous_lifecycle_status AS PreviousLifecycleStatus,
                 p.take_down_expires_at AS TakeDownExpiresAt,
                 COALESCE(p.is_re_evaluation_pending, false) AS IsReEvaluationPending,
+                COALESCE(p.is_review_pending, false) AS IsReviewPending,
+                p.review_reason AS ReviewReason,
                 COALESCE(w.waitlist_count, 0) AS WaitlistCount,
                 p.color_groups::text AS ColorGroupsJson,
                 p.media_order::text AS MediaOrderJson, 
@@ -602,6 +662,8 @@ public class CurationService : ICurationService
                 base_cost AS BaseCost, mrp, sale_price AS SalePrice,
                 lifecycle_status AS LifecycleStatus, stock_quantity AS StockQuantity,
                 color_group_id AS ColorGroupId, colorway_name AS ColorwayName, color_hex AS ColorHex,
+                COALESCE(is_review_pending, false) AS IsReviewPending,
+                review_reason AS ReviewReason,
                 media_order::text AS MediaOrderJson, tags::text AS TagsJson,
                 is_published AS IsPublished, published_at AS PublishedAt
             FROM products
@@ -630,6 +692,10 @@ public class CurationService : ICurationService
         {
             await LogAuditAsync(conn, realId, "colorway_updated", "colorwayName", current.ColorwayName, req.ColorwayName, authorEmail);
         }
+        if (current.IsReviewPending)
+        {
+            await LogAuditAsync(conn, realId, "review_cleared", "isReviewPending", "true", "false", authorEmail);
+        }
 
         string? mediaOrderJson = req.MediaOrder != null ? JsonSerializer.Serialize(req.MediaOrder) : null;
         string? colorGroupsJson = req.ColorGroups != null ? JsonSerializer.Serialize(req.ColorGroups) : null;
@@ -651,6 +717,8 @@ public class CurationService : ICurationService
                 media_order = CASE WHEN @MediaOrder::jsonb IS NOT NULL THEN @MediaOrder::jsonb ELSE media_order END,
                 tags = CASE WHEN @Tags::jsonb IS NOT NULL THEN @Tags::jsonb ELSE tags END,
                 skus = CASE WHEN @Skus::jsonb IS NOT NULL THEN @Skus::jsonb ELSE skus END,
+                is_review_pending = false,
+                review_reason = NULL,
                 updated_at = NOW()
             WHERE id = @Id;";
 
@@ -672,6 +740,16 @@ public class CurationService : ICurationService
             Skus = skusJson
         });
 
+        // Cascade review resolution to siblings
+        const string cascadeSiblingsSql = @"
+            UPDATE products 
+            SET is_review_pending = false, review_reason = NULL, updated_at = NOW()
+            WHERE id != @Id 
+              AND parent_catalog_id IS NOT NULL 
+              AND parent_catalog_id = (SELECT COALESCE(parent_catalog_id, vayyari_product_id) FROM products WHERE id = @Id);";
+
+        await conn.ExecuteAsync(cascadeSiblingsSql, new { Id = realId });
+
         // Publish event to Kafka
         await _eventPublisher.PublishAsync(
             "store.product.curation.updated",
@@ -687,6 +765,20 @@ public class CurationService : ICurationService
 
         _logger.LogInformation("Successfully updated curation in PostgreSQL for product {Id} ({Code}) by {Author}", realId, current.ProductCode, authorEmail);
         return true;
+    }
+
+    public async Task<bool> DismissReviewAsync(Guid id)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync();
+        const string dismissSql = @"
+            UPDATE products 
+            SET is_review_pending = false, review_reason = NULL, updated_at = NOW() 
+            WHERE id = @Id 
+               OR (parent_catalog_id IS NOT NULL AND parent_catalog_id = (SELECT COALESCE(parent_catalog_id, vayyari_product_id) FROM products WHERE id = @Id));";
+        var affected = await conn.ExecuteAsync(dismissSql, new { Id = id });
+        _logger.LogInformation("DismissReviewAsync for {Id} affected {Count} product records", id, affected);
+        return affected > 0;
     }
 
     public async Task<StoreMediaItemDto?> SaveModifiedMediaAsync(
@@ -964,8 +1056,19 @@ public class CurationService : ICurationService
             WaitlistCount: r.WaitlistCount,
             SiblingSwatches: siblingSwatches,
             SwatchesCount: swatchesCount,
-            Skus: skus
+            Skus: skus,
+            IsReviewPending: r.IsReviewPending,
+            ReviewReason: r.ReviewReason
         );
+    }
+
+    private class ExistingProductRecord
+    {
+        public Guid Id { get; set; }
+        public decimal Mrp { get; set; }
+        public decimal SalePrice { get; set; }
+        public string? MediaOrderJson { get; set; }
+        public Guid? ParentCatalogId { get; set; }
     }
 
     private class ProductDbRow
@@ -992,6 +1095,8 @@ public class CurationService : ICurationService
         public string? PreviousLifecycleStatus { get; set; }
         public DateTime? TakeDownExpiresAt { get; set; }
         public bool IsReEvaluationPending { get; set; }
+        public bool IsReviewPending { get; set; }
+        public string? ReviewReason { get; set; }
         public int WaitlistCount { get; set; }
         public string? ColorGroupsJson { get; set; }
         public string? MediaOrderJson { get; set; }
