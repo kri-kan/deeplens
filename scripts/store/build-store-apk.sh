@@ -30,7 +30,7 @@ die()  { echo -e "\n${RED}❌  $*${NC}" >&2; exit 1; }
 
 # Default Options
 VARIANT="release"
-ARCH="arm64"
+ARCH="dual"
 KEEP=3
 DO_CLEAN=false
 DO_INSTALL=false
@@ -134,6 +134,9 @@ case "$ARCH" in
   arm64|arm64-v8a)
     ARCH_FLAG="-PreactNativeArchitectures=arm64-v8a"
     ;;
+  dual|64|all64|arm64_x86_64)
+    ARCH_FLAG="-PreactNativeArchitectures=arm64-v8a,x86_64"
+    ;;
   universal|all)
     ARCH_FLAG="-PreactNativeArchitectures=armeabi-v7a,arm64-v8a,x86,x86_64"
     ;;
@@ -141,7 +144,7 @@ case "$ARCH" in
     ARCH_FLAG="-PreactNativeArchitectures=x86_64"
     ;;
   *)
-    die "Invalid architecture: '$ARCH'. Supported: arm64, universal, x86_64"
+    die "Invalid architecture: '$ARCH'. Supported: dual, arm64, universal, x86_64"
     ;;
 esac
 

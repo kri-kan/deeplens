@@ -175,6 +175,12 @@ def main():
         img.save(out_path, format=fmt)
         print(f"Generated root asset: {filename} ({w}x{h})")
 
+    # android-icon-background.png (512x512)
+    bg_path = os.path.join(OUTPUT_BASE, "android-icon-background.png")
+    bg_img = Image.new("RGBA", (512, 512), (12, 14, 20, 255))
+    bg_img.save(bg_path, format="PNG")
+    print("Generated root asset: android-icon-background.png (512x512)")
+
     # 2. Android monochrome icon
     mono_path = os.path.join(OUTPUT_BASE, "android-icon-monochrome.png")
     mono_img = create_monochrome_asset(emblem_crop, (432, 432), scale_ratio=0.62)
@@ -182,12 +188,6 @@ def main():
     print(f"Generated root asset: android-icon-monochrome.png (432x432)")
 
     # 3. Android mipmaps
-    # Densities and sizes:
-    # mdpi: 48x48 icon, 108x108 foreground
-    # hdpi: 72x72 icon, 162x162 foreground
-    # xhdpi: 96x96 icon, 216x216 foreground
-    # xxhdpi: 144x144 icon, 324x324 foreground
-    # xxxhdpi: 192x192 icon, 432x432 foreground
     densities = {
         "mdpi": {"icon": (48, 48), "foreground": (108, 108)},
         "hdpi": {"icon": (72, 72), "foreground": (162, 162)},
@@ -203,21 +203,49 @@ def main():
         icon_size = sizes["icon"]
         fg_size = sizes["foreground"]
 
-        # ic_launcher.webp
-        icon_img = create_centered_asset(emblem_crop, icon_size, scale_ratio=0.85)
-        icon_path = os.path.join(res_dir, "ic_launcher.webp")
-        icon_img.save(icon_path, format="WEBP", lossless=True)
+        # ic_launcher_background.webp (solid brand dark #0C0E14)
+        bg_mipmap = Image.new("RGBA", fg_size, (12, 14, 20, 255))
+        bg_mipmap_path = os.path.join(res_dir, "ic_launcher_background.webp")
+        bg_mipmap.save(bg_mipmap_path, format="WEBP", lossless=True)
 
-        # ic_launcher_round.webp
-        round_path = os.path.join(res_dir, "ic_launcher_round.webp")
-        icon_img.save(round_path, format="WEBP", lossless=True)
-
-        # ic_launcher_foreground.webp (adaptive icon safe zone 66.67%)
+        # ic_launcher_foreground.webp (adaptive icon safe zone 62%)
         fg_img = create_centered_asset(emblem_crop, fg_size, scale_ratio=0.62)
         fg_path = os.path.join(res_dir, "ic_launcher_foreground.webp")
         fg_img.save(fg_path, format="WEBP", lossless=True)
 
-        print(f"Generated Android mipmap-{density}: ic_launcher ({icon_size[0]}x{icon_size[1]}), foreground ({fg_size[0]}x{fg_size[1]})")
+        # ic_launcher_monochrome.webp (pure white mask in safe zone)
+        mono_mipmap = create_monochrome_asset(emblem_crop, fg_size, scale_ratio=0.62)
+        mono_mipmap_path = os.path.join(res_dir, "ic_launcher_monochrome.webp")
+        mono_mipmap.save(mono_mipmap_path, format="WEBP", lossless=True)
+
+        # ic_launcher.webp (standard icon with rounded-corner luxury dark background)
+        base_icon = Image.new("RGBA", icon_size, (12, 14, 20, 255))
+        # Draw rounded corners
+        corner_r = max(int(icon_size[0] * 0.22), 4)
+        mask = Image.new("L", icon_size, 0)
+        from PIL import ImageDraw
+        draw = ImageDraw.Draw(mask)
+        draw.rounded_rectangle([(0, 0), (icon_size[0] - 1, icon_size[1] - 1)], radius=corner_r, fill=255)
+        emblem_on_icon = create_centered_asset(emblem_crop, icon_size, scale_ratio=0.75)
+        base_icon.alpha_composite(emblem_on_icon)
+        final_icon = Image.new("RGBA", icon_size, (0, 0, 0, 0))
+        final_icon.paste(base_icon, (0, 0), mask)
+        icon_path = os.path.join(res_dir, "ic_launcher.webp")
+        final_icon.save(icon_path, format="WEBP", lossless=True)
+
+        # ic_launcher_round.webp (circular icon)
+        round_mask = Image.new("L", icon_size, 0)
+        round_draw = ImageDraw.Draw(round_mask)
+        round_draw.ellipse([(0, 0), (icon_size[0] - 1, icon_size[1] - 1)], fill=255)
+        round_base = Image.new("RGBA", icon_size, (12, 14, 20, 255))
+        round_emblem = create_centered_asset(emblem_crop, icon_size, scale_ratio=0.70)
+        round_base.alpha_composite(round_emblem)
+        final_round = Image.new("RGBA", icon_size, (0, 0, 0, 0))
+        final_round.paste(round_base, (0, 0), round_mask)
+        round_path = os.path.join(res_dir, "ic_launcher_round.webp")
+        final_round.save(round_path, format="WEBP", lossless=True)
+
+        print(f"Generated Android mipmap-{density}: all 5 webp assets (bg, fg, mono, launcher, round)")
 
     # 4. Android splash drawables
     # Densities and sizes:
