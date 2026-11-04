@@ -457,6 +457,14 @@ export const waProcessorService = {
     return get<any[]>(`/group-review/${encodeURIComponent(jid)}`);
   },
 
+  presignBatch: async (urls: string[]): Promise<{ url: string; presigned: string | null }[]> => {
+    const result = await post<{ success: boolean; results: { url: string; presigned: string | null }[] }>(
+      '/group-review/presign-batch',
+      { urls }
+    );
+    return result.results;
+  },
+
   fetchGroupAuditLog: async (groupId: string): Promise<any[]> => {
     return get<any[]>(`/group-review/${encodeURIComponent(groupId)}/audit`);
   },

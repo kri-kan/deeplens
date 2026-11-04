@@ -29,6 +29,17 @@ interface AuditLogEntry {
   occurredAt: string;
 }
 
+function safeFormatDate(dateVal: any, pattern: string): string {
+  if (!dateVal) return '';
+  try {
+    const d = typeof dateVal === 'number' ? new Date(dateVal) : new Date(dateVal);
+    if (isNaN(d.getTime())) return '';
+    return format(d, pattern);
+  } catch {
+    return '';
+  }
+}
+
 export default function GroupZoneViewScreen() {
   const theme = useTheme();
   const router = useRouter();
@@ -372,7 +383,7 @@ export default function GroupZoneViewScreen() {
                     </View>
 
                     <Text variant="bodySmall" style={styles.countsText}>
-                      {group.mediaCount} media • {group.textCount} messages • Last updated {format(new Date(group.lastMessageAt), 'MMM d, HH:mm')}
+                      {group.mediaCount} media • {group.textCount} messages • Last updated {safeFormatDate(group.lastMessageAt, 'MMM d, HH:mm') || 'Recently'}
                     </Text>
 
                     {group.errorDetail && (
@@ -388,12 +399,20 @@ export default function GroupZoneViewScreen() {
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.mediaScroll}>
                         {group.messages
                           .filter((m: any) => m.mediaUrl)
+                          .slice(0, 10)
                           .map((m: any) => (
                             <View key={m.messageId} style={styles.thumbnailContainer}>
-                              {m.mediaType === 'image' || m.mediaType === 'photo' ? (
-                                <Image source={{ uri: m.mediaUrl }} style={styles.thumbnail} />
-                              ) : m.mediaType === 'sticker' ? (
-                                <Image source={{ uri: m.mediaUrl }} style={[styles.thumbnail, { resizeMode: 'contain' }]} />
+                              {(m.mediaType === 'image' || m.mediaType === 'photo' || m.mediaType === 'sticker') ? (
+                                m.mediaUrl?.startsWith('http') ? (
+                                  <Image
+                                    source={{ uri: m.mediaUrl }}
+                                    style={[styles.thumbnail, m.mediaType === 'sticker' ? { resizeMode: 'contain' } : {}]}
+                                  />
+                                ) : (
+                                  <View style={[styles.thumbnail, styles.videoPlaceholder]}>
+                                    <IconButton icon="image" size={20} iconColor="#aaa" style={{ margin: 0 }} />
+                                  </View>
+                                )
                               ) : (
                                 <View style={[styles.thumbnail, styles.videoPlaceholder]}>
                                   <IconButton icon="play-circle" size={24} iconColor="#fff" style={{ margin: 0 }} />
@@ -423,28 +442,36 @@ export default function GroupZoneViewScreen() {
 
                     {isExpanded && (
                       <View style={styles.messagesList}>
-                        {group.messages.map((m: any, idx: number) => (
-                          <View key={m.messageId} style={styles.messageItem}>
-                            <View style={{ flex: 1 }}>
-                              <Text variant="labelSmall" style={{ opacity: 0.5 }}>
-                                {m.isFromMe ? 'Me' : m.sender || 'Sender'} • {format(new Date(m.timestamp * 1000), 'HH:mm')}
-                              </Text>
-                              <Text variant="bodySmall" numberOfLines={2}>
-                                {m.content || `[${m.mediaType?.toUpperCase() || 'MEDIA'}]`}
-                              </Text>
+                        {group.messages.slice(0, 100).map((m: any, idx: number) => {
+                          const timeStr = m.timestamp ? safeFormatDate(Number(m.timestamp) * 1000, 'HH:mm') : '';
+                          return (
+                            <View key={m.messageId} style={styles.messageItem}>
+                              <View style={{ flex: 1 }}>
+                                <Text variant="labelSmall" style={{ opacity: 0.5 }}>
+                                  {m.isFromMe ? 'Me' : m.sender || 'Sender'} {timeStr ? `• ${timeStr}` : ''}
+                                </Text>
+                                <Text variant="bodySmall" numberOfLines={2}>
+                                  {m.content || `[${m.mediaType?.toUpperCase() || 'MEDIA'}]`}
+                                </Text>
+                              </View>
+                              {/* Can split at any index except the very first one */}
+                              {idx > 0 && (
+                                <IconButton
+                                  icon="content-cut"
+                                  size={16}
+                                  iconColor={theme.colors.error}
+                                  onPress={() => handleSplit(group.groupId, m.messageId, group.status)}
+                                  style={{ margin: 0 }}
+                                />
+                              )}
                             </View>
-                            {/* Can split at any index except the very first one */}
-                            {idx > 0 && (
-                              <IconButton
-                                icon="content-cut"
-                                size={16}
-                                iconColor={theme.colors.error}
-                                onPress={() => handleSplit(group.groupId, m.messageId, group.status)}
-                                style={{ margin: 0 }}
-                              />
-                            )}
-                          </View>
-                        ))}
+                          );
+                        })}
+                        {group.messages.length > 100 && (
+                          <Text variant="labelSmall" style={{ opacity: 0.6, textAlign: 'center', marginVertical: 8 }}>
+                            Showing first 100 of {group.messages.length} messages
+                          </Text>
+                        )}
                       </View>
                     )}
                   </Card.Content>

@@ -49,8 +49,35 @@ export function createGroupReviewRoutes(io?: any): Router {
     });
 
     /**
+     * POST /api/group-review/presign-batch
+     * Accepts { urls: string[] } (max 50) and returns presigned URLs for all in parallel.
+     * Must be registered BEFORE GET /group-review/:jid to avoid route capture.
+     */
+    router.post('/group-review/presign-batch', async (req: Request, res: Response) => {
+        const { urls } = req.body as { urls: string[] };
+        if (!Array.isArray(urls) || urls.length === 0) {
+            return res.status(400).json({ success: false, message: 'urls must be a non-empty array' });
+        }
+        const limited = urls.slice(0, 50);
+        const { getPresignedUrl } = await import('../clients/media.client');
+        const results = await Promise.all(
+            limited.map(async (url) => {
+                if (!url || url === 'minio://' || url.trim().length <= 10) return { url, presigned: null };
+                try {
+                    const presigned = await getPresignedUrl(url);
+                    return { url, presigned };
+                } catch {
+                    return { url, presigned: null };
+                }
+            })
+        );
+        res.json({ success: true, results });
+    });
+
+    /**
      * GET /api/group-review/:jid
-     * Returns all message groups for a given chat, including their nested messages
+     * Returns all message groups for a given chat, including their nested messages.
+     * Media URLs are returned as raw minio:// paths — use POST /presign-batch for lazy presigning.
      */
     router.get('/group-review/:jid', async (req: Request, res: Response) => {
         const { jid } = req.params;
@@ -109,17 +136,9 @@ export function createGroupReviewRoutes(io?: any): Router {
                 [jid]
             );
 
-            // Group messages by groupId and resolve presigned URLs for media
-            const { getPresignedUrl } = await import('../clients/media.client');
+            // Group messages by groupId — raw media_url values returned (no presigning here)
             const messagesByGroup = new Map<string, any[]>();
             for (const msg of messagesRes.rows) {
-                if (msg.mediaUrl && msg.mediaUrl !== 'minio://' && msg.mediaUrl.trim().length > 10) {
-                    try {
-                        msg.mediaUrl = await getPresignedUrl(msg.mediaUrl);
-                    } catch {
-                        // Keep raw if presigning fails
-                    }
-                }
                 if (!messagesByGroup.has(msg.groupId)) {
                     messagesByGroup.set(msg.groupId, []);
                 }
