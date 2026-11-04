@@ -45,7 +45,7 @@ export interface AdminPipelineEventsPageProps {
 }
 
 export type PipelineTabMode = 'events' | 'queue' | 'catalog';
-export type EventCategoryFilter = 'all' | 'split_merge' | 'product_create' | 'media_sync' | 'error';
+export type EventCategoryFilter = 'all' | 'split_merge' | 'product_create' | 'media_sync' | 'store_publish' | 'error';
 
 export const AdminPipelineEventsPage: React.FC<AdminPipelineEventsPageProps> = ({
   data,
@@ -71,6 +71,7 @@ export const AdminPipelineEventsPage: React.FC<AdminPipelineEventsPageProps> = (
       if (categoryFilter === 'split_merge' && e.category !== 'split_merge') return false;
       if (categoryFilter === 'product_create' && e.category !== 'product_create') return false;
       if (categoryFilter === 'media_sync' && e.category !== 'media_sync') return false;
+      if (categoryFilter === 'store_publish' && e.category !== 'store_publish') return false;
       if (categoryFilter === 'error' && e.category !== 'error') return false;
 
       if (!searchQuery.trim()) return true;
@@ -290,6 +291,7 @@ export const AdminPipelineEventsPage: React.FC<AdminPipelineEventsPageProps> = (
                 { key: 'split_merge', label: '✂️ Split & Merge' },
                 { key: 'product_create', label: '🏷️ Product Promotions' },
                 { key: 'media_sync', label: '📷 Media Sync' },
+                { key: 'store_publish', label: '🏪 Store Publish' },
                 { key: 'error', label: '⚠️ Errors' },
               ].map((chip) => {
                 const isSelected = categoryFilter === chip.key;

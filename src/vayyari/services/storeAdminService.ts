@@ -57,6 +57,22 @@ export interface PublishProductItem {
   mediaItems?: PublishMediaItem[];
 }
 
+export interface PublishJobResponse {
+  id: string;
+  action: string;
+  status: string;
+  totalCount: number;
+  processedCount: number;
+  failedCount: number;
+  requestedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PublishJobStatusResponse extends PublishJobResponse {
+  errorDetails?: string | null;
+}
+
 export interface StoreMediaItem {
   id: string;
   url: string;
@@ -198,6 +214,36 @@ class StoreAdminService {
 
     if (!res.ok) {
       throw new Error(`Failed to publish products to store: ${res.status} ${res.statusText}`);
+    }
+
+    return res.json();
+  }
+
+  async submitPublishJob(action: 'initial_publish' | 'sync_updates', productIds: string[]): Promise<PublishJobResponse> {
+    const headers = await this.getAuthHeaders();
+    const baseUrl = getStoreApiUrl();
+    const res = await fetch(`${baseUrl}/api/v1/admin/products/publish-job`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ action, productIds }),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to submit publish job: ${res.status} ${res.statusText}`);
+    }
+
+    return res.json();
+  }
+
+  async getPublishJobStatus(jobId: string): Promise<PublishJobStatusResponse> {
+    const headers = await this.getAuthHeaders();
+    const baseUrl = getStoreApiUrl();
+    const res = await fetch(`${baseUrl}/api/v1/admin/products/publish-jobs/${jobId}`, {
+      headers,
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to get publish job status: ${res.status} ${res.statusText}`);
     }
 
     return res.json();

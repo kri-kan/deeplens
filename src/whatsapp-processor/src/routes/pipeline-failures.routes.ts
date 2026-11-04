@@ -533,6 +533,33 @@ export function createPipelineFailuresRoutes(): Router {
                     purpose: 'Extracts 512-dimensional visual vector embeddings via ResNet/CLIP for visual lens similarity search.',
                     trigger: 'Image ingestion completion in WorkerService.',
                     priority: 'Background'
+                },
+                {
+                    topic: 'store.product.publish.requested',
+                    name: 'Store Product Publish / Update Sync',
+                    direction: 'Store.Api ➔ .NET Worker Service',
+                    consumer: 'StoreProductPublishWorker',
+                    purpose: 'Asynchronously clones media into store-assets via zero-download MinIO server-side copy, upserts products and color variants, and cascades review-pending flags.',
+                    trigger: 'Admin clicks "Publish to Store" or "Publish Updates for N Products" in Vayyari Admin.',
+                    priority: 'High (Immediate)'
+                },
+                {
+                    topic: 'store.product.sync.completed',
+                    name: 'Store Publish Confirmation & Platform Sync',
+                    direction: '.NET Worker Service ➔ DeepLens Platform',
+                    consumer: 'Platform Sync Listener',
+                    purpose: 'Confirms product published to store and updates store_publish_updated_at in deeplens_platform, dismissing product from Publish Updates review queue.',
+                    trigger: 'Successful completion of product ingestion in StoreProductPublishWorker.',
+                    priority: 'Immediate'
+                },
+                {
+                    topic: 'store.product.publish.failed',
+                    name: 'Store Publish Failure Dead-Letter',
+                    direction: '.NET Worker Service ➔ Error Queue',
+                    consumer: 'Error Monitoring & Job State Machine',
+                    purpose: 'Captures failures during store publishing or update syncing with error diagnostics, marking the publish job as failed or partial.',
+                    trigger: 'Exception encountered during media download, S3 copy, or database upsert.',
+                    priority: 'High (Alert)'
                 }
             ];
 

@@ -2,6 +2,7 @@ using System.Text.Json;
 using Dapper;
 using Npgsql;
 using Store.Api.Models;
+using DeepLens.Contracts.Events;
 
 namespace Store.Api.Services;
 
@@ -1060,6 +1061,76 @@ public class CurationService : ICurationService
             IsReviewPending: r.IsReviewPending,
             ReviewReason: r.ReviewReason
         );
+    }
+
+    public async Task<PublishJobDto> CreatePublishJobAsync(SubmitPublishJobRequest request, string authorEmail, CancellationToken ct = default)
+    {
+        var jobId = Guid.NewGuid();
+        var action = string.IsNullOrWhiteSpace(request.Action) ? "initial_publish" : request.Action.ToLowerInvariant();
+        var totalCount = request.ProductIds?.Count ?? 0;
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        const string sql = @"
+            INSERT INTO publish_jobs (
+                id, action, status, total_count, processed_count, failed_count, requested_by, created_at, updated_at
+            ) VALUES (
+                @Id, @Action, 'queued', @TotalCount, 0, 0, @RequestedBy, NOW(), NOW()
+            )
+            RETURNING id, action, status, total_count AS TotalCount, processed_count AS ProcessedCount, 
+                      failed_count AS FailedCount, error_details::text AS ErrorDetails, 
+                      requested_by AS RequestedBy, created_at AS CreatedAt, updated_at AS UpdatedAt;";
+
+        var job = await conn.QuerySingleAsync<PublishJobDto>(sql, new
+        {
+            Id = jobId,
+            Action = action,
+            TotalCount = totalCount,
+            RequestedBy = authorEmail
+        });
+
+        // Publish event for each product in the batch
+        if (request.ProductIds != null && request.ProductIds.Count > 0)
+        {
+            foreach (var productId in request.ProductIds)
+            {
+                var evt = new StoreProductPublishRequestedEvent(
+                    EventId: Guid.NewGuid(),
+                    JobId: jobId,
+                    Action: action,
+                    ProductId: productId,
+                    ProductCode: string.Empty,
+                    RequestedBy: authorEmail,
+                    Timestamp: DateTime.UtcNow
+                );
+
+                await _eventPublisher.PublishAsync(
+                    StorePublishTopics.PublishRequested,
+                    productId.ToString(),
+                    evt,
+                    ct
+                );
+            }
+        }
+
+        _logger.LogInformation("Created publish job {JobId} ({Action}) for {Count} products by {Author}", jobId, action, totalCount, authorEmail);
+        return job;
+    }
+
+    public async Task<PublishJobDto?> GetPublishJobAsync(Guid jobId, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        const string sql = @"
+            SELECT id, action, status, total_count AS TotalCount, processed_count AS ProcessedCount, 
+                   failed_count AS FailedCount, error_details::text AS ErrorDetails, 
+                   requested_by AS RequestedBy, created_at AS CreatedAt, updated_at AS UpdatedAt
+            FROM publish_jobs
+            WHERE id = @Id;";
+
+        return await conn.QuerySingleOrDefaultAsync<PublishJobDto>(sql, new { Id = jobId });
     }
 
     private class ExistingProductRecord

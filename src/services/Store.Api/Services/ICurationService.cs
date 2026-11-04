@@ -16,4 +16,6 @@ public interface ICurationService
     Task<StoreMediaItemDto?> DeleteModifiedMediaAsync(Guid productId, string mediaId, string authorEmail, CancellationToken ct = default);
     Task<StoreMediaItemDto?> ToggleMediaDisplaySourceAsync(Guid productId, string mediaId, string activeDisplaySource, string authorEmail, CancellationToken ct = default);
     Task<bool> DismissReviewAsync(Guid id);
+    Task<PublishJobDto> CreatePublishJobAsync(SubmitPublishJobRequest request, string authorEmail, CancellationToken ct = default);
+    Task<PublishJobDto?> GetPublishJobAsync(Guid jobId, CancellationToken ct = default);
 }

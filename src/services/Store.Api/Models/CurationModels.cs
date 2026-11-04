@@ -118,3 +118,27 @@ public record UpdateCurationRequest(
 public record ToggleMediaDisplaySourceRequest(
     [property: JsonPropertyName("activeDisplaySource")] string ActiveDisplaySource
 );
+
+public record SubmitPublishJobRequest(
+    [property: JsonPropertyName("action")] string Action,
+    [property: JsonPropertyName("productIds")] List<Guid> ProductIds,
+    [property: JsonPropertyName("options")] SubmitPublishJobOptions? Options = null
+);
+
+public record SubmitPublishJobOptions(
+    [property: JsonPropertyName("cascadeReviewPending")] bool CascadeReviewPending = true,
+    [property: JsonPropertyName("reviewReason")] string ReviewReason = "media_updated"
+);
+
+public record PublishJobDto(
+    [property: JsonPropertyName("id")] Guid Id,
+    [property: JsonPropertyName("action")] string Action,
+    [property: JsonPropertyName("status")] string Status,
+    [property: JsonPropertyName("totalCount")] int TotalCount,
+    [property: JsonPropertyName("processedCount")] int ProcessedCount,
+    [property: JsonPropertyName("failedCount")] int FailedCount,
+    [property: JsonPropertyName("errorDetails")] string? ErrorDetails,
+    [property: JsonPropertyName("requestedBy")] string? RequestedBy,
+    [property: JsonPropertyName("createdAt")] DateTime CreatedAt,
+    [property: JsonPropertyName("updatedAt")] DateTime UpdatedAt
+);

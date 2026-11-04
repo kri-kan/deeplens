@@ -238,68 +238,18 @@ export default function StorePublishScreen() {
   }, [loadData]);
 
   const handlePublishBatch = async (selectedIds: string[]) => {
-    const selectedItems = starredProducts.filter((p) => selectedIds.includes(p.id));
-    const payload: PublishProductItem[] = await Promise.all(
-      selectedItems.map(async (p) => {
-        let mediaUrls = p.allMediaUris && p.allMediaUris.length > 0 ? p.allMediaUris : [p.primaryImageUri];
-        let mediaItems: PublishMediaItem[] = mediaUrls.map((url) => ({ url, mediaType: 1 }));
-
-        try {
-          const fullProd = await productService.getProductById(p.id);
-          if (fullProd?.media && fullProd.media.length > 0) {
-            const resolvedItems: PublishMediaItem[] = [];
-            const resolvedUrls: string[] = [];
-
-            for (const m of fullProd.media) {
-              let url: string | null = null;
-              if (m.id && m.id !== '00000000-0000-0000-0000-000000000000') {
-                url = productService.getThumbnailUrl(m.id, 'large');
-              } else if (m.storagePath) {
-                url = productService.getThumbnailUrlByPath(m.storagePath, 'large');
-              }
-              if (url) {
-                resolvedUrls.push(url);
-                resolvedItems.push({
-                  catalogMediaId: m.id && m.id !== '00000000-0000-0000-0000-000000000000' ? m.id : undefined,
-                  url,
-                  mediaType: m.mediaType || 1,
-                });
-              }
-            }
-
-            if (resolvedUrls.length > 0) {
-              mediaUrls = resolvedUrls;
-              mediaItems = resolvedItems;
-            }
-          }
-        } catch (e) {
-          console.warn(`Failed to fetch full media list for product ${p.productCode}:`, e);
-        }
-
-        return {
-          vayyariProductId: p.id,
-          productCode: p.productCode,
-          title: p.title,
-          categoryName: p.category,
-          fabric: p.fabric,
-          baseCost: p.price || 8000,
-          mediaUrls,
-          mediaItems,
-        };
-      })
-    );
+    if (selectedIds.length === 0) return;
 
     try {
-      const res = await storeAdminService.batchPublish(payload);
       const nowIso = new Date().toISOString();
-      // Synchronize publish state to deeplens_platform
-      try {
-        await productService.recordStorePublish(selectedIds, nowIso);
-      } catch (platErr) {
-        console.warn('Failed to record store publish to platform:', platErr);
-      }
+      const isUpdating = starredProducts.some((p) => selectedIds.includes(p.id) && p.isPublishedToStore);
+      const action = isUpdating ? 'sync_updates' : 'initial_publish';
 
-      // Immediately reflect synchronized state so products disappear from publish_updates
+      // 1. Submit asynchronous event-driven publish job to Kafka
+      const job = await storeAdminService.submitPublishJob(action, selectedIds);
+      console.log('Dispatched asynchronous publish job:', job);
+
+      // 2. Immediately reflect state in local UI
       setStarredProducts((prev) =>
         prev.map((p) => {
           if (selectedIds.includes(p.id)) {
@@ -316,12 +266,15 @@ export default function StorePublishScreen() {
           return p;
         })
       );
-      setPublishedCount((prev) => prev + res.count);
+      setPublishedCount((prev) => prev + selectedIds.length);
 
-      await loadData(true);
+      // 3. Reload data from backend
+      setTimeout(() => {
+        loadData(true);
+      }, 1500);
     } catch (err) {
-      console.error('Failed to batch publish:', err);
-      Alert.alert('Error', 'Failed to publish to Store.');
+      console.error('Failed to submit publish job:', err);
+      Alert.alert('Error', 'Failed to submit publish job to Store.');
       throw err;
     }
   };

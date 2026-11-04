@@ -740,6 +740,28 @@ app.MapPost("/api/v1/admin/products/publish", async ([FromBody] BatchPublishRequ
 .WithName("AdminBatchPublishProducts")
 .WithOpenApi();
 
+// 1a. Asynchronous Event-Driven Publish Job (202 Accepted)
+app.MapPost("/api/v1/admin/products/publish-job", async ([FromBody] SubmitPublishJobRequest request, HttpContext ctx, ICurationService curationService) =>
+{
+    var author = GetAuthorEmail(ctx);
+    var job = await curationService.CreatePublishJobAsync(request, author);
+    return Results.Accepted($"/api/v1/admin/products/publish-jobs/{job.Id}", job);
+})
+.WithName("AdminSubmitPublishJob")
+.WithOpenApi();
+
+// 1b. Get Publish Job Status & Progress
+app.MapGet("/api/v1/admin/products/publish-jobs/{id}", async (Guid id, ICurationService curationService) =>
+{
+    var job = await curationService.GetPublishJobAsync(id);
+    return job != null
+        ? Results.Ok(job)
+        : Results.NotFound(new { message = $"Publish job '{id}' not found." });
+})
+.WithName("AdminGetPublishJob")
+.WithOpenApi();
+
+
 // 2. List In-Store Products (For In-Store Inventory Screen)
 app.MapGet("/api/v1/admin/products/in-store", async ([FromQuery] string? category, [FromQuery] string? search, [FromQuery] string? lifecycle, ICurationService curationService) =>
 {
