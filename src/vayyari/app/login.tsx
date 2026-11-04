@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Image } from 'react-native';
 import { Text, TextInput, Button, useTheme, Surface, HelperText, IconButton } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
@@ -51,6 +51,12 @@ export default function LoginScreen() {
       >
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.header}>
+            <Image
+              source={require('@/assets/images/icon.png')}
+              style={styles.logo}
+              resizeMode="contain"
+              accessibilityLabel="Vayyari Logo"
+            />
             <Text variant="displaySmall" style={[styles.title, { color: theme.colors.primary }]}>
               Vayyari
             </Text>
@@ -145,6 +151,11 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     marginBottom: 48,
+  },
+  logo: {
+    width: 64,
+    height: 64,
+    marginBottom: 16,
   },
   settingsIcon: {
     position: 'absolute',
