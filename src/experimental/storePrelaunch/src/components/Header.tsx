@@ -55,6 +55,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenVIPModal, isVIP }) => {
         {/* Brand Logo */}
         <a
           href="#"
+          aria-label="Vayyari Home"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -70,11 +71,15 @@ export const Header: React.FC<HeaderProps> = ({ onOpenVIPModal, isVIP }) => {
             src="/assets/vayyari-logo.png"
             alt="Vayyari"
             style={{
-              height: scrolled ? '34px' : '40px',
+              height: scrolled ? '36px' : '42px',
+              maxHeight: '42px',
+              maxWidth: '100%',
               width: 'auto',
               objectFit: 'contain',
+              display: 'block',
               transition: 'all 0.3s ease',
-              filter: 'drop-shadow(0 2px 10px rgba(0,0,0,0.5))',
+              filter:
+                'drop-shadow(0 2px 8px rgba(212, 175, 55, 0.3)) drop-shadow(0 4px 14px rgba(0, 0, 0, 0.65))',
             }}
           />
         </a>

@@ -191,7 +191,6 @@ class PrelaunchTelemetryManager {
   private initPostHog() {
     if (typeof window === 'undefined') return;
     try {
-      // Ingest endpoint routes through Vite same-origin proxy to self-hosted PostHog on port 8000
       const apiHost = `${window.location.origin}/ingest`;
       const apiKey =
         (window as any).__POSTHOG_API_KEY__ ||
@@ -200,18 +199,21 @@ class PrelaunchTelemetryManager {
 
       posthog.init(apiKey, {
         api_host: apiHost,
-        ui_host: 'http://localhost:8000',
         bootstrap: {
           distinctID: this.deviceMetadata.deviceId,
         },
+        // Client-side batching for high throughput & network efficiency
+        request_batching: true,
+        batch_size: 20,
+        batch_flush_interval_ms: 3000,
         autocapture: true,
         capture_pageview: true,
         capture_pageleave: true,
-        disable_session_recording: false,
+        disable_session_recording: true, // Safeguard: prevents high-bandwidth DOM recording bursts
         session_recording: {
           maskAllInputs: true,
         },
-        loaded: (ph) => {
+        loaded: (ph: any) => {
           ph.register({
             platform: this.deviceMetadata.platform,
             os: this.deviceMetadata.os,
@@ -222,7 +224,7 @@ class PrelaunchTelemetryManager {
             app: 'vayyari-prelaunch',
           });
         },
-      });
+      } as any);
       this.posthogInitialized = true;
     } catch (err) {
       console.debug('[PostHog] Init deferred:', err);
@@ -231,16 +233,21 @@ class PrelaunchTelemetryManager {
 
   public trackSignal(type: string, properties: Record<string, any> = {}) {
     const payload = {
-      signalId: `sig_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      deviceId: this.deviceMetadata.deviceId,
+      sessionId: this.sessionId,
       signalType: type,
-      timestamp: new Date().toISOString(),
       properties: {
         ...properties,
         sessionDurationSec: Math.round((Date.now() - this.sessionStartTime) / 1000),
       },
+      clientTimestamp: new Date().toISOString(),
     };
 
     this.signalBuffer.push(payload);
+    // Safety cap buffer at 100 items to protect memory under offline conditions
+    if (this.signalBuffer.length > 100) {
+      this.signalBuffer.shift();
+    }
 
     // Dual-dispatch to PostHog
     try {
@@ -253,14 +260,20 @@ class PrelaunchTelemetryManager {
       }
     } catch {}
 
-    if (this.flushTimer) {
-      clearTimeout(this.flushTimer);
-    }
-    // Flush after 400ms or immediately for key events
-    if (type === 'session_start' || type === 'waitlist_join_clicked') {
+    const isUrgent =
+      type === 'session_start' ||
+      type === 'waitlist_join_clicked' ||
+      type === 'order_placed' ||
+      this.signalBuffer.length >= 15;
+
+    if (isUrgent) {
       this.flushSignals();
-    } else {
-      this.flushTimer = setTimeout(() => this.flushSignals(), 400);
+    } else if (!this.flushTimer) {
+      // High-volume batch window: flush every 2500ms
+      this.flushTimer = setTimeout(() => {
+        this.flushTimer = null;
+        this.flushSignals();
+      }, 2500);
     }
   }
 
@@ -282,6 +295,10 @@ class PrelaunchTelemetryManager {
 
   public flushSignals() {
     if (this.signalBuffer.length === 0) return;
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
 
     const signalsToSend = [...this.signalBuffer];
     this.signalBuffer = [];
@@ -312,7 +329,7 @@ class PrelaunchTelemetryManager {
       }
     } catch {}
 
-    // Fallback to fetch
+    // Fallback to fetch with keepalive
     fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -63,3 +63,19 @@ export const YouTubeIcon: React.FC<IconProps> = ({ size = 20, color = 'currentCo
     <polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="var(--bg-dark)" />
   </svg>
 );
+
+export const MudraCoinIcon: React.FC<{ size?: number; className?: string; style?: React.CSSProperties }> = ({
+  size = 24,
+  className,
+  style,
+}) => (
+  <img
+    src="/assets/mudra-icon.svg"
+    width={size}
+    height={size}
+    alt="Mudra Coin"
+    className={className}
+    style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0, ...style }}
+  />
+);
+

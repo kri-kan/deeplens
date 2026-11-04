@@ -3,6 +3,7 @@ import { X, Sparkles, Copy, Check, Share2, Award, Download } from 'lucide-react'
 import confetti from 'canvas-confetti';
 import { VIPMember } from '../types';
 import { BrandLogo } from './BrandLogo';
+import { MudraCoinIcon } from './Icons';
 import { sounds } from '../utils/audio';
 import { telemetry } from '../services/telemetry';
 
@@ -257,6 +258,24 @@ export const VIPPassModal: React.FC<VIPPassModalProps> = ({
           </div>
 
           {/* Privilege Privileges */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              background: 'rgba(212, 175, 55, 0.08)',
+              border: '1px solid rgba(212, 175, 55, 0.3)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '10px 14px',
+              marginBottom: '16px',
+            }}
+          >
+            <MudraCoinIcon size={28} />
+            <div style={{ fontSize: '0.8rem', color: 'var(--gold-champagne)', lineHeight: 1.4 }}>
+              <strong style={{ color: 'var(--gold)', fontWeight: 700 }}>700 Mudra Coins</strong> credited to your digital vault for your debut handloom order.
+            </div>
+          </div>
+
           <div
             style={{
               fontSize: '0.8rem',
