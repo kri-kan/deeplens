@@ -171,6 +171,11 @@ public class WhatsAppGroupWorker : BackgroundService
     {
         try
         {
+            if (!_hashCache.IsInitialized)
+            {
+                await _hashCache.EnsureInitializedAsync(ct);
+            }
+
             if (consumeResult.Topic == KafkaTopics.GroupProductCreate)
             {
                 await HandleGroupProductCreate(consumeResult.Message.Value, ct);
@@ -229,6 +234,29 @@ public class WhatsAppGroupWorker : BackgroundService
             }
         }
 
+        // Stage 4 Hard circuit breaker: if evt.MediaFiles.Count > 35
+        if (evt.MediaFiles != null && evt.MediaFiles.Count > 35)
+        {
+            _logger.LogWarning("GroupId {GroupId} media count ({Count} > 35) exceeds safety threshold. Aborting ingestion.", evt.GroupId, evt.MediaFiles.Count);
+            using var connCircuit = new NpgsqlConnection(_connectionString);
+            await connCircuit.OpenAsync(ct);
+            await connCircuit.ExecuteAsync(
+                @"UPDATE wa.message_groups 
+                  SET status = 'needs_review', 
+                      review_stage = 'catalog_ingestion',
+                      error_detail = @ErrorDetail,
+                      updated_at = NOW() 
+                  WHERE group_id = @GroupId",
+                new 
+                { 
+                    ErrorDetail = $"Ingestion blocked: Media count ({evt.MediaFiles.Count} > 35) exceeds safety threshold.",
+                    GroupId = evt.GroupId 
+                }
+            );
+            await LogGroupAudit(connCircuit, evt.GroupId, "product_creation_aborted_circuit_breaker", "system", null, new { media_count = evt.MediaFiles.Count, threshold = 35 });
+            return;
+        }
+
         // Fast-fail if incoming payload lacks minimum required media files (saves AI extraction, DB connections, and sequence churn)
         if (evt.MediaFiles == null || evt.MediaFiles.Count < 2)
         {
@@ -237,13 +265,14 @@ public class WhatsAppGroupWorker : BackgroundService
             await connAbort.OpenAsync(ct);
             await connAbort.ExecuteAsync(
                 @"UPDATE wa.message_groups 
-                  SET status = 'media_missing', 
+                  SET status = 'needs_review', 
+                      review_stage = 'media_sync',
                       error_detail = @ErrorDetail,
                       updated_at = NOW() 
                   WHERE group_id = @GroupId",
                 new 
                 { 
-                    ErrorDetail = $"Insufficient media files in event payload (found {evt.MediaFiles?.Count ?? 0}, required >= 2)",
+                    ErrorDetail = $"Insufficient media ({evt.MediaFiles?.Count ?? 0} < 2) or media download stalled.",
                     GroupId = evt.GroupId 
                 }
             );
@@ -459,45 +488,63 @@ public class WhatsAppGroupWorker : BackgroundService
 
                         if (bestProductVotes >= 1 && bestProductId != Guid.Empty)
                         {
-                            matchDistance = bestProductDistance;
-                            double ratio = (double)bestProductCloseVotes / incomingPhashes.Count;
+                            // Once matching media is found, check if relevant product in DB is active (not deleted or archived)
+                            var matchedProductStatus = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                                @"SELECT is_deleted, is_archived FROM public.products WHERE id = @ProductId",
+                                new { ProductId = bestProductId }, trans);
 
-                            _logger.LogInformation(
-                                "Any-to-any visual match: Product {MatchProductId}, closeVotes={CloseVotes}, totalVotes={Votes}, totalIncoming={Total}, ratio={Ratio:P1}, bestDist={Distance}, categories: Current={CurrentCat}, Matched={MatchedCat}",
-                                bestProductId, bestProductCloseVotes, bestProductVotes, incomingPhashes.Count, ratio, bestProductDistance, extracted.Category, bestProductCategory);
+                            bool isMatchedProductActive = matchedProductStatus != null &&
+                                (matchedProductStatus.is_deleted == false || matchedProductStatus.is_deleted == null) &&
+                                (matchedProductStatus.is_archived == false || matchedProductStatus.is_archived == null);
 
-                            // Hardened Auto-merge criteria:
-                            // 1. Minimum close votes floor (>= 2)
-                            // 2. Minimum ratio of source group photos matching (>= 60%)
-                            // 3. Best distance <= 2
-                            // 4. Category matches
-                            bool meetsThreshold = incomingPhashes.Count >= AUTO_MERGE_MIN_VOTES &&
-                                                 bestProductCloseVotes >= AUTO_MERGE_MIN_VOTES &&
-                                                 ratio >= AUTO_MERGE_MIN_RATIO &&
-                                                 bestProductDistance <= 2 &&
-                                                 string.Equals(extracted.Category, bestProductCategory, StringComparison.OrdinalIgnoreCase);
-
-                            if (meetsThreshold)
+                            if (!isMatchedProductActive)
                             {
-                                var targetPrice = await GetProductPriceAsync(conn, bestProductId, trans);
-                                if (IsPriceCompatible(extracted.Price, targetPrice, MAX_PRICE_TOLERANCE))
+                                _logger.LogInformation(
+                                    "Visual match found for product {ProductId}, but it is soft-deleted or archived in DB. Skipping auto-merge and active suggestions.",
+                                    bestProductId);
+                            }
+                            else
+                            {
+                                matchDistance = bestProductDistance;
+                                double ratio = (double)bestProductCloseVotes / incomingPhashes.Count;
+
+                                _logger.LogInformation(
+                                    "Any-to-any visual match: Product {MatchProductId}, closeVotes={CloseVotes}, totalVotes={Votes}, totalIncoming={Total}, ratio={Ratio:P1}, bestDist={Distance}, categories: Current={CurrentCat}, Matched={MatchedCat}",
+                                    bestProductId, bestProductCloseVotes, bestProductVotes, incomingPhashes.Count, ratio, bestProductDistance, extracted.Category, bestProductCategory);
+
+                                // Hardened Auto-merge criteria:
+                                // 1. Minimum close votes floor (>= 2)
+                                // 2. Minimum ratio of source group photos matching (>= 60%)
+                                // 3. Best distance <= 2
+                                // 4. Category matches
+                                bool meetsThreshold = incomingPhashes.Count >= AUTO_MERGE_MIN_VOTES &&
+                                                     bestProductCloseVotes >= AUTO_MERGE_MIN_VOTES &&
+                                                     ratio >= AUTO_MERGE_MIN_RATIO &&
+                                                     bestProductDistance <= 2 &&
+                                                     string.Equals(extracted.Category, bestProductCategory, StringComparison.OrdinalIgnoreCase);
+
+                                if (meetsThreshold)
                                 {
-                                    isAutoMerge = true;
-                                    productId = bestProductId;
+                                    var targetPrice = await GetProductPriceAsync(conn, bestProductId, trans);
+                                    if (IsPriceCompatible(extracted.Price, targetPrice, MAX_PRICE_TOLERANCE))
+                                    {
+                                        isAutoMerge = true;
+                                        productId = bestProductId;
+                                    }
+                                    else
+                                    {
+                                        isReviewCandidate = true;
+                                        reviewSourceProductId = bestProductId;
+                                        _logger.LogWarning(
+                                            "Auto-merge rejected between incoming group {GroupId} (price {SourcePrice}) and Product {BestProductId} (price {TargetPrice}) due to price discrepancy exceeding {Tolerance:P0}. Enqueuing for review.",
+                                            evt.GroupId, extracted.Price, bestProductId, targetPrice, MAX_PRICE_TOLERANCE);
+                                    }
                                 }
-                                else
+                                else if (bestProductDistance <= 4)
                                 {
                                     isReviewCandidate = true;
                                     reviewSourceProductId = bestProductId;
-                                    _logger.LogWarning(
-                                        "Auto-merge rejected between incoming group {GroupId} (price {SourcePrice}) and Product {BestProductId} (price {TargetPrice}) due to price discrepancy exceeding {Tolerance:P0}. Enqueuing for review.",
-                                        evt.GroupId, extracted.Price, bestProductId, targetPrice, MAX_PRICE_TOLERANCE);
                                 }
-                            }
-                            else if (bestProductDistance <= 4)
-                            {
-                                isReviewCandidate = true;
-                                reviewSourceProductId = bestProductId;
                             }
                         }
                         else
@@ -983,7 +1030,8 @@ public class WhatsAppGroupWorker : BackgroundService
 
                 await conn.ExecuteAsync(
                     @"UPDATE wa.message_groups 
-                      SET status = 'media_missing', 
+                      SET status = 'needs_review', 
+                          review_stage = 'media_sync',
                           deeplens_product_id = NULL,
                           deeplens_listing_id = NULL,
                           error_detail = @ErrorDetail,
@@ -991,7 +1039,7 @@ public class WhatsAppGroupWorker : BackgroundService
                       WHERE group_id = @GroupId",
                     new 
                     { 
-                        ErrorDetail = $"Insufficient verified downloaded media files in storage (found {successfulMediaCount}, required >= 2)",
+                        ErrorDetail = $"Insufficient media ({successfulMediaCount} < 2) or media download stalled.",
                         GroupId = evt.GroupId 
                     }
                 );
@@ -1086,19 +1134,33 @@ public class WhatsAppGroupWorker : BackgroundService
 
                 if (isReviewCandidate)
                 {
-                    // similarity_score stored as Hamming distance (lower = more similar)
-                    await conn.ExecuteAsync(@"
-                        INSERT INTO public.product_merge_candidates (product_a_id, product_b_id, similarity_score, status, detected_at)
-                        VALUES (@ProductAId, @ProductBId, @SimilarityScore, 'pending', NOW())
-                        ON CONFLICT (product_a_id, product_b_id) DO NOTHING",
-                        new
-                        {
-                            ProductAId = reviewSourceProductId,
-                            ProductBId = productId,
-                            SimilarityScore = (double)matchDistance
-                        }, trans);
-                    
-                    await LogGroupAudit(conn, evt.GroupId, "review_candidate_enqueued", "system", null, new { canonical_product_id = reviewSourceProductId, new_product_id = productId, distance = matchDistance }, trans);
+                    var isSourceActive = await conn.QuerySingleOrDefaultAsync<bool?>(
+                        @"SELECT true FROM public.products 
+                          WHERE id = @Id 
+                            AND COALESCE(is_deleted, false) = false 
+                            AND COALESCE(is_archived, false) = false",
+                        new { Id = reviewSourceProductId }, trans);
+
+                    if (isSourceActive == true)
+                    {
+                        // similarity_score stored as Hamming distance (lower = more similar)
+                        await conn.ExecuteAsync(@"
+                            INSERT INTO public.product_merge_candidates (product_a_id, product_b_id, similarity_score, status, detected_at)
+                            VALUES (@ProductAId, @ProductBId, @SimilarityScore, 'pending', NOW())
+                            ON CONFLICT (product_a_id, product_b_id) DO NOTHING",
+                            new
+                            {
+                                ProductAId = reviewSourceProductId,
+                                ProductBId = productId,
+                                SimilarityScore = (double)matchDistance
+                            }, trans);
+                        
+                        await LogGroupAudit(conn, evt.GroupId, "review_candidate_enqueued", "system", null, new { canonical_product_id = reviewSourceProductId, new_product_id = productId, distance = matchDistance }, trans);
+                    }
+                    else
+                    {
+                        _logger.LogInformation("Skipping review candidate between {SourceId} and {TargetId} because candidate product is deleted or archived.", reviewSourceProductId, productId);
+                    }
                 }
             }
 
@@ -1111,12 +1173,13 @@ public class WhatsAppGroupWorker : BackgroundService
                 await conn.ExecuteAsync(
                     @"UPDATE wa.message_groups 
                       SET status = 'needs_review', 
+                          review_stage = 'zoning',
                           error_detail = @ErrorDetail,
                           updated_at = NOW() 
                       WHERE group_id = @GroupId",
                     new 
                     { 
-                        ErrorDetail = $"High media count ({successfulMediaCount} media). Flagged for human zoning review.",
+                        ErrorDetail = $"High media count ({successfulMediaCount} > 30). Human zoning review/split required.",
                         GroupId = evt.GroupId 
                     }, trans);
 
@@ -2217,16 +2280,33 @@ public class WhatsAppGroupWorker : BackgroundService
                     Guid productAId = thisProductId < candidateId ? thisProductId : candidateId;
                     Guid productBId = thisProductId < candidateId ? candidateId : thisProductId;
 
-                    await conn.ExecuteAsync(@"
-                        INSERT INTO public.product_merge_candidates (product_a_id, product_b_id, similarity_score, status, detected_at)
-                        VALUES (@ProductAId, @ProductBId, @SimilarityScore, 'pending', NOW())
-                        ON CONFLICT (product_a_id, product_b_id) DO NOTHING",
-                        new
-                        {
-                            ProductAId = productAId,
-                            ProductBId = productBId,
-                            SimilarityScore = (double)closestDistance
-                        });
+                    var areBothActive = await conn.QuerySingleOrDefaultAsync<bool?>(
+                        @"SELECT true FROM public.products pa 
+                          JOIN public.products pb ON pb.id = @ProductBId
+                          WHERE pa.id = @ProductAId 
+                            AND COALESCE(pa.is_deleted, false) = false 
+                            AND COALESCE(pa.is_archived, false) = false
+                            AND COALESCE(pb.is_deleted, false) = false 
+                            AND COALESCE(pb.is_archived, false) = false",
+                        new { ProductAId = productAId, ProductBId = productBId });
+
+                    if (areBothActive == true)
+                    {
+                        await conn.ExecuteAsync(@"
+                            INSERT INTO public.product_merge_candidates (product_a_id, product_b_id, similarity_score, status, detected_at)
+                            VALUES (@ProductAId, @ProductBId, @SimilarityScore, 'pending', NOW())
+                            ON CONFLICT (product_a_id, product_b_id) DO NOTHING",
+                            new
+                            {
+                                ProductAId = productAId,
+                                ProductBId = productBId,
+                                SimilarityScore = (double)closestDistance
+                            });
+                    }
+                    else
+                    {
+                        _logger.LogInformation("Skipping cross-product candidate between {ProductAId} and {ProductBId} because one or both products are deleted or archived.", productAId, productBId);
+                    }
                 }
             }
         }
@@ -2266,7 +2346,9 @@ public class WhatsAppGroupWorker : BackgroundService
         _hashCache.UpdateCategory(evt.ProductId, evt.NewCategory);
 
         // 3. Scan the cache to generate new valid candidates
-        var productEntries = _hashCache.GetAll().Where(e => e.ProductId == evt.ProductId).ToList();
+        var productEntries = _hashCache.GetAll()
+            .Where(e => e.ProductId == evt.ProductId)
+            .ToList();
         if (productEntries.Count == 0)
         {
             _logger.LogInformation("No hashes found in cache for ProductId: {ProductId}", evt.ProductId);
@@ -2335,16 +2417,36 @@ public class WhatsAppGroupWorker : BackgroundService
                     }
                 }
 
-                await conn.ExecuteAsync(@"
-                    INSERT INTO public.product_merge_candidates (product_a_id, product_b_id, similarity_score, status, detected_at)
-                    VALUES (@ProductAId, @ProductBId, @SimilarityScore, 'pending', NOW())
-                    ON CONFLICT (product_a_id, product_b_id) DO NOTHING",
-                    new
-                    {
-                        ProductAId = candidateProductId < evt.ProductId ? candidateProductId : evt.ProductId,
-                        ProductBId = candidateProductId < evt.ProductId ? evt.ProductId : candidateProductId,
-                        SimilarityScore = (double)closestDistance
-                    });
+                Guid pAId = candidateProductId < evt.ProductId ? candidateProductId : evt.ProductId;
+                Guid pBId = candidateProductId < evt.ProductId ? evt.ProductId : candidateProductId;
+
+                var areBothActive = await conn.QuerySingleOrDefaultAsync<bool?>(
+                    @"SELECT true FROM public.products pa 
+                      JOIN public.products pb ON pb.id = @ProductBId
+                      WHERE pa.id = @ProductAId 
+                        AND COALESCE(pa.is_deleted, false) = false 
+                        AND COALESCE(pa.is_archived, false) = false
+                        AND COALESCE(pb.is_deleted, false) = false 
+                        AND COALESCE(pb.is_archived, false) = false",
+                    new { ProductAId = pAId, ProductBId = pBId });
+
+                if (areBothActive == true)
+                {
+                    await conn.ExecuteAsync(@"
+                        INSERT INTO public.product_merge_candidates (product_a_id, product_b_id, similarity_score, status, detected_at)
+                        VALUES (@ProductAId, @ProductBId, @SimilarityScore, 'pending', NOW())
+                        ON CONFLICT (product_a_id, product_b_id) DO NOTHING",
+                        new
+                        {
+                            ProductAId = pAId,
+                            ProductBId = pBId,
+                            SimilarityScore = (double)closestDistance
+                        });
+                }
+                else
+                {
+                    _logger.LogInformation("Skipping category re-eval candidate between {ProductAId} and {ProductBId} because one or both products are deleted or archived.", pAId, pBId);
+                }
             }
         }
     }

@@ -456,12 +456,24 @@ export class ZoningService {
         // Insert new message groups that do not yet exist
         await client.query(`
             INSERT INTO wa.message_groups (
-                group_id, jid, status, process_as_product, media_count, text_count, description, last_message_at, created_at, updated_at
+                group_id, jid, status, review_stage, error_detail, process_as_product, media_count, text_count, description, last_message_at, created_at, updated_at
             )
             SELECT 
                 m.group_id,
                 $1::varchar as jid,
-                'staging' as status,
+                CASE 
+                    WHEN COUNT(*) FILTER (WHERE m.media_type IN ('image', 'video', 'photo', 'document')) > 30 THEN 'needs_review' 
+                    ELSE 'staging' 
+                END as status,
+                CASE 
+                    WHEN COUNT(*) FILTER (WHERE m.media_type IN ('image', 'video', 'photo', 'document')) > 30 THEN 'zoning' 
+                    ELSE NULL 
+                END as review_stage,
+                CASE 
+                    WHEN COUNT(*) FILTER (WHERE m.media_type IN ('image', 'video', 'photo', 'document')) > 30 
+                    THEN 'High media count (' || COUNT(*) FILTER (WHERE m.media_type IN ('image', 'video', 'photo', 'document')) || ' > 30). Human zoning review/split required.' 
+                    ELSE NULL 
+                END as error_detail,
                 (COUNT(*) FILTER (WHERE m.media_type IN ('image', 'video', 'photo', 'document')) > 0) as process_as_product,
                 COUNT(*) FILTER (WHERE m.media_type IN ('image', 'video', 'photo', 'document')) as media_count,
                 COUNT(*) FILTER (WHERE m.media_type IS NULL OR m.media_type = 'text') as text_count,
@@ -488,6 +500,19 @@ export class ZoningService {
                 text_count = stats.text_count,
                 description = stats.description,
                 last_message_at = stats.last_message_at,
+                status = CASE 
+                    WHEN stats.media_count > 30 AND mg.status IN ('staging', 'needs_review') THEN 'needs_review' 
+                    ELSE mg.status 
+                END,
+                review_stage = CASE 
+                    WHEN stats.media_count > 30 AND mg.status IN ('staging', 'needs_review') THEN 'zoning' 
+                    ELSE mg.review_stage 
+                END,
+                error_detail = CASE 
+                    WHEN stats.media_count > 30 AND mg.status IN ('staging', 'needs_review') 
+                    THEN 'High media count (' || stats.media_count || ' > 30). Human zoning review/split required.'
+                    ELSE mg.error_detail 
+                END,
                 updated_at = NOW()
             FROM (
                 SELECT 

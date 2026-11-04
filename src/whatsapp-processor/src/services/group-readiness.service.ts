@@ -197,7 +197,7 @@ export class GroupReadinessService {
 
             // 4. Query current group status or create if not exists
             const groupRes = await client.query(
-                `SELECT status, process_as_product, deeplens_product_id 
+                `SELECT status, process_as_product, deeplens_product_id, review_stage 
                  FROM wa.message_groups 
                  WHERE group_id = $1`,
                 [groupId]
@@ -247,24 +247,60 @@ export class GroupReadinessService {
                 });
             }
 
-            // 5. Hard Gate: If no vendor assigned, save error_detail and stop
-            if (!vendorId) {
-                const errMsg = 'Vendor not assigned to chat. Assign a vendor in settings to enable product creation.';
+            // Stage 1 Gating: zoning - High media count cap (> 30)
+            if (mediaCount > 30) {
+                logger.warn({ groupId, mediaCount }, 'High media count in group (> 30). Flagging for zoning review.');
+                const errorDetail = `High media count (${mediaCount} > 30). Human zoning review/split required.`;
                 await client.query(
                     `UPDATE wa.message_groups 
-                     SET error_detail = $1, updated_at = NOW() 
+                     SET status = 'needs_review', 
+                         review_stage = 'zoning', 
+                         error_detail = $1, 
+                         updated_at = NOW() 
+                     WHERE group_id = $2`,
+                    [errorDetail, groupId]
+                );
+                await this.logAudit(groupId, 'flagged_needs_review', 'system', { status: currentStatus }, { status: 'needs_review', review_stage: 'zoning', media_count: mediaCount });
+                if (this.io) {
+                    this.io.emit('group_updated', {
+                        groupId,
+                        status: 'needs_review',
+                        reviewStage: 'zoning',
+                        mediaCount,
+                        textCount
+                    });
+                }
+                return;
+            }
+
+            // Stage 3 Gating: qualification - If chat has no vendor assigned
+            if (!vendorId) {
+                const errMsg = 'Chat missing vendor assignment or description invalid.';
+                await client.query(
+                    `UPDATE wa.message_groups 
+                     SET status = 'needs_review', 
+                         review_stage = 'qualification', 
+                         error_detail = $1, 
+                         updated_at = NOW() 
                      WHERE group_id = $2`,
                     [errMsg, groupId]
                 );
+                await this.logAudit(groupId, 'flagged_needs_review', 'system', { status: currentStatus }, { status: 'needs_review', review_stage: 'qualification' });
                 return;
             } else {
-                // Clear vendor error if vendor is now assigned
+                // Clear vendor error if vendor is now assigned and was qualification error
                 await client.query(
                     `UPDATE wa.message_groups 
-                     SET error_detail = NULL, updated_at = NOW() 
-                     WHERE group_id = $1 AND error_detail LIKE 'Vendor not assigned%'`,
+                     SET error_detail = NULL, review_stage = NULL, status = CASE WHEN status = 'needs_review' AND review_stage = 'qualification' THEN 'staging' ELSE status END, updated_at = NOW() 
+                     WHERE group_id = $1 AND (error_detail LIKE 'Vendor not assigned%' OR (review_stage = 'qualification' AND error_detail = 'Chat missing vendor assignment or description invalid.'))`,
                     [groupId]
                 );
+            }
+
+            // If group is in needs_review, human review is required; do NOT auto-promote to product
+            if (currentStatus === 'needs_review') {
+                logger.debug({ groupId }, 'Group flagged as needs_review; skipping auto-promotion in checkAndEmitGroupEvent');
+                return;
             }
 
             // 6. Check Qualification & Emit Event
@@ -516,17 +552,16 @@ export class GroupReadinessService {
             if (!client) return;
 
             try {
-                // Find all groups in 'staging' or 'media_missing' where the last message was updated/received more than debounceSeconds ago
-                // and the group has vendor_id assigned in wa.chats (ignore sticker groups).
+                // Find all groups in 'staging' where the last message was updated/received more than debounceSeconds ago
+                // (ignore sticker groups and tombstoned groups).
                 const res = await client.query(
                     `SELECT mg.group_id, mg.jid, mg.process_as_product, c.vendor_id, c.auto_process_products, mg.status as current_status
                      FROM wa.message_groups mg
-                     JOIN wa.chats c ON mg.jid = c.jid
+                     LEFT JOIN wa.chats c ON mg.jid = c.jid
                      WHERE mg.status IN ('staging')
                        AND mg.group_id LIKE 'product_%'
                        AND NOT (mg.group_id LIKE 'sticker_%')
                        AND mg.updated_at < NOW() - CAST($1 || ' seconds' AS INTERVAL)
-                       AND c.vendor_id IS NOT NULL
                        AND NOT EXISTS (SELECT 1 FROM wa.product_tombstones pt WHERE pt.source_group_id = mg.group_id)`,
                     [debounceSeconds]
                 );
@@ -538,7 +573,7 @@ export class GroupReadinessService {
 
                     // Fetch messages for this group to check eligibility and media readiness
                     const msgRes = await client.query(
-                        `SELECT message_id, content, media_type, media_url, media_mime_type, timestamp, processing_status 
+                        `SELECT message_id, content, media_type, media_url, media_mime_type, timestamp, processing_status, processing_last_attempt 
                          FROM wa.messages 
                          WHERE group_id = $1 AND is_deleted = false 
                          ORDER BY timestamp ASC`,
@@ -552,8 +587,13 @@ export class GroupReadinessService {
                     let textCount = 0;
                     let hasUndownloadedMedia = false;
                     let hasActiveDownloads = false;
+                    let hasStalledMedia = false;
+                    let hasFailedDownloads = false;
                     const descriptionParts: string[] = [];
                     const mediaFiles: any[] = [];
+
+                    const now = Date.now();
+                    const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
 
                     for (const msg of messages) {
                         const isMedia = msg.media_type && ['image', 'video', 'photo'].includes(msg.media_type);
@@ -578,8 +618,20 @@ export class GroupReadinessService {
                                 });
                             } else {
                                 hasUndownloadedMedia = true;
-                                if (['queued', 'processing'].includes(msg.processing_status)) {
-                                    hasActiveDownloads = true;
+                                const msgTimeMs = Number(msg.timestamp) * 1000;
+                                const isStalled = (now - msgTimeMs > FIFTEEN_MINUTES_MS) ||
+                                    (msg.processing_last_attempt && (now - new Date(msg.processing_last_attempt).getTime() > FIFTEEN_MINUTES_MS));
+
+                                if (msg.processing_status === 'failed') {
+                                    hasFailedDownloads = true;
+                                } else if (['queued', 'processing', 'pending'].includes(msg.processing_status)) {
+                                    if (isStalled) {
+                                        hasStalledMedia = true;
+                                    } else {
+                                        hasActiveDownloads = true;
+                                    }
+                                } else if (isStalled) {
+                                    hasStalledMedia = true;
                                 }
                             }
                         }
@@ -601,9 +653,94 @@ export class GroupReadinessService {
                     const description = rawDescription
                         .replace(/\[image\]|\[photo\]|\[video\]|\[sticker\]|\[audio\]|\[document\]/gi, '')
                         .trim();
-                    // Qualifies if mediaCount >= 2 and description is valid.
-                    // If active downloads are in progress, wait for them. But do NOT block on stale/failed undownloaded media.
-                    const qualifies = mediaCount >= 2 && isValidDescription(description) && !hasActiveDownloads;
+
+                    // --- GATING STAGES ---
+
+                    // Stage 1: zoning Gating - High media count cap (> 30)
+                    if (mediaCount > 30) {
+                        logger.warn({ groupId: group_id, mediaCount }, 'High media count in staging group (> 30). Flagging for zoning review.');
+                        const errorDetail = `High media count (${mediaCount} > 30). Human zoning review/split required.`;
+                        await client.query(
+                            `UPDATE wa.message_groups 
+                             SET status = 'needs_review', 
+                                 review_stage = 'zoning', 
+                                 error_detail = $1, 
+                                 updated_at = NOW() 
+                             WHERE group_id = $2`,
+                            [errorDetail, group_id]
+                        );
+                        await this.logAudit(group_id, 'flagged_needs_review', 'system_poller', { status: row.current_status }, { status: 'needs_review', review_stage: 'zoning', media_count: mediaCount });
+                        if (this.io) {
+                            this.io.emit('group_updated', {
+                                groupId: group_id,
+                                status: 'needs_review',
+                                reviewStage: 'zoning',
+                                mediaCount,
+                                textCount
+                            });
+                        }
+                        continue; // Do not emit to Kafka
+                    }
+
+                    // Stage 2: media_sync Gating - undownloaded media stalled > 15m or mediaCount < 2 with failed downloads
+                    if (hasStalledMedia || (mediaCount < 2 && hasFailedDownloads)) {
+                        logger.warn({ groupId: group_id, mediaCount, hasStalledMedia, hasFailedDownloads }, 'Media sync failure in staging group. Flagging for media_sync review.');
+                        const errorDetail = `Insufficient media (${mediaCount} < 2) or media download stalled.`;
+                        await client.query(
+                            `UPDATE wa.message_groups 
+                             SET status = 'needs_review', 
+                                 review_stage = 'media_sync', 
+                                 error_detail = $1, 
+                                 updated_at = NOW() 
+                             WHERE group_id = $2`,
+                            [errorDetail, group_id]
+                        );
+                        await this.logAudit(group_id, 'flagged_needs_review', 'system_poller', { status: row.current_status }, { status: 'needs_review', review_stage: 'media_sync', media_count: mediaCount });
+                        if (this.io) {
+                            this.io.emit('group_updated', {
+                                groupId: group_id,
+                                status: 'needs_review',
+                                reviewStage: 'media_sync',
+                                mediaCount,
+                                textCount
+                            });
+                        }
+                        continue; // Do not emit to Kafka
+                    }
+
+                    // If active downloads are in progress (< 15m), wait for them
+                    if (hasActiveDownloads) {
+                        continue;
+                    }
+
+                    // Stage 3: qualification Gating - missing vendor assignment or description invalid/missing
+                    if (!vendor_id || !isValidDescription(description)) {
+                        logger.warn({ groupId: group_id, hasVendor: Boolean(vendor_id), hasValidDesc: isValidDescription(description) }, 'Qualification check failed for staging group. Flagging for qualification review.');
+                        const errorDetail = 'Chat missing vendor assignment or description invalid.';
+                        await client.query(
+                            `UPDATE wa.message_groups 
+                             SET status = 'needs_review', 
+                                 review_stage = 'qualification', 
+                                 error_detail = $1, 
+                                 updated_at = NOW() 
+                             WHERE group_id = $2`,
+                            [errorDetail, group_id]
+                        );
+                        await this.logAudit(group_id, 'flagged_needs_review', 'system_poller', { status: row.current_status }, { status: 'needs_review', review_stage: 'qualification' });
+                        if (this.io) {
+                            this.io.emit('group_updated', {
+                                groupId: group_id,
+                                status: 'needs_review',
+                                reviewStage: 'qualification',
+                                mediaCount,
+                                textCount
+                            });
+                        }
+                        continue; // Do not emit to Kafka
+                    }
+
+                    // Qualifies if mediaCount >= 2 and all gating checks passed
+                    const qualifies = mediaCount >= 2 && isValidDescription(description) && !hasActiveDownloads && !hasUndownloadedMedia;
 
                     if (qualifies) {
                         logger.info({ groupId: group_id, mediaCount, previousStatus: row.current_status, descriptionWords: description.split(/\s+/).length }, 'Staged/media_missing group qualifies, promoting to product...');
@@ -617,7 +754,7 @@ export class GroupReadinessService {
                         // Update status to prevent double-processing
                         await client.query(
                             `UPDATE wa.message_groups 
-                             SET status = 'product_create_sent', error_detail = NULL, updated_at = NOW() 
+                             SET status = 'product_create_sent', error_detail = NULL, review_stage = NULL, updated_at = NOW() 
                              WHERE group_id = $1`,
                             [group_id]
                         );
@@ -729,12 +866,12 @@ export class GroupReadinessService {
                 `SELECT mg.group_id 
                  FROM wa.message_groups mg
                  JOIN wa.chats c ON mg.jid = c.jid
-                 WHERE mg.status = 'error' 
-                   AND mg.error_detail LIKE 'Vendor not assigned%'
+                 WHERE ((mg.status = 'error' AND mg.error_detail LIKE 'Vendor not assigned%')
+                        OR (mg.status = 'needs_review' AND mg.review_stage = 'qualification' AND (mg.error_detail LIKE 'Vendor not assigned%' OR mg.error_detail = 'Chat missing vendor assignment or description invalid.')))
                    AND c.vendor_id IS NOT NULL`
             );
             for (const row of vendorErrRes.rows) {
-                await client.query(`UPDATE wa.message_groups SET status = 'staging', error_detail = NULL, retry_count = 0, updated_at = NOW() WHERE group_id = $1`, [row.group_id]);
+                await client.query(`UPDATE wa.message_groups SET status = 'staging', review_stage = NULL, error_detail = NULL, retry_count = 0, updated_at = NOW() WHERE group_id = $1`, [row.group_id]);
                 await this.checkAndEmitGroupEvent(row.group_id);
                 recoveredVendorErrors++;
             }

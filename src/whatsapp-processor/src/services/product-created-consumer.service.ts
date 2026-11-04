@@ -9,6 +9,9 @@ export class ProductCreatedConsumerService {
     private kafka: Kafka;
     private consumer: Consumer;
     private isConnected = false;
+    private isConnecting = false;
+    private isStopping = false;
+    private reconnectTimeout: NodeJS.Timeout | null = null;
     private io: SocketServer | null = null;
 
     constructor() {
@@ -31,40 +34,103 @@ export class ProductCreatedConsumerService {
         });
     }
 
+    public isHealthy(): boolean {
+        return this.isConnected;
+    }
+
     /**
      * Start the Kafka consumer
      */
     public async start(io: SocketServer): Promise<void> {
         this.io = io;
-        try {
-            logger.info('Connecting Kafka consumer for ProductCreatedConsumerService...');
-            await this.consumer.connect();
-            this.isConnected = true;
-            logger.info('Kafka consumer for ProductCreatedConsumerService connected');
+        this.isStopping = false;
+        this.connectWithRetry().catch(err => {
+            logger.error({ err: err.message }, 'Unhandled error in ProductCreatedConsumerService connectWithRetry');
+        });
+    }
 
-            logger.info({ topic: KAFKA_CONFIG.groupProductCreatedTopic }, 'Subscribing to product created topic');
-            await this.consumer.subscribe({ 
-                topic: KAFKA_CONFIG.groupProductCreatedTopic, 
-                fromBeginning: false 
-            });
+    private async connectWithRetry(): Promise<void> {
+        if (this.isConnected || this.isConnecting || this.isStopping) return;
+        this.isConnecting = true;
 
-            await this.consumer.run({
-                eachMessage: async ({ topic, partition, message }) => {
-                    const value = message.value?.toString();
-                    if (!value) return;
+        let delayMs = 2000;
+        const maxDelayMs = 15000;
+        let attempt = 0;
 
-                    try {
-                        const payload = JSON.parse(value) as WhatsAppGroupProductCreatedEvent;
-                        await this.handleProductCreated(payload);
-                    } catch (err: any) {
-                        logger.error({ err: err.message }, 'Error handling product created message');
+        while (!this.isConnected && !this.isStopping) {
+            attempt++;
+            try {
+                logger.info({ brokers: KAFKA_CONFIG.brokers, attempt }, 'Connecting Kafka consumer for ProductCreatedConsumerService...');
+                await this.consumer.connect();
+
+                logger.info({ topic: KAFKA_CONFIG.groupProductCreatedTopic }, 'Subscribing to product created topic');
+                await this.consumer.subscribe({ 
+                    topic: KAFKA_CONFIG.groupProductCreatedTopic, 
+                    fromBeginning: false 
+                });
+
+                this.setupEventListeners();
+
+                await this.consumer.run({
+                    eachMessage: async ({ topic, partition, message }) => {
+                        const value = message.value?.toString();
+                        if (!value) return;
+
+                        try {
+                            const payload = JSON.parse(value) as WhatsAppGroupProductCreatedEvent;
+                            await this.handleProductCreated(payload);
+                        } catch (err: any) {
+                            logger.error({ err: err.message }, 'Error handling product created message');
+                        }
                     }
-                }
-            });
+                });
 
-            logger.info('ProductCreatedConsumerService started successfully');
-        } catch (err: any) {
-            logger.error({ err: err.message }, 'Failed to start ProductCreatedConsumerService');
+                this.isConnected = true;
+                this.isConnecting = false;
+                logger.info('ProductCreatedConsumerService started successfully');
+                return;
+            } catch (err: any) {
+                logger.warn(
+                    { err: err.message, attempt, nextRetryMs: delayMs },
+                    'Failed to start ProductCreatedConsumerService. Retrying in background...'
+                );
+
+                try {
+                    await new Promise(resolve => setTimeout(resolve, delayMs));
+                } catch {
+                    break;
+                }
+
+                delayMs = Math.min(Math.round(delayMs * 1.5), maxDelayMs);
+            }
+        }
+
+        this.isConnecting = false;
+    }
+
+    private setupEventListeners() {
+        this.consumer.on(this.consumer.events.CRASH, (e: any) => {
+            logger.error({ err: e.payload?.error?.message }, 'ProductCreatedConsumer crashed, scheduling reconnect');
+            this.handleDisconnect();
+        });
+
+        this.consumer.on(this.consumer.events.DISCONNECT, () => {
+            logger.warn('ProductCreatedConsumer disconnected');
+            this.handleDisconnect();
+        });
+    }
+
+    private handleDisconnect() {
+        if (this.isStopping) return;
+        this.isConnected = false;
+
+        if (!this.reconnectTimeout && !this.isConnecting) {
+            this.reconnectTimeout = setTimeout(() => {
+                this.reconnectTimeout = null;
+                this.connectWithRetry().catch(err => {
+                    logger.error({ err: err.message }, 'Error during ProductCreatedConsumer reconnection');
+                });
+            }, 3000);
         }
     }
 
@@ -95,13 +161,14 @@ export class ProductCreatedConsumerService {
             const prevStatus = prevGroupRes.rows[0]?.status || 'unknown';
 
             // Update group status in PostgreSQL DB wa.message_groups
+            // CRITICAL: Preserve status = 'needs_review' so async writeback never wipes out human review flags!
             const updateRes = await client.query(
                 `UPDATE wa.message_groups 
                  SET deeplens_product_id = $1,
                      deeplens_listing_id = $2,
                      category = $3,
                      sub_category = $4,
-                     status = 'product_created',
+                     status = CASE WHEN status = 'needs_review' THEN 'needs_review' ELSE 'product_created' END,
                      retry_count = 0,
                      product_created_at = NOW(),
                      updated_at = NOW()
@@ -119,6 +186,8 @@ export class ProductCreatedConsumerService {
                 );
             }
 
+            const newStatus = prevStatus === 'needs_review' ? 'needs_review' : 'product_created';
+
             // Log to wa.group_audit_log
             await client.query(
                 `INSERT INTO wa.group_audit_log (group_id, event, actor, old_value, new_value, occurred_at)
@@ -127,7 +196,7 @@ export class ProductCreatedConsumerService {
                     groupId,
                     JSON.stringify({ status: prevStatus }),
                     JSON.stringify({
-                        status: 'product_created',
+                        status: newStatus,
                         productId,
                         listingId,
                         category,
@@ -136,12 +205,13 @@ export class ProductCreatedConsumerService {
                 ]
             );
 
-            logger.info({ groupId, rowCount: updateRes.rowCount }, 'Updated message group status to product_created');
+            logger.info({ groupId, status: newStatus, rowCount: updateRes.rowCount }, 'Updated message group write-back details');
 
             // Emit Socket.IO event for real-time dashboard updates
             if (this.io) {
                 this.io.emit('group_product_created', {
                     groupId,
+                    status: newStatus,
                     productId,
                     listingId,
                     category,
@@ -158,10 +228,17 @@ export class ProductCreatedConsumerService {
      * Disconnect the Kafka consumer
      */
     public async shutdown(): Promise<void> {
-        if (this.isConnected) {
+        this.isStopping = true;
+        this.isConnected = false;
+        if (this.reconnectTimeout) {
+            clearTimeout(this.reconnectTimeout);
+            this.reconnectTimeout = null;
+        }
+        try {
             await this.consumer.disconnect();
-            this.isConnected = false;
             logger.info('Kafka consumer for ProductCreatedConsumerService disconnected');
+        } catch (err: any) {
+            logger.warn({ err: err.message }, 'Error disconnecting Kafka consumer during shutdown');
         }
     }
 }
