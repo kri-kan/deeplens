@@ -36,6 +36,8 @@ public class FixDbController : ControllerBase
             
             await conn.ExecuteAsync("ALTER TABLE vendor_listings ADD COLUMN IF NOT EXISTS is_plus_shipping BOOLEAN DEFAULT true");
             await conn.ExecuteAsync("ALTER TABLE wa.message_groups ADD COLUMN IF NOT EXISTS is_plus_shipping BOOLEAN DEFAULT true");
+            await conn.ExecuteAsync("ALTER TABLE wa.message_groups ADD COLUMN IF NOT EXISTS review_stage VARCHAR(50)");
+            await conn.ExecuteAsync("CREATE INDEX IF NOT EXISTS idx_mg_review_stage_status ON wa.message_groups (review_stage, status)");
             
             // Migrate images to media
             await conn.ExecuteAsync(@"
