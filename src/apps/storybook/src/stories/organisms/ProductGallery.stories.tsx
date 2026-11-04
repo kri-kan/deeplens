@@ -32,23 +32,14 @@ const meta: Meta<any> = {
 };
 export default meta;
 
-export const MobileWithColorSelection: any = (args: any) => {
+export const InteractiveProductGallery: any = (args: any) => {
   const [color, setColor] = useState('ivory');
   return (
     <YStack gap={12} padding={16} width="100%">
-      <YStack gap={8} marginBottom={12}>
-        <Text fontSize={13} fontWeight="800" color="#333">
-          📱 Mobile PDP Carousel with Color Selection Below
-        </Text>
-        <Text fontSize={11} color="#666">
-          👉 Circular swipe on the carousel updates the active dot, badge, and selected swatch below.
-        </Text>
-      </YStack>
       <ProductGallery
         swatches={SWATCHES}
         selectedColor={color}
         onSelectColor={setColor}
-        isMobile={true}
       >
         <YStack
           backgroundColor="#ffffff"
@@ -67,62 +58,4 @@ export const MobileWithColorSelection: any = (args: any) => {
     </YStack>
   );
 };
-MobileWithColorSelection.parameters = {
-  formFactorShell: { defaultFactor: 'mobile' },
-};
-
-export const TabletCarouselWithColorSelection: any = (args: any) => {
-  const [color, setColor] = useState('ivory');
-  return (
-    <YStack gap={12} padding={20} width="100%">
-      <YStack gap={8} marginBottom={12}>
-        <Text fontSize={14} fontWeight="800" color="#333">
-          📱 Tablet PDP Carousel with Color Selection Below
-        </Text>
-        <Text fontSize={12} color="#666">
-          👉 Full-width 460px carousel with circular gestures and swatch row directly beneath.
-        </Text>
-      </YStack>
-      <ProductGallery
-        swatches={SWATCHES}
-        selectedColor={color}
-        onSelectColor={setColor}
-        isMobile={false}
-      >
-        <YStack
-          backgroundColor="#ffffff"
-          borderWidth={1}
-          borderColor="#e2e0dc"
-          borderRadius={16}
-          padding={16}
-        >
-          <ColourSelector
-            options={COLOUR_OPTIONS}
-            selected={color}
-            onSelect={setColor}
-          />
-        </YStack>
-      </ProductGallery>
-    </YStack>
-  );
-};
-TabletCarouselWithColorSelection.parameters = {
-  formFactorShell: { defaultFactor: 'tablet' },
-};
-
-export const DesktopInteractive: any = (args: any) => {
-  const [color, setColor] = useState('ivory');
-  return (
-    <YStack padding={16} width="100%">
-      <ProductGallery
-        swatches={SWATCHES}
-        selectedColor={color}
-        onSelectColor={setColor}
-        isMobile={false}
-      />
-    </YStack>
-  );
-};
-DesktopInteractive.parameters = {
-  formFactorShell: { defaultFactor: 'desktop' },
-};
+InteractiveProductGallery.storyName = '1. Interactive Product Gallery (Responsive)';

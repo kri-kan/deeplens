@@ -1,7 +1,6 @@
 import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-native';
 import { BetaCartPage, INITIAL_BETA_CART_ITEMS } from '../../../components/pages/BetaCart';
-import { FormFactorPreview, withFormFactor } from '../../utils/FormFactorPreview';
 import { THEME_ARG_TYPES, THEME_ARGS } from '../../../utils/storyTheme';
 
 const meta: Meta<any> = {
@@ -33,12 +32,13 @@ export default meta;
 type Story = StoryObj<typeof BetaCartPage>;
 
 /**
- * 1. Default Beta Cart (Desktop 1100px):
+ * 1. Default Beta Cart (Responsive):
  * Anonymous device-synced cart (30d TTL), NO coupons, NO donations, 1-click WhatsApp order handoff.
+ * Adapts across Mobile (390px), Tablet (768px), and Desktop (1280px) in FormFactorShell.
  */
 export const DefaultBetaCart: Story = {
-  name: '1. Device-Synced Beta Bag (WhatsApp Order CTA & Share Token)',
-  decorators: [withFormFactor('desktop', 'Beta Shopping Bag (1100px Desktop)')],
+  name: '1. Device-Synced Beta Bag (Responsive)',
+  render: (args) => <BetaCartPage {...args} />,
 };
 
 /**
@@ -52,26 +52,17 @@ export const SharedCartSalesView: Story = {
     isSharedView: true,
     shareToken: 'crt_9x8k2m',
   },
-  decorators: [withFormFactor('desktop', 'Shared Cart Link (Sales View)')],
+  render: (args) => <BetaCartPage {...args} />,
 };
 
 /**
- * 3. Mobile PWA Bag (390px):
- * Mobile PWA shopping bag with sticky bottom WhatsApp order button.
- */
-export const MobileBetaCartView: Story = {
-  name: '3. Mobile PWA Beta Bag (390px Viewport)',
-  decorators: [withFormFactor('mobile', 'Beta Shopping Bag (390px Mobile)')],
-};
-
-/**
- * 4. Empty Bag State:
+ * 3. Empty Bag State:
  * Displays zero-item state with CTA to explore ethnic handloom catalog.
  */
 export const EmptyBetaBagView: Story = {
-  name: '4. Empty Beta Bag',
+  name: '3. Empty Beta Bag',
   args: {
     initialItems: [],
   },
-  decorators: [withFormFactor('desktop', 'Empty Shopping Bag')],
+  render: (args) => <BetaCartPage {...args} />,
 };

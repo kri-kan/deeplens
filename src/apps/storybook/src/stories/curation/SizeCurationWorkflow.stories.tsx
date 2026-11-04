@@ -1369,42 +1369,10 @@ export function SizeSettingWorkflowComponent({
  * Master adaptive workspace with in-story form factor switcher (Mobile 390px, Tablet 768px, Desktop 1100px).
  */
 export const InteractiveCurationWorkflow: StoryObj<any> = {
+  name: '1. Interactive Curation Workflow (Adaptive Workspace)',
   render: () => <SizeSettingWorkflowComponent />,
 };
 
-/**
- * 2. Mobile Curation Viewport (390px iPhone Size)
- * Demonstrates the dedicated mobile presentation with the top tab switcher,
- * full-width sub-variant cards, and sticky bottom preview action bar.
- */
-export const MobileCurationView_390px: StoryObj<any> = {
-  parameters: {
-    formFactorShell: { defaultFactor: 'mobile' },
-  },
-  render: () => <SizeSettingWorkflowComponent overrideFactor="mobile" />,
-};
-
-/**
- * 3. Tablet Curation Viewport (768px iPad Size)
- * Demonstrates balanced 2-column workspace layout for tablet screens.
- */
-export const TabletCurationView_768px: StoryObj<any> = {
-  parameters: {
-    formFactorShell: { defaultFactor: 'tablet' },
-  },
-  render: () => <SizeSettingWorkflowComponent overrideFactor="tablet" />,
-};
-
-/**
- * 4. Desktop Curation Workspace (1100px Full Side-by-Side Dual Container)
- * Demonstrates the full workstation layout with phone device mockup frame.
- */
-export const DesktopCurationWorkspace_1100px: StoryObj<any> = {
-  parameters: {
-    formFactorShell: { defaultFactor: 'desktop' },
-  },
-  render: () => <SizeSettingWorkflowComponent overrideFactor="desktop" />,
-};
 
 const styles = StyleSheet.create({
   containerShadow: {
