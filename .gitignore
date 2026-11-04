@@ -31,7 +31,9 @@ TestResults/
 # NuGet packages
 *.nupkg
 *.snupkg
-packages/
+packages/*
+!packages/brand-assets/
+!packages/ui
 .nuget/
 
 # =============================================================================
