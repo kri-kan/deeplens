@@ -112,7 +112,7 @@
 - Modify: `src/whatsapp-processor/src/routes/group-review.routes.ts`
 - Modify: `src/vayyari/services/wa-processor.service.ts`
 
-- [ ] **Step 1: Update `/admin/pipeline-events` & `/admin/pipeline-failures` queries**
+- [x] **Step 1: Update `/admin/pipeline-events` & `/admin/pipeline-failures` queries**
   Update SQL queries to include `status = 'needs_review'`.
   Support `stage` filter parameter (`all`, `zoning`, `media_sync`, `qualification`, `catalog_ingestion`, `enrichment`).
   Return breakdown of review counts per stage:
@@ -126,11 +126,11 @@
     enrichment: number;
   }
   ```
-- [ ] **Step 2: Add Resolution Endpoints in `group-review.routes.ts`**
+- [x] **Step 2: Add Resolution Endpoints in `group-review.routes.ts`**
   - `POST /api/group-review/:groupId/dismiss`: Marks group as reviewed/resolved (`status = 'archived'`).
   - `POST /api/group-review/:groupId/ignore`: Existing endpoint for dismissing non-products.
   - `POST /api/group-review/:groupId/force-publish`: Existing endpoint for admin override approval.
-- [ ] **Step 3: Update `wa-processor.service.ts` in Vayyari**
+- [x] **Step 3: Update `wa-processor.service.ts` in Vayyari**
   Add TypeScript types and API methods:
   - `fetchReviewInbox(stage?: string, limit?: number, offset?: number)`
   - `dismissGroupReview(groupId: string)`
