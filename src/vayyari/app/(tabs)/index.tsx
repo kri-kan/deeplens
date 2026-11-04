@@ -32,10 +32,12 @@ import {
   LuFlaskConical,
   LuMegaphone,
   LuShield,
+  LuShieldCheck,
   LuStore,
   LuSparkles,
   LuPackage,
   LuActivity,
+  LuTriangleAlert,
 } from '@/components/tamagui-ui/icons/lu';
 import {
   RiWhatsappLine,
@@ -117,11 +119,12 @@ const STORE_UTILITIES: RawUtilityItem[] = [
     permission: PERMISSIONS.CATALOG_CREATE,
   },
   {
-    id: 'store-devices',
-    title: 'Fleet & Devices',
-    icon: <LuMonitor size={36} color="#06B6D4" />,
-    route: '/store/devices',
+    id: 'store-administration',
+    title: 'Administration',
+    icon: <LuShieldCheck size={36} color="#06B6D4" />,
+    route: '/store/administration',
     color: '#06B6D4',
+    description: 'Fleet, hardware devices & store telemetry',
     permission: PERMISSIONS.CATALOG_VIEW,
   },
 ];
@@ -181,6 +184,15 @@ const SYSTEM_UTILITIES: RawUtilityItem[] = [
     icon: <RiWhatsappLine size={36} color="#25D366" />,
     route: '/utilities/whatsapp',
     color: '#25D366',
+    permission: PERMISSIONS.WHATSAPP_VIEW,
+  },
+  {
+    id: 'whatsapp-review-inbox',
+    title: 'Review Inbox',
+    icon: <LuTriangleAlert size={36} color="#D97706" />,
+    route: '/utilities/whatsapp/review-inbox',
+    color: '#D97706',
+    description: 'Multi-stage WhatsApp product triage & review',
     permission: PERMISSIONS.WHATSAPP_VIEW,
   },
   {

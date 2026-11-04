@@ -16,6 +16,7 @@ export default function WhatsAppAdminScreen() {
   const router = useRouter();
 
   const menuItems = [
+    { title: 'Review Inbox', subtitle: 'Multi-stage product triage & review', icon: 'alert-decagram-outline', route: '/utilities/whatsapp/review-inbox' },
     { title: 'Session Status', subtitle: 'Connection & QR Pairing', icon: 'qrcode-scan', route: '/utilities/whatsapp/session' },
     { title: 'Accounts Registry', subtitle: 'Manage multiple WhatsApp sessions', icon: 'card-account-details-outline', route: '/utilities/whatsapp-accounts' },
     { title: 'Chats Admin', subtitle: 'Manage individual chat tracking', icon: 'chat-processing-outline', route: '/utilities/whatsapp/chats' },
