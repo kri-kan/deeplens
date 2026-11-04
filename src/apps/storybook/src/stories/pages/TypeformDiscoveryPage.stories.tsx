@@ -21,11 +21,16 @@ const meta: Meta<TypeformSingleScreenContainerProps> = {
     columns: 'auto',
     brandName: 'Vayyari',
     optionalHeading: 'VIP Taste Discovery',
-    showCoverPage: true,
+    showCoverPage: false,
+    initialStepIndex: 0,
     initialLanguage: 'en',
   },
   argTypes: {
     ...THEME_ARG_TYPES,
+    initialStepIndex: {
+      control: 'number',
+      description: 'Initial step index (-1 for cover briefing page, 0 for question 1)',
+    },
     initialLanguage: {
       control: 'select',
       options: ['te', 'hi', 'en', 'ta', 'ml', 'kn'],
@@ -91,8 +96,8 @@ export const SurveyCoverScreenPreview: Story = {
     return (
       <TypeformSingleScreenContainer
         themeId={args.themeId || 'ivory-editorial'}
-        brandName="Vayyari"
-        optionalHeading="VIP Taste Discovery"
+        brandName={args.brandName || 'Vayyari'}
+        optionalHeading={args.optionalHeading || 'VIP Taste Discovery'}
         hasRewards={args.hasRewards ?? true}
         showCoverPage={true}
         initialStepIndex={-1}
@@ -112,8 +117,8 @@ export const SingleScreenFlowWithRewards: Story = {
     return (
       <TypeformSingleScreenContainer
         themeId={args.themeId || 'ivory-editorial'}
-        brandName="Vayyari"
-        optionalHeading="VIP Taste Discovery"
+        brandName={args.brandName || 'Vayyari'}
+        optionalHeading={args.optionalHeading || 'VIP Taste Discovery'}
         hasRewards={args.hasRewards ?? true}
         stepRewardMudras={args.stepRewardMudras ?? 175}
         baseWalletBalance={args.baseWalletBalance ?? 1250}
@@ -121,6 +126,7 @@ export const SingleScreenFlowWithRewards: Story = {
         progressType={args.progressType || 'dots'}
         columns={args.columns || 'auto'}
         showCoverPage={args.showCoverPage}
+        initialStepIndex={args.initialStepIndex}
       />
     );
   },
@@ -136,11 +142,13 @@ export const FashionPortrait34: Story = {
     return (
       <TypeformSingleScreenContainer
         themeId={args.themeId || 'ivory-editorial'}
-        brandName="Vayyari"
-        optionalHeading="VIP Taste Discovery"
+        brandName={args.brandName || 'Vayyari'}
+        optionalHeading={args.optionalHeading || 'VIP Taste Discovery'}
         hasRewards={args.hasRewards ?? true}
         tileAspectRatio="3:4"
         progressType={args.progressType || 'dots'}
+        showCoverPage={args.showCoverPage}
+        initialStepIndex={args.initialStepIndex}
       />
     );
   },
@@ -156,11 +164,13 @@ export const CompactLandscape43: Story = {
     return (
       <TypeformSingleScreenContainer
         themeId={args.themeId || 'ivory-editorial'}
-        brandName="Vayyari"
-        optionalHeading="VIP Taste Discovery"
+        brandName={args.brandName || 'Vayyari'}
+        optionalHeading={args.optionalHeading || 'VIP Taste Discovery'}
         hasRewards={args.hasRewards ?? true}
         tileAspectRatio="4:3"
         progressType={args.progressType || 'dots'}
+        showCoverPage={args.showCoverPage}
+        initialStepIndex={args.initialStepIndex}
       />
     );
   },
@@ -177,11 +187,13 @@ export const VerticalStory916: Story = {
     return (
       <TypeformSingleScreenContainer
         themeId={args.themeId || 'ivory-editorial'}
-        brandName="Vayyari"
-        optionalHeading="VIP Taste Discovery"
+        brandName={args.brandName || 'Vayyari'}
+        optionalHeading={args.optionalHeading || 'VIP Taste Discovery'}
         hasRewards={args.hasRewards ?? true}
         tileAspectRatio="9:16"
         progressType={args.progressType || 'dots'}
+        showCoverPage={args.showCoverPage}
+        initialStepIndex={args.initialStepIndex}
       />
     );
   },
@@ -193,15 +205,21 @@ export const VerticalStory916: Story = {
  */
 export const StandardSurveyNoRewards: Story = {
   name: '5. Standard Survey (No Mudras Rewards)',
+  args: {
+    optionalHeading: 'General Feedback',
+    hasRewards: false,
+  },
   render: (args) => {
     return (
       <TypeformSingleScreenContainer
         themeId={args.themeId || 'ivory-editorial'}
-        brandName="Vayyari"
-        optionalHeading="General Feedback"
+        brandName={args.brandName || 'Vayyari'}
+        optionalHeading={args.optionalHeading || 'VIP Taste Discovery'}
         hasRewards={false}
         tileAspectRatio={args.tileAspectRatio || '1:1'}
         progressType={args.progressType || 'dots'}
+        showCoverPage={args.showCoverPage}
+        initialStepIndex={args.initialStepIndex}
       />
     );
   },
@@ -217,11 +235,13 @@ export const VayyariDarkSingleScreen: Story = {
     return (
       <TypeformSingleScreenContainer
         themeId="vayyari-dark"
-        brandName="Vayyari"
-        optionalHeading="VIP Taste Discovery"
+        brandName={args.brandName || 'Vayyari'}
+        optionalHeading={args.optionalHeading || 'VIP Taste Discovery'}
         hasRewards={args.hasRewards ?? true}
         tileAspectRatio="3:4"
         progressType={args.progressType || 'dots'}
+        showCoverPage={args.showCoverPage}
+        initialStepIndex={args.initialStepIndex}
       />
     );
   },
@@ -258,6 +278,8 @@ export const PrePublishThemeSwitcher: Story = {
         tileAspectRatio={args.tileAspectRatio || '1:1'}
         progressType={args.progressType || 'dots'}
         columns={args.columns || 'auto'}
+        showCoverPage={args.showCoverPage}
+        initialStepIndex={args.initialStepIndex}
       />
     );
   },
@@ -287,6 +309,8 @@ export const TopProgressPercentageBar: Story = {
         hasRewards={args.hasRewards ?? true}
         tileAspectRatio={args.tileAspectRatio || '1:1'}
         progressType="percentage"
+        showCoverPage={args.showCoverPage}
+        initialStepIndex={args.initialStepIndex}
       />
     );
   },
@@ -316,6 +340,8 @@ export const TopProgressStepTracker: Story = {
         hasRewards={args.hasRewards ?? true}
         tileAspectRatio={args.tileAspectRatio || '1:1'}
         progressType="step"
+        showCoverPage={args.showCoverPage}
+        initialStepIndex={args.initialStepIndex}
       />
     );
   },
