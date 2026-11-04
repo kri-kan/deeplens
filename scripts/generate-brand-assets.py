@@ -113,7 +113,7 @@ def create_centered_asset(emblem, target_size, scale_ratio=0.85):
 
     offset_x = (w - new_w) // 2
     offset_y = (h - new_h) // 2
-    canvas.paste(resized, (offset_x, offset_y), resized)
+    canvas.alpha_composite(resized, (offset_x, offset_y))
     return canvas
 
 
@@ -141,7 +141,7 @@ def create_monochrome_asset(emblem, target_size, scale_ratio=0.62):
     canvas = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     offset_x = (w - new_w) // 2
     offset_y = (h - new_h) // 2
-    canvas.paste(white_emblem, (offset_x, offset_y), white_emblem)
+    canvas.alpha_composite(white_emblem, (offset_x, offset_y))
     return canvas
 
 

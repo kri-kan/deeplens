@@ -59,6 +59,15 @@ def test_generated_assets(base_dir):
         f"android-icon-foreground emblem max dimension {max_dim} exceeds safe zone limit {safe_zone_limit}"
     )
 
+    # Verify android-icon-monochrome.png has pure white (255, 255, 255) RGB for all visible pixels
+    mono_path = os.path.join(base_dir, "android-icon-monochrome.png")
+    mono_im = Image.open(mono_path)
+    for r, g, b, a in mono_im.getdata():
+        if a > 0:
+            assert (r, g, b) == (255, 255, 255), (
+                f"android-icon-monochrome.png contains contaminated RGB {(r, g, b)} != (255, 255, 255)"
+            )
+
     print("All asset tests passed!")
 
 if __name__ == "__main__":
