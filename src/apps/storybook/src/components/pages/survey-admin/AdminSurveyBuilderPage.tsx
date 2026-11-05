@@ -42,6 +42,7 @@ import {
   MOCK_ADMIN_SURVEYS,
   MOCK_ADMIN_QUESTIONS,
 } from './surveyAdminMocks';
+import { MudraCoin } from '../../atoms/MudraCoin';
 
 export interface AdminSurveyBuilderPageProps {
   surveys?: AdminSurveyItem[];
@@ -780,7 +781,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
 
               {/* Target Mudras */}
               <XStack alignItems="center" gap={5}>
-                <LuCoins size={12} color={theme.accent} />
+                <MudraCoin size={13} />
                 <Text color={theme.accent} fontSize={12} fontWeight="800">
                   +{currentSurvey.totalMudrasTarget} Mudras
                 </Text>
@@ -1042,7 +1043,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                     alignItems="center"
                     gap={5}
                   >
-                    <LuCoins size={12} color={theme.accent} />
+                    <MudraCoin size={14} isPulsing={true} />
                     <Text color={theme.accent} fontSize={11} fontWeight="800">
                       +{currentSurvey.totalMudrasTarget} Mudras
                     </Text>
@@ -1229,7 +1230,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                                 alignItems="center"
                                 gap={4}
                               >
-                                <LuCoins size={11} color={theme.accent} />
+                                <MudraCoin size={11} />
                                 <Text color={theme.accent} fontSize={10} fontWeight="800">
                                   +{question.defaultPoints ?? question.points}
                                 </Text>
@@ -1750,7 +1751,7 @@ export const AdminSurveyBuilderPage: React.FC<AdminSurveyBuilderPageProps> = ({
                                 alignItems="center"
                                 gap={3}
                               >
-                                <LuCoins size={10} color={theme.accent} />
+                                <MudraCoin size={10} />
                                 <Text color={theme.accent} fontSize={10} fontWeight="800">
                                   +{q.defaultPoints ?? q.points}
                                 </Text>

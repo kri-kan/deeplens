@@ -41,6 +41,7 @@ import {
   MOCK_ADMIN_SURVEYS,
   MOCK_ADMIN_QUESTIONS,
 } from './surveyAdminMocks';
+import { MudraCoin } from '../../atoms/MudraCoin';
 import { SurveyPlayer } from '../../organisms/TypeformSurvey/SurveyPlayer';
 import {
   SurveyVersionDto,
@@ -1192,11 +1193,14 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
                       Live Answers Captured ({Object.keys(liveAnswers).length})
                     </Text>
                     <XStack
+                      alignItems="center"
+                      gap={4}
                       backgroundColor={theme.accentSubtle}
                       paddingHorizontal={6}
                       paddingVertical={2}
                       borderRadius={4}
                     >
+                      <MudraCoin size={12} />
                       <Text fontSize={10} fontWeight="700" color={theme.accent}>
                         +{Object.keys(liveAnswers).length * (activeSurvey.pointsPerQuestion || 175)} Mudras
                       </Text>
@@ -1410,9 +1414,12 @@ export const AdminSurveyPreviewPage: React.FC<AdminSurveyPreviewPageProps> = ({
                   <Text fontSize={12} color={theme.textMuted}>
                     Mudras Credited (Simulated):
                   </Text>
-                  <Text fontSize={13} fontWeight="800" color="#10b981">
-                    +{receiptResult.earnedMudras} Mudras
-                  </Text>
+                  <XStack alignItems="center" gap={5}>
+                    <MudraCoin size={14} />
+                    <Text fontSize={13} fontWeight="800" color="#10b981">
+                      +{receiptResult.earnedMudras} Mudras
+                    </Text>
+                  </XStack>
                 </XStack>
 
                 <XStack justifyContent="space-between" alignItems="center">

@@ -18,6 +18,7 @@ import {
   LuSlidersHorizontal,
 } from 'react-icons/lu';
 import { useTheme, useResponsive } from '../../../theme';
+import { MudraCoin } from '../../atoms/MudraCoin';
 import {
   AdminQuestionItem,
   AdminQuestionRevision,
@@ -579,11 +580,11 @@ export const AdminSurveyQuestionsPage: React.FC<AdminSurveyQuestionsPageProps> =
                       paddingVertical={2}
                       borderRadius={tokens.radius.full}
                     >
-                      <LuCoins size={12} color={tokens.accent} />
+                      <MudraCoin size={12} />
                       <Text fontSize={11} fontWeight="700" color={tokens.accent}>
                         {question.isHidden
-                          ? '0 Default Coins (Hidden)'
-                          : `${question.defaultPoints ?? question.points ?? 0} Default Coins`}
+                          ? '0 Default Mudras (Hidden)'
+                          : `${question.defaultPoints ?? question.points ?? 0} Default Mudras`}
                       </Text>
                     </XStack>
                   </XStack>

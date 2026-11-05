@@ -3,6 +3,7 @@ import { TextInput, StyleSheet, Modal, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSurveyAdminTheme, surveyAdminStyles } from './surveyAdminTheme';
 import { useResponsive } from '../../../theme';
+import { MudraCoin } from '../../atoms/MudraCoin';
 import { YStack, XStack, Text, ScrollView } from 'tamagui';
 import {
   LuSearch,
@@ -268,7 +269,7 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
               alignItems="center"
               gap={8}
             >
-              <LuCoins size={16} color={theme.accent} />
+              <MudraCoin size={16} />
               <Text color={theme.textMuted} fontSize={13}>
                 Avg Reward:{' '}
                 <Text color={theme.accent} fontWeight="700">
@@ -626,7 +627,7 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
                     {/* Mudras Reward */}
                     <YStack width={130} gap={2}>
                       <XStack alignItems="center" gap={6}>
-                        <LuCoins size={15} color={theme.accent} />
+                        <MudraCoin size={15} />
                         <Text color={theme.accent} fontSize={14} fontWeight="800">
                           +{resp.earnedMudras}
                         </Text>
@@ -811,9 +812,12 @@ export const AdminSurveyResponsesPage: React.FC<AdminSurveyResponsesPageProps> =
                   <Text color={theme.textMuted} fontSize={11}>
                     MUDRAS EARNED
                   </Text>
-                  <Text color={theme.accent} fontSize={13} fontWeight="800">
-                    +{inspectedResponse.earnedMudras} Mudras
-                  </Text>
+                  <XStack alignItems="center" gap={5}>
+                    <MudraCoin size={14} />
+                    <Text color={theme.accent} fontSize={13} fontWeight="800">
+                      +{inspectedResponse.earnedMudras} Mudras
+                    </Text>
+                  </XStack>
                 </YStack>
                 <YStack gap={2}>
                   <Text color={theme.textMuted} fontSize={11}>
