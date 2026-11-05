@@ -39,22 +39,65 @@ export interface AdminProductFullscreenViewerProps {
   bottomInset?: number;
 }
 
-const FullscreenVideoItem = ({ uri, isActive }: { uri: string; isActive: boolean }) => {
-  const player = useVideoPlayer(uri, (p) => {
+const FullscreenVideoItem = ({
+  uri,
+  posterUrl,
+  isActive,
+}: {
+  uri: string;
+  posterUrl?: string;
+  isActive: boolean;
+}) => {
+  const isImageFallback = !uri || uri.toLowerCase().endsWith('.jpg') || uri.toLowerCase().endsWith('.jpeg') || uri.toLowerCase().endsWith('.webp');
+  const [hasError, setHasError] = useState(isImageFallback);
+
+  const player = useVideoPlayer(hasError ? '' : uri, (p) => {
     p.loop = true;
-    if (isActive) {
-      p.play();
+    if (isActive && !hasError) {
+      try {
+        p.play();
+      } catch (err) {
+        console.warn('[FullscreenVideoItem] Initial play suppressed error:', err);
+      }
     }
   });
 
   useEffect(() => {
-    if (!player) return;
-    if (isActive) {
-      player.play();
-    } else {
-      player.pause();
+    if (isImageFallback || !uri) {
+      setHasError(true);
     }
-  }, [isActive, player]);
+  }, [uri, isImageFallback]);
+
+  useEffect(() => {
+    if (!player || hasError) return;
+    try {
+      if (isActive) {
+        player.play();
+      } else {
+        player.pause();
+      }
+    } catch (err) {
+      console.warn('[FullscreenVideoItem] Playback toggle error:', err);
+    }
+  }, [isActive, player, hasError]);
+
+  if (hasError) {
+    return (
+      <YStack width={SCREEN_WIDTH} height={SCREEN_HEIGHT * 0.72} alignItems="center" justifyContent="center">
+        {posterUrl ? (
+          <Image
+            source={{ uri: posterUrl }}
+            style={{ width: '100%', height: '100%' }}
+            contentFit="contain"
+          />
+        ) : (
+          <Text fontSize={13} color="#888888">
+            Video unavailable
+          </Text>
+        )}
+      </YStack>
+    );
+  }
 
   return (
     <YStack width={SCREEN_WIDTH} height={SCREEN_HEIGHT * 0.72} alignItems="center" justifyContent="center">
@@ -267,7 +310,12 @@ export function AdminProductFullscreenViewer({
                 position="relative"
               >
                 {m.mediaType === 'video' ? (
-                  <FullscreenVideoItem uri={m.url} isActive={visible && idx === activeMediaIndex} />
+                  <FullscreenVideoItem
+                    key={`fullscreen-video-${m.id || idx}-${m.url}`}
+                    uri={m.url}
+                    posterUrl={m.thumbnailUrl}
+                    isActive={visible && idx === activeMediaIndex}
+                  />
                 ) : (
                   <ZoomableImage
                     key={`zoomable-${m.id}-${idx}`}

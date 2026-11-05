@@ -41,6 +41,44 @@ import {
   filterPublishUpdatesQueue,
 } from '@/utils/publishDeltaRules';
 
+import {
+  StorePublishFilterDrawer,
+  StorePublishFilterState,
+  DEFAULT_STORE_PUBLISH_FILTER_STATE,
+  getActiveStorePublishFilterCount,
+  getStorePublishFilterChips,
+  removeStorePublishFilterChip,
+  filterStorePublishProducts,
+  StorePublishFilterChip,
+  StoreSortOption,
+  PriceRangeOption,
+  SkuFilterOption,
+  DeltaSyncFilterOption,
+  CATEGORIES,
+  FABRIC_OPTIONS,
+  PRICE_OPTIONS,
+  SORT_OPTIONS,
+  SKU_OPTIONS,
+  SYNC_STATUS_OPTIONS,
+} from '../molecules/StorePublishFilterDrawer';
+
+export {
+  StoreSortOption,
+  PriceRangeOption,
+  SkuFilterOption,
+  DeltaSyncFilterOption,
+  CATEGORIES,
+  FABRIC_OPTIONS,
+  PRICE_OPTIONS,
+  SORT_OPTIONS,
+  SKU_OPTIONS,
+  SYNC_STATUS_OPTIONS,
+  StorePublishFilterState,
+  DEFAULT_STORE_PUBLISH_FILTER_STATE,
+  getActiveStorePublishFilterCount,
+  StorePublishFilterChip,
+};
+
 export interface VayyariStarredProductItem {
   id: string;
   productCode: string;
@@ -70,9 +108,6 @@ export interface VayyariStarredProductItem {
   canRetry?: boolean;
 }
 
-export type StoreSortOption = 'newest' | 'price_low' | 'price_high' | 'media_count';
-export type PriceRangeOption = 'all' | 'under_5k' | '5k_10k' | '10k_20k' | 'above_20k';
-
 export interface AdminVayyariStorePublishPageProps {
   products?: VayyariStarredProductItem[];
   failedProducts?: VayyariStarredProductItem[];
@@ -94,23 +129,6 @@ export interface AdminVayyariStorePublishPageProps {
   onOpenPdp?: (productId: string) => void;
   disableSafeArea?: boolean;
 }
-
-
-export const CATEGORIES = ['All', 'Saree', 'Dress Material', 'Kurti / Set', 'Lehenga', 'Gown', 'Western', 'Kids'];
-export const FABRIC_OPTIONS = ['All', 'Pure Silk', 'Kanjivaram', 'Banarasi', 'Georgette', 'Chiffon', 'Cotton', 'Linen', 'Organza', 'Tussar'];
-export const PRICE_OPTIONS: { id: PriceRangeOption; label: string }[] = [
-  { id: 'all', label: 'All Prices' },
-  { id: 'under_5k', label: '< ₹5,000' },
-  { id: '5k_10k', label: '₹5K - ₹10K' },
-  { id: '10k_20k', label: '₹10K - ₹20K' },
-  { id: 'above_20k', label: '> ₹20,000' },
-];
-export const SORT_OPTIONS: { id: StoreSortOption; label: string }[] = [
-  { id: 'newest', label: 'Newest' },
-  { id: 'price_low', label: 'Price: Low ➔ High' },
-  { id: 'price_high', label: 'Price: High ➔ Low' },
-  { id: 'media_count', label: 'Most Images' },
-];
 
 export function AdminVayyariStorePublishPage({
   products = [],
@@ -141,10 +159,7 @@ export function AdminVayyariStorePublishPage({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [activeQueue, setActiveQueue] = useState<'all' | 'publish_updates' | 'failed'>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
-  const [selectedFabric, setSelectedFabric] = useState('All');
-  const [selectedPriceRange, setSelectedPriceRange] = useState<PriceRangeOption>('all');
-  const [selectedSort, setSelectedSort] = useState<StoreSortOption>('newest');
+  const [filters, setFilters] = useState<StorePublishFilterState>(DEFAULT_STORE_PUBLISH_FILTER_STATE);
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
   const [isJobsModalOpen, setIsJobsModalOpen] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
@@ -172,76 +187,27 @@ export function AdminVayyariStorePublishPage({
   );
   const failedCount = useMemo(() => failedProducts.length, [failedProducts]);
 
-  const activeFilterCount = useMemo(() => {
-    let count = 0;
-    if (selectedCategory !== 'All') count++;
-    if (selectedFabric !== 'All') count++;
-    if (selectedPriceRange !== 'all') count++;
-    if (selectedSort !== 'newest') count++;
-    return count;
-  }, [selectedCategory, selectedFabric, selectedPriceRange, selectedSort]);
+  const activeFilterCount = useMemo(() => getActiveStorePublishFilterCount(filters), [filters]);
+  const activeFilterChips = useMemo(() => getStorePublishFilterChips(filters), [filters]);
 
   const resetFilters = () => {
-    setSelectedCategory('All');
-    setSelectedFabric('All');
-    setSelectedPriceRange('all');
-    setSelectedSort('newest');
+    setFilters({ ...DEFAULT_STORE_PUBLISH_FILTER_STATE });
     setSearchQuery('');
   };
 
+  const handleRemoveFilterChip = (chipId: string) => {
+    setFilters((prev) => removeStorePublishFilterChip(prev, chipId));
+  };
+
   const filteredProducts = useMemo(() => {
-    const source = activeQueue === 'failed' ? failedProducts : products;
-    let list = source.filter((p) => {
-      const catLower = (p.category || '').toLowerCase();
-      const selCatLower = selectedCategory.toLowerCase();
-      const matchCat =
-        selectedCategory === 'All' ||
-        !catLower ||
-        catLower.includes(selCatLower) ||
-        selCatLower.includes(catLower);
-
-      const fabricLower = (p.fabric || '').toLowerCase();
-      const selFabricLower = selectedFabric.toLowerCase();
-      const matchFabric =
-        selectedFabric === 'All' ||
-        !fabricLower ||
-        fabricLower.includes(selFabricLower) ||
-        selFabricLower.includes(fabricLower);
-      
-      let matchPrice = true;
-      const price = p.price || 8000;
-      if (selectedPriceRange === 'under_5k') matchPrice = price < 5000;
-      else if (selectedPriceRange === '5k_10k') matchPrice = price >= 5000 && price <= 10000;
-      else if (selectedPriceRange === '10k_20k') matchPrice = price > 10000 && price <= 20000;
-      else if (selectedPriceRange === 'above_20k') matchPrice = price > 20000;
-
-      const q = searchQuery.toLowerCase().trim();
-      const matchQuery =
-        !q ||
-        p.title.toLowerCase().includes(q) ||
-        p.productCode.toLowerCase().includes(q) ||
-        p.fabric.toLowerCase().includes(q) ||
-        p.category.toLowerCase().includes(q);
-
-      return matchCat && matchFabric && matchPrice && matchQuery;
-    });
-
-    if (activeQueue === 'publish_updates') {
-      list = filterPublishUpdatesQueue(list);
-    } else if (activeQueue === 'all') {
-      list = list.filter((p) => !p.isPublishedToStore && !p.isPublished);
-    }
-
-    if (selectedSort === 'price_low') {
-      list = [...list].sort((a, b) => (a.price || 8000) - (b.price || 8000));
-    } else if (selectedSort === 'price_high') {
-      list = [...list].sort((a, b) => (b.price || 8000) - (a.price || 8000));
-    } else if (selectedSort === 'media_count') {
-      list = [...list].sort((a, b) => b.mediaCount - a.mediaCount);
-    }
-
-    return list;
-  }, [products, failedProducts, activeQueue, selectedCategory, selectedFabric, selectedPriceRange, selectedSort, searchQuery]);
+    return filterStorePublishProducts(
+      products,
+      filters,
+      searchQuery,
+      activeQueue,
+      failedProducts
+    );
+  }, [products, failedProducts, activeQueue, filters, searchQuery]);
 
   const toggleSelectProduct = (id: string) => {
     if (selectedIds.includes(id)) {
@@ -255,7 +221,7 @@ export function AdminVayyariStorePublishPage({
     if (selectedIds.length === filteredProducts.length) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(filteredProducts.map((p) => p.id));
+      setSelectedIds(filteredProducts.map((p: VayyariStarredProductItem) => p.id));
     }
   };
 
@@ -598,35 +564,39 @@ export function AdminVayyariStorePublishPage({
             />
           </XStack>
 
-          {/* Toggle Advanced Filters Button */}
+          {/* Left Drawer Filter Toggle Button */}
           <Pressable
-            onPress={() => setIsFilterDrawerOpen(!isFilterDrawerOpen)}
+            accessibilityRole="button"
+            accessibilityLabel="Open filter drawer"
+            onPress={() => setIsFilterDrawerOpen(true)}
             style={[
               styles.filterToggleBtn,
               {
-                backgroundColor: activeFilterCount > 0 ? tokens.accent : 'rgba(0,0,0,0.04)',
+                backgroundColor: activeFilterCount > 0 ? `${tokens.accent}14` : 'rgba(0,0,0,0.04)',
                 borderColor: activeFilterCount > 0 ? tokens.accent : tokens.border,
               },
             ]}
           >
-            <XStack alignItems="center" gap={4}>
-              <LuSlidersHorizontal size={13} color={activeFilterCount > 0 ? tokens.accentForeground : tokens.text} />
+            <XStack alignItems="center" gap={5}>
+              <LuSlidersHorizontal size={14} color={activeFilterCount > 0 ? tokens.accent : tokens.text} />
               {activeFilterCount > 0 && (
-                <Text fontSize={11} fontWeight="800" color={tokens.accentForeground}>
-                  {activeFilterCount}
-                </Text>
-              )}
-              {isFilterDrawerOpen ? (
-                <LuChevronUp size={12} color={activeFilterCount > 0 ? tokens.accentForeground : tokens.textSecondary} />
-              ) : (
-                <LuChevronDown size={12} color={activeFilterCount > 0 ? tokens.accentForeground : tokens.textSecondary} />
+                <XStack
+                  paddingHorizontal={5}
+                  paddingVertical={1}
+                  borderRadius={10}
+                  backgroundColor={tokens.accent}
+                >
+                  <Text fontSize={10} fontWeight="800" color="#ffffff">
+                    {activeFilterCount}
+                  </Text>
+                </XStack>
               )}
             </XStack>
           </Pressable>
 
           {activeFilterCount > 0 && (
             <Pressable onPress={resetFilters} hitSlop={6} style={styles.resetBtn}>
-              <LuRotateCcw size={12} color={tokens.textMuted} />
+              <LuRotateCcw size={13} color={tokens.textMuted} />
             </Pressable>
           )}
         </XStack>
@@ -634,11 +604,11 @@ export function AdminVayyariStorePublishPage({
         {/* Category Horizontal Scroll */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
           {CATEGORIES.map((cat) => {
-            const isSelected = selectedCategory === cat;
+            const isSelected = filters.category === cat;
             return (
               <Pressable
                 key={cat}
-                onPress={() => setSelectedCategory(cat)}
+                onPress={() => setFilters((prev) => ({ ...prev, category: cat }))}
                 style={[
                   styles.categoryPill,
                   {
@@ -655,96 +625,37 @@ export function AdminVayyariStorePublishPage({
           })}
         </ScrollView>
 
-        {/* ── EXPANDABLE ADVANCED FILTERS ── */}
-        {isFilterDrawerOpen && (
-          <YStack gap={8} paddingTop={6} borderTopWidth={1} borderTopColor={tokens.border}>
-            {/* Fabric Row */}
-            <YStack gap={4}>
-              <Text fontSize={10} fontWeight="700" color={tokens.textMuted} textTransform="uppercase">
-                Fabric
-              </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 5 }}>
-                {FABRIC_OPTIONS.map((fab) => {
-                  const isSelected = selectedFabric === fab;
-                  return (
-                    <Pressable
-                      key={fab}
-                      onPress={() => setSelectedFabric(fab)}
-                      style={[
-                        styles.chipPill,
-                        {
-                          backgroundColor: isSelected ? tokens.accentSubtle : 'transparent',
-                          borderColor: isSelected ? tokens.accent : tokens.border,
-                        },
-                      ]}
-                    >
-                      <Text fontSize={10} fontWeight={isSelected ? '800' : '600'} color={isSelected ? tokens.accent : tokens.textSecondary}>
-                        {fab}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </YStack>
-
-            {/* Price Range Row */}
-            <YStack gap={4}>
-              <Text fontSize={10} fontWeight="700" color={tokens.textMuted} textTransform="uppercase">
-                Price Range
-              </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 5 }}>
-                {PRICE_OPTIONS.map((p) => {
-                  const isSelected = selectedPriceRange === p.id;
-                  return (
-                    <Pressable
-                      key={p.id}
-                      onPress={() => setSelectedPriceRange(p.id)}
-                      style={[
-                        styles.chipPill,
-                        {
-                          backgroundColor: isSelected ? tokens.accentSubtle : 'transparent',
-                          borderColor: isSelected ? tokens.accent : tokens.border,
-                        },
-                      ]}
-                    >
-                      <Text fontSize={10} fontWeight={isSelected ? '800' : '600'} color={isSelected ? tokens.accent : tokens.textSecondary}>
-                        {p.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </YStack>
-
-            {/* Sort Row */}
-            <YStack gap={4}>
-              <Text fontSize={10} fontWeight="700" color={tokens.textMuted} textTransform="uppercase">
-                Sort By
-              </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 5 }}>
-                {SORT_OPTIONS.map((s) => {
-                  const isSelected = selectedSort === s.id;
-                  return (
-                    <Pressable
-                      key={s.id}
-                      onPress={() => setSelectedSort(s.id)}
-                      style={[
-                        styles.chipPill,
-                        {
-                          backgroundColor: isSelected ? tokens.accentSubtle : 'transparent',
-                          borderColor: isSelected ? tokens.accent : tokens.border,
-                        },
-                      ]}
-                    >
-                      <Text fontSize={10} fontWeight={isSelected ? '800' : '600'} color={isSelected ? tokens.accent : tokens.textSecondary}>
-                        {s.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </YStack>
-          </YStack>
+        {/* Active Filter Chips Bar */}
+        {activeFilterChips.length > 0 && (
+          <XStack alignItems="center" gap={6} paddingTop={2}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, alignItems: 'center' }}>
+              {activeFilterChips.map((chip: StorePublishFilterChip) => (
+                <XStack
+                  key={chip.id}
+                  alignItems="center"
+                  height={24}
+                  gap={4}
+                  paddingHorizontal={8}
+                  borderRadius={tokens.radius.full}
+                  backgroundColor={`${tokens.accent}14`}
+                  borderWidth={1}
+                  borderColor={`${tokens.accent}40`}
+                >
+                  <Text fontSize={10} fontWeight="700" color={tokens.accent}>
+                    {chip.label}
+                  </Text>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remove filter ${chip.label}`}
+                    activeOpacity={0.7}
+                    onPress={() => handleRemoveFilterChip(chip.id)}
+                  >
+                    <LuX size={11} color={tokens.accent} />
+                  </TouchableOpacity>
+                </XStack>
+              ))}
+            </ScrollView>
+          </XStack>
         )}
       </YStack>
 
@@ -1175,6 +1086,14 @@ export function AdminVayyariStorePublishPage({
           </YStack>
         </View>
       )}
+
+      {/* Left Drawer Filter Modal */}
+      <StorePublishFilterDrawer
+        visible={isFilterDrawerOpen}
+        onClose={() => setIsFilterDrawerOpen(false)}
+        current={filters}
+        onApply={(nextFilters) => setFilters(nextFilters)}
+      />
     </YStack>
   );
 }

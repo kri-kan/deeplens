@@ -31,6 +31,10 @@ import {
   DEFAULT_STORE_PUBLISH_FILTER_STATE,
   getActiveStorePublishFilterCount,
   getStorePublishSectionBadge,
+  getStorePublishFilterChips,
+  removeStorePublishFilterChip,
+  filterStorePublishProducts,
+  StorePublishFilterChip,
   StorePublishSectionKey,
   SECTIONS,
 } from '@/utils/storePublishFilterRules';
@@ -50,6 +54,10 @@ export {
   DEFAULT_STORE_PUBLISH_FILTER_STATE,
   getActiveStorePublishFilterCount,
   getStorePublishSectionBadge,
+  getStorePublishFilterChips,
+  removeStorePublishFilterChip,
+  filterStorePublishProducts,
+  StorePublishFilterChip,
   StorePublishSectionKey,
   SECTIONS,
 };
