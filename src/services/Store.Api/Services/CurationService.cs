@@ -1150,7 +1150,7 @@ public class CurationService : ICurationService
         return await conn.QuerySingleOrDefaultAsync<PublishJobDto>(sql, new { Id = jobId });
     }
 
-    public async Task<List<PublishJobDto>> GetRecentPublishJobsAsync(int limit = 20, CancellationToken ct = default)
+    public async Task<List<PublishJobDto>> GetRecentPublishJobsAsync(int limit = 20, int offset = 0, CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
@@ -1162,9 +1162,13 @@ public class CurationService : ICurationService
                    requested_by AS RequestedBy, created_at AS CreatedAt, updated_at AS UpdatedAt
             FROM publish_jobs
             ORDER BY created_at DESC
-            LIMIT @Limit;";
+            LIMIT @Limit OFFSET @Offset;";
 
-        var rows = await conn.QueryAsync<PublishJobDto>(sql, new { Limit = Math.Clamp(limit, 1, 100) });
+        var rows = await conn.QueryAsync<PublishJobDto>(sql, new
+        {
+            Limit = Math.Clamp(limit, 1, 100),
+            Offset = Math.Max(0, offset)
+        });
         return rows.ToList();
     }
 

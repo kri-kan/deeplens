@@ -761,10 +761,11 @@ app.MapGet("/api/v1/admin/products/publish-jobs/{id}", async (Guid id, ICuration
 .WithName("AdminGetPublishJob")
 .WithOpenApi();
 
-// 1b-list. List Recent Publish Jobs
-app.MapGet("/api/v1/admin/products/publish-jobs", async ([FromQuery] int? limit, ICurationService curationService) =>
+// 1b-list. List Recent Publish Jobs (Supports pagination with limit & offset/skip)
+app.MapGet("/api/v1/admin/products/publish-jobs", async ([FromQuery] int? limit, [FromQuery] int? offset, [FromQuery] int? skip, ICurationService curationService) =>
 {
-    var jobs = await curationService.GetRecentPublishJobsAsync(limit ?? 20);
+    var effectiveOffset = offset ?? skip ?? 0;
+    var jobs = await curationService.GetRecentPublishJobsAsync(limit ?? 20, effectiveOffset);
     return Results.Ok(jobs);
 })
 .WithName("AdminGetRecentPublishJobs")

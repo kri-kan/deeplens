@@ -32,7 +32,10 @@ export interface AdminStorePublishBatchesPageProps {
   jobs?: PublishJobStatusResponse[];
   loading?: boolean;
   refreshing?: boolean;
+  isLoadingMore?: boolean;
+  hasMore?: boolean;
   onRefresh?: () => void;
+  onLoadMore?: () => void;
   onBack?: () => void;
   onSelectBatch?: (job: PublishJobStatusResponse) => void;
   onOpenPdp?: (productId: string) => void;
@@ -449,7 +452,10 @@ export function AdminStorePublishBatchesPage({
   jobs = [],
   loading = false,
   refreshing = false,
+  isLoadingMore = false,
+  hasMore = false,
   onRefresh,
+  onLoadMore,
   onBack,
   onSelectBatch,
   onOpenPdp,
@@ -616,7 +622,7 @@ export function AdminStorePublishBatchesPage({
               </Text>
             </XStack>
             <Text fontSize={11} color={tokens.textMuted}>
-              {jobs.length} Batch{jobs.length === 1 ? '' : 'es'} Recorded
+              {jobs.length} Batch{jobs.length === 1 ? '' : 'es'} Loaded
             </Text>
           </YStack>
         </XStack>
@@ -662,6 +668,8 @@ export function AdminStorePublishBatchesPage({
           renderItem={renderBatchCard}
           contentContainerStyle={{ padding: 12, paddingBottom: 60, gap: 10 }}
           showsVerticalScrollIndicator={false}
+          onEndReached={hasMore && !isLoadingMore ? onLoadMore : undefined}
+          onEndReachedThreshold={0.4}
           refreshControl={
             onRefresh ? (
               <RefreshControl
@@ -671,6 +679,28 @@ export function AdminStorePublishBatchesPage({
                 colors={[tokens.accent]}
               />
             ) : undefined
+          }
+          ListFooterComponent={
+            isLoadingMore ? (
+              <YStack alignItems="center" paddingVertical={16} gap={6}>
+                <ActivityIndicator size="small" color={tokens.accent} />
+                <Text fontSize={11} color={tokens.textMuted} fontWeight="600">
+                  Loading more batches...
+                </Text>
+              </YStack>
+            ) : hasMore && onLoadMore ? (
+              <YStack alignItems="center" paddingVertical={12}>
+                <Pressable
+                  onPress={onLoadMore}
+                  style={styles.loadMoreBtn}
+                  accessibilityRole="button"
+                >
+                  <Text fontSize={11} fontWeight="700" color={tokens.accent}>
+                    Load More Batches ▾
+                  </Text>
+                </Pressable>
+              </YStack>
+            ) : null
           }
         />
       )}
@@ -760,5 +790,11 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 20,
     backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+  loadMoreBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.04)',
   },
 });

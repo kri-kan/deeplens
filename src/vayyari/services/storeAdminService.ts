@@ -385,10 +385,10 @@ class StoreAdminService {
     return res.json();
   }
 
-  async getRecentPublishJobs(limit = 20): Promise<PublishJobStatusResponse[]> {
+  async getRecentPublishJobs(limit = 20, offset = 0): Promise<PublishJobStatusResponse[]> {
     const headers = await this.getAuthHeaders();
     const baseUrl = getStoreApiUrl();
-    const res = await fetch(`${baseUrl}/api/v1/admin/products/publish-jobs?limit=${limit}`, {
+    const res = await fetch(`${baseUrl}/api/v1/admin/products/publish-jobs?limit=${limit}&offset=${offset}`, {
       headers,
     });
 

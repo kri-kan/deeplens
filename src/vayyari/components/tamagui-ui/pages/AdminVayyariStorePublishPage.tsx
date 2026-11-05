@@ -436,7 +436,7 @@ export function AdminVayyariStorePublishPage({
                     fontWeight="800"
                     color={hasActiveJob ? '#D97706' : tokens.accent}
                   >
-                    {hasActiveJob ? 'Running...' : `Queue ${jobs.length > 0 ? `(${jobs.length})` : ''}`}
+                    {jobs.length}
                   </Text>
                 </XStack>
               </Pressable>
