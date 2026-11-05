@@ -9,6 +9,7 @@ import {
   LuSparkles,
   LuSend,
   LuStar,
+  LuLayers,
 } from 'react-icons/lu';
 import { useTheme } from '../../theme';
 
@@ -262,11 +263,33 @@ export function AdminVayyariStorePublishPage({
             </Pressable>
           )}
           <YStack>
-            <XStack alignItems="center" gap={5}>
-              <LuStore size={15} color={tokens.accent} />
-              <Text fontSize={15} fontWeight="800" color={tokens.text}>
-                Publish to Store
-              </Text>
+            <XStack alignItems="center" gap={8}>
+              <XStack alignItems="center" gap={5}>
+                <LuStore size={15} color={tokens.accent} />
+                <Text fontSize={15} fontWeight="800" color={tokens.text}>
+                  Publish to Store
+                </Text>
+              </XStack>
+
+              {/* Queue Button next to heading */}
+              <Pressable
+                onPress={() => {}}
+                hitSlop={6}
+                style={[
+                  styles.queueHeaderBtn,
+                  {
+                    backgroundColor: tokens.surfaceRaised,
+                    borderColor: `${tokens.accent}40`,
+                  },
+                ]}
+              >
+                <XStack alignItems="center" gap={4}>
+                  <LuLayers size={12} color={tokens.accent} />
+                  <Text fontSize={10} fontWeight="800" color={tokens.accent}>
+                    Queue (3)
+                  </Text>
+                </XStack>
+              </Pressable>
             </XStack>
             <Text fontSize={11} color={tokens.textMuted}>
               Vayyari Catalog ➔ Store Ingestion
@@ -580,6 +603,14 @@ const styles = StyleSheet.create({
   inStoreHeaderBtn: {
     paddingHorizontal: 8,
     paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  queueHeaderBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 12,
     borderWidth: 1,
     alignItems: 'center',

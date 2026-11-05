@@ -1090,28 +1090,42 @@ public class CurationService : ICurationService
             RequestedBy = authorEmail
         });
 
-        // Publish event for each product in the batch
+        // Publish events in background without blocking the HTTP response
         if (request.ProductIds != null && request.ProductIds.Count > 0)
         {
-            foreach (var productId in request.ProductIds)
+            var productIdsCopy = request.ProductIds.ToList();
+            _ = Task.Run(async () =>
             {
-                var evt = new StoreProductPublishRequestedEvent(
-                    EventId: Guid.NewGuid(),
-                    JobId: jobId,
-                    Action: action,
-                    ProductId: productId,
-                    ProductCode: string.Empty,
-                    RequestedBy: authorEmail,
-                    Timestamp: DateTime.UtcNow
-                );
+                try
+                {
+                    var publishTasks = productIdsCopy.Select(productId =>
+                    {
+                        var evt = new StoreProductPublishRequestedEvent(
+                            EventId: Guid.NewGuid(),
+                            JobId: jobId,
+                            Action: action,
+                            ProductId: productId,
+                            ProductCode: string.Empty,
+                            RequestedBy: authorEmail,
+                            Timestamp: DateTime.UtcNow
+                        );
 
-                await _eventPublisher.PublishAsync(
-                    StorePublishTopics.PublishRequested,
-                    productId.ToString(),
-                    evt,
-                    ct
-                );
-            }
+                        return _eventPublisher.PublishAsync(
+                            StorePublishTopics.PublishRequested,
+                            productId.ToString(),
+                            evt,
+                            CancellationToken.None
+                        );
+                    });
+
+                    await Task.WhenAll(publishTasks);
+                    _logger.LogInformation("Dispatched {Count} Kafka publish events for job {JobId}", productIdsCopy.Count, jobId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to dispatch Kafka publish events for job {JobId}", jobId);
+                }
+            });
         }
 
         _logger.LogInformation("Created publish job {JobId} ({Action}) for {Count} products by {Author}", jobId, action, totalCount, authorEmail);

@@ -29,6 +29,7 @@ import {
   LuX,
   LuActivity,
   LuClock,
+  LuLayers,
 } from '../icons/lu';
 import { useTheme } from '@/theme';
 import { PublishJobStatusResponse } from '@/services/storeAdminService';
@@ -148,6 +149,15 @@ export function AdminVayyariStorePublishPage({
   const [isJobsModalOpen, setIsJobsModalOpen] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishSuccessToast, setPublishSuccessToast] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (publishSuccessToast) {
+      const timer = setTimeout(() => {
+        setPublishSuccessToast(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [publishSuccessToast]);
 
   const hasActiveJob = useMemo(() => {
     return Boolean(
@@ -421,11 +431,47 @@ export function AdminVayyariStorePublishPage({
             </Pressable>
           )}
           <YStack>
-            <XStack alignItems="center" gap={5}>
-              <LuStore size={15} color={tokens.accent} />
-              <Text fontSize={15} fontWeight="800" color={tokens.text}>
-                Publish to Store
-              </Text>
+            <XStack alignItems="center" gap={8}>
+              <XStack alignItems="center" gap={5}>
+                <LuStore size={15} color={tokens.accent} />
+                <Text fontSize={15} fontWeight="800" color={tokens.text}>
+                  Publish to Store
+                </Text>
+              </XStack>
+
+              {/* ── QUEUE / BATCHES ICON RIGHT NEXT TO HEADING ── */}
+              <Pressable
+                onPress={() => setIsJobsModalOpen(true)}
+                hitSlop={8}
+                style={({ pressed }) => [
+                  styles.queueHeaderBtn,
+                  {
+                    backgroundColor: hasActiveJob
+                      ? '#FEF3C7'
+                      : pressed
+                      ? 'rgba(0,0,0,0.08)'
+                      : 'rgba(0,0,0,0.04)',
+                    borderColor: hasActiveJob ? '#F59E0B' : tokens.border,
+                  },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Publish Batches Queue"
+              >
+                <XStack alignItems="center" gap={4}>
+                  {hasActiveJob ? (
+                    <ActivityIndicator size="small" color="#D97706" style={{ transform: [{ scale: 0.65 }] }} />
+                  ) : (
+                    <LuLayers size={13} color={hasActiveJob ? '#D97706' : tokens.accent} />
+                  )}
+                  <Text
+                    fontSize={11}
+                    fontWeight="800"
+                    color={hasActiveJob ? '#D97706' : tokens.accent}
+                  >
+                    {hasActiveJob ? 'Running...' : `Queue ${jobs.length > 0 ? `(${jobs.length})` : ''}`}
+                  </Text>
+                </XStack>
+              </Pressable>
             </XStack>
             <Text fontSize={11} color={tokens.textMuted}>
               {filteredProducts.length} Starred Products Available
@@ -433,94 +479,22 @@ export function AdminVayyariStorePublishPage({
           </YStack>
         </XStack>
 
-        <XStack alignItems="center" gap={6}>
-          {/* Jobs / Activity History Button */}
+        {onNavigateToStoreInventory && (
           <Pressable
-            onPress={() => setIsJobsModalOpen(true)}
+            onPress={onNavigateToStoreInventory}
             style={({ pressed }) => [
               styles.navInventoryBtn,
-              {
-                backgroundColor: pressed
-                  ? 'rgba(0,0,0,0.08)'
-                  : hasActiveJob
-                  ? '#FEF3C7'
-                  : 'rgba(0,0,0,0.04)',
-                borderColor: hasActiveJob ? '#F59E0B' : 'transparent',
-                borderWidth: hasActiveJob ? 1 : 0,
-              },
+              { backgroundColor: pressed ? 'rgba(0,0,0,0.08)' : 'rgba(0,0,0,0.04)' },
             ]}
           >
             <XStack alignItems="center" gap={4}>
-              <LuActivity size={13} color={hasActiveJob ? '#D97706' : tokens.text} />
-              <Text fontSize={11} fontWeight="800" color={hasActiveJob ? '#D97706' : tokens.text}>
-                {hasActiveJob ? 'Running...' : 'Jobs'}
+              <Text fontSize={11} fontWeight="800" color={tokens.accent}>
+                🏪 In Store ({publishedCount}) ➔
               </Text>
             </XStack>
           </Pressable>
-
-          {onNavigateToStoreInventory && (
-            <Pressable
-              onPress={onNavigateToStoreInventory}
-              style={({ pressed }) => [
-                styles.navInventoryBtn,
-                { backgroundColor: pressed ? 'rgba(0,0,0,0.08)' : 'rgba(0,0,0,0.04)' },
-              ]}
-            >
-              <XStack alignItems="center" gap={4}>
-                <Text fontSize={11} fontWeight="800" color={tokens.accent}>
-                  🏪 In Store ({publishedCount}) ➔
-                </Text>
-              </XStack>
-            </Pressable>
-          )}
-        </XStack>
+        )}
       </XStack>
-
-      {/* ── ACTIVE JOB PROGRESS BANNER ── */}
-      {hasActiveJob && activeJob && (
-        <Pressable onPress={() => setIsJobsModalOpen(true)}>
-          <XStack
-            backgroundColor="#FEF3C7"
-            borderBottomWidth={1}
-            borderBottomColor="#F59E0B"
-            paddingHorizontal={12}
-            paddingVertical={8}
-            alignItems="center"
-            justifyContent="space-between"
-          >
-            <YStack flex={1} marginRight={10}>
-              <XStack alignItems="center" justifyContent="space-between" marginBottom={4}>
-                <XStack alignItems="center" gap={6}>
-                  <ActivityIndicator size="small" color="#D97706" />
-                  <Text fontSize={11} fontWeight="800" color="#92400E">
-                    Publishing Batch #{activeJob.id.substring(0, 8)}...
-                  </Text>
-                </XStack>
-                <Text fontSize={10} fontWeight="800" color="#B45309">
-                  {activeJob.processedCount} / {activeJob.totalCount} ({Math.round((activeJob.processedCount / (activeJob.totalCount || 1)) * 100)}%)
-                </Text>
-              </XStack>
-              <View
-                style={{
-                  height: 4,
-                  backgroundColor: '#FDE68A',
-                  borderRadius: 2,
-                  overflow: 'hidden',
-                }}
-              >
-                <View
-                  style={{
-                    height: 4,
-                    backgroundColor: '#D97706',
-                    width: `${Math.min(100, Math.round((activeJob.processedCount / (activeJob.totalCount || 1)) * 100))}%`,
-                  }}
-                />
-              </View>
-            </YStack>
-            <LuChevronDown size={14} color="#92400E" />
-          </XStack>
-        </Pressable>
-      )}
 
       {/* ── QUEUE SELECTOR TABS ── */}
       <XStack
@@ -1217,6 +1191,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
+  },
+  queueHeaderBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   searchInput: {
     flex: 1,
