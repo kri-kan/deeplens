@@ -82,36 +82,10 @@ export default function WhatsAppReviewInboxScreen() {
     );
   };
 
-  const handleIgnore = (item: ReviewInboxItem) => {
-    Alert.alert(
-      'Ignore Group',
-      `Mark group ${item.groupId.substring(0, 8)} as ignored? It will not be processed as a product.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Ignore',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setActionLoadingId(item.groupId);
-              await waProcessorService.ignoreGroupReview(item.groupId, true);
-              Alert.alert('Success', 'Group marked as ignored.');
-              fetchData(activeStage);
-            } catch (err: any) {
-              Alert.alert('Error', err?.message || 'Failed to ignore group');
-            } finally {
-              setActionLoadingId(null);
-            }
-          },
-        },
-      ]
-    );
-  };
-
   const handleDismiss = (item: ReviewInboxItem) => {
     Alert.alert(
-      'Dismiss Review Flag',
-      `Clear the review flag for group ${item.groupId.substring(0, 8)}?`,
+      'Dismiss Review',
+      `Dismiss review for group ${item.groupId.substring(0, 8)}? It will be archived and removed from the review queue.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -120,10 +94,10 @@ export default function WhatsAppReviewInboxScreen() {
             try {
               setActionLoadingId(item.groupId);
               await waProcessorService.dismissGroupReview(item.groupId);
-              Alert.alert('Success', 'Review flag dismissed.');
+              Alert.alert('Success', 'Review dismissed.');
               fetchData(activeStage);
             } catch (err: any) {
-              Alert.alert('Error', err?.message || 'Failed to dismiss review flag');
+              Alert.alert('Error', err?.message || 'Failed to dismiss review');
             } finally {
               setActionLoadingId(null);
             }
@@ -144,7 +118,6 @@ export default function WhatsAppReviewInboxScreen() {
       onBack={() => router.back()}
       onInspectZone={handleInspectZone}
       onForcePromote={handleForcePromote}
-      onIgnore={handleIgnore}
       onDismiss={handleDismiss}
       actionLoadingId={actionLoadingId}
     />

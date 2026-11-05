@@ -19,7 +19,6 @@ import {
   LuX,
   LuTriangleAlert,
   LuCheck,
-  LuBan,
   LuSparkles,
   LuEye,
   LuInbox,
@@ -45,7 +44,6 @@ export interface WhatsAppReviewInboxPageProps {
   onBack?: () => void;
   onInspectZone?: (item: ReviewInboxItem) => void;
   onForcePromote?: (item: ReviewInboxItem) => void;
-  onIgnore?: (item: ReviewInboxItem) => void;
   onDismiss?: (item: ReviewInboxItem) => void;
   actionLoadingId?: string | null;
 }
@@ -74,7 +72,6 @@ export const WhatsAppReviewInboxPage: React.FC<WhatsAppReviewInboxPageProps> = (
   onBack,
   onInspectZone,
   onForcePromote,
-  onIgnore,
   onDismiss,
   actionLoadingId = null,
 }) => {
@@ -293,19 +290,6 @@ export const WhatsAppReviewInboxPage: React.FC<WhatsAppReviewInboxPageProps> = (
             >
               <LuEye size={13} color="#60A5FA" />
               <Text style={styles.inspectButtonText}>Inspect in Chat</Text>
-            </Pressable>
-          ) : null}
-
-          {/* Ignore / Not a Product */}
-          {onIgnore ? (
-            <Pressable
-              onPress={() => onIgnore(item)}
-              disabled={isActionLoading}
-              style={[styles.ignoreButton, isActionLoading && styles.buttonDisabled]}
-              accessibilityLabel="Ignore group"
-            >
-              <LuBan size={13} color="#94A3B8" />
-              <Text style={styles.ignoreButtonText}>Ignore</Text>
             </Pressable>
           ) : null}
 
@@ -767,22 +751,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: '#60A5FA',
-  },
-  ignoreButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#1E293B',
-  },
-  ignoreButtonText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#94A3B8',
   },
   dismissButton: {
     flexDirection: 'row',
