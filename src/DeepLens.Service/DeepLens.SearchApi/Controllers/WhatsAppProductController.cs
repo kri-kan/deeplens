@@ -30,6 +30,34 @@ public class WhatsAppProductController : ControllerBase
         _logger = logger;
     }
 
+    public const string MergeCandidatesSql = @"
+        SELECT 
+            pmc.id AS ""id"",
+            pmc.product_a_id AS ""productAId"",
+            pmc.product_b_id AS ""productBId"",
+            pmc.similarity_score AS ""similarityScore"",
+            pmc.status AS ""status"",
+            pmc.detected_at AS ""detectedAt"",
+            pa.title AS ""productATitle"",
+            pa.base_sku AS ""productASku"",
+            pa.created_at AS ""productACreatedAt"",
+            (SELECT m.storage_path FROM public.media_links ml JOIN public.media m ON ml.media_id = m.id WHERE ml.entity_id = pa.id AND ml.entity_type = 'product' ORDER BY ml.is_primary DESC LIMIT 1) AS ""productAImagePath"",
+            (SELECT ml.media_id FROM public.media_links ml WHERE ml.entity_id = pa.id AND ml.entity_type = 'product' ORDER BY ml.is_primary DESC LIMIT 1) AS ""productAMediaId"",
+            pb.title AS ""productBTitle"",
+            pb.base_sku AS ""productBSku"",
+            pb.created_at AS ""productBCreatedAt"",
+            (SELECT m.storage_path FROM public.media_links ml JOIN public.media m ON ml.media_id = m.id WHERE ml.entity_id = pb.id AND ml.entity_type = 'product' ORDER BY ml.is_primary DESC LIMIT 1) AS ""productBImagePath"",
+            (SELECT ml.media_id FROM public.media_links ml WHERE ml.entity_id = pb.id AND ml.entity_type = 'product' ORDER BY ml.is_primary DESC LIMIT 1) AS ""productBMediaId""
+        FROM public.product_merge_candidates pmc
+        JOIN public.products pa ON pmc.product_a_id = pa.id
+        JOIN public.products pb ON pmc.product_b_id = pb.id
+        WHERE pmc.status = 'pending'
+          AND COALESCE(pa.is_deleted, false) = false
+          AND COALESCE(pa.is_archived, false) = false
+          AND COALESCE(pb.is_deleted, false) = false
+          AND COALESCE(pb.is_archived, false) = false
+        ORDER BY pmc.similarity_score DESC";
+
     /// <summary>
     /// GET /api/v1/whatsapp/products/merge-candidates
     /// Lists all pending vector similarity product merge candidates
@@ -40,31 +68,7 @@ public class WhatsAppProductController : ControllerBase
         using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync();
 
-        const string sql = @"
-            SELECT 
-                pmc.id AS ""id"",
-                pmc.product_a_id AS ""productAId"",
-                pmc.product_b_id AS ""productBId"",
-                pmc.similarity_score AS ""similarityScore"",
-                pmc.status AS ""status"",
-                pmc.detected_at AS ""detectedAt"",
-                pa.title AS ""productATitle"",
-                pa.base_sku AS ""productASku"",
-                pa.created_at AS ""productACreatedAt"",
-                (SELECT m.storage_path FROM public.media_links ml JOIN public.media m ON ml.media_id = m.id WHERE ml.entity_id = pa.id AND ml.entity_type = 'product' ORDER BY ml.is_primary DESC LIMIT 1) AS ""productAImagePath"",
-                (SELECT ml.media_id FROM public.media_links ml WHERE ml.entity_id = pa.id AND ml.entity_type = 'product' ORDER BY ml.is_primary DESC LIMIT 1) AS ""productAMediaId"",
-                pb.title AS ""productBTitle"",
-                pb.base_sku AS ""productBSku"",
-                pb.created_at AS ""productBCreatedAt"",
-                (SELECT m.storage_path FROM public.media_links ml JOIN public.media m ON ml.media_id = m.id WHERE ml.entity_id = pb.id AND ml.entity_type = 'product' ORDER BY ml.is_primary DESC LIMIT 1) AS ""productBImagePath"",
-                (SELECT ml.media_id FROM public.media_links ml WHERE ml.entity_id = pb.id AND ml.entity_type = 'product' ORDER BY ml.is_primary DESC LIMIT 1) AS ""productBMediaId""
-            FROM public.product_merge_candidates pmc
-            JOIN public.products pa ON pmc.product_a_id = pa.id
-            JOIN public.products pb ON pmc.product_b_id = pb.id
-            WHERE pmc.status = 'pending'
-            ORDER BY pmc.similarity_score DESC";
-
-        var candidates = await conn.QueryAsync<dynamic>(new CommandDefinition(sql, cancellationToken: ct));
+        var candidates = await conn.QueryAsync<dynamic>(new CommandDefinition(MergeCandidatesSql, cancellationToken: ct));
         return Ok(candidates);
     }
 
@@ -454,6 +458,35 @@ public class WhatsAppProductController : ControllerBase
         return Ok(new { success = true, count });
     }
 
+    public const string SimilarMatchesSql = @"
+        SELECT 
+            pmc.id AS ""id"",
+            pmc.product_a_id AS ""productAId"",
+            pmc.product_b_id AS ""productBId"",
+            pmc.similarity_score AS ""similarityScore"",
+            pmc.status AS ""status"",
+            pmc.detected_at AS ""detectedAt"",
+            pa.title AS ""productATitle"",
+            pa.base_sku AS ""productASku"",
+            pa.created_at AS ""productACreatedAt"",
+            COALESCE(pa.is_deleted, false) AS ""productAIsDeleted"",
+            COALESCE(pa.is_archived, false) AS ""productAIsArchived"",
+            (SELECT m.storage_path FROM public.media_links ml JOIN public.media m ON ml.media_id = m.id WHERE ml.entity_id = pa.id AND ml.entity_type = 'product' ORDER BY ml.is_primary DESC LIMIT 1) AS ""productAImagePath"",
+            (SELECT ml.media_id FROM public.media_links ml WHERE ml.entity_id = pa.id AND ml.entity_type = 'product' ORDER BY ml.is_primary DESC LIMIT 1) AS ""productAMediaId"",
+            pb.title AS ""productBTitle"",
+            pb.base_sku AS ""productBSku"",
+            pb.created_at AS ""productBCreatedAt"",
+            COALESCE(pb.is_deleted, false) AS ""productBIsDeleted"",
+            COALESCE(pb.is_archived, false) AS ""productBIsArchived"",
+            (SELECT m.storage_path FROM public.media_links ml JOIN public.media m ON ml.media_id = m.id WHERE ml.entity_id = pb.id AND ml.entity_type = 'product' ORDER BY ml.is_primary DESC LIMIT 1) AS ""productBImagePath"",
+            (SELECT ml.media_id FROM public.media_links ml WHERE ml.entity_id = pb.id AND ml.entity_type = 'product' ORDER BY ml.is_primary DESC LIMIT 1) AS ""productBMediaId""
+        FROM public.product_merge_candidates pmc
+        JOIN public.products pa ON pmc.product_a_id = pa.id
+        JOIN public.products pb ON pmc.product_b_id = pb.id
+        WHERE (pmc.product_a_id = @ProductId OR pmc.product_b_id = @ProductId)
+          AND pmc.status IN ('pending', 'dismissed')
+        ORDER BY pmc.similarity_score DESC";
+
     /// <summary>
     /// GET /api/v1/whatsapp/products/{productId}/similar-matches
     /// Returns all pending or dismissed merge candidates for a specific product, ordered by similarity score DESC.
@@ -464,32 +497,7 @@ public class WhatsAppProductController : ControllerBase
         using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync();
 
-        const string sql = @"
-            SELECT 
-                pmc.id AS ""id"",
-                pmc.product_a_id AS ""productAId"",
-                pmc.product_b_id AS ""productBId"",
-                pmc.similarity_score AS ""similarityScore"",
-                pmc.status AS ""status"",
-                pmc.detected_at AS ""detectedAt"",
-                pa.title AS ""productATitle"",
-                pa.base_sku AS ""productASku"",
-                pa.created_at AS ""productACreatedAt"",
-                (SELECT m.storage_path FROM public.media_links ml JOIN public.media m ON ml.media_id = m.id WHERE ml.entity_id = pa.id AND ml.entity_type = 'product' ORDER BY ml.is_primary DESC LIMIT 1) AS ""productAImagePath"",
-                (SELECT ml.media_id FROM public.media_links ml WHERE ml.entity_id = pa.id AND ml.entity_type = 'product' ORDER BY ml.is_primary DESC LIMIT 1) AS ""productAMediaId"",
-                pb.title AS ""productBTitle"",
-                pb.base_sku AS ""productBSku"",
-                pb.created_at AS ""productBCreatedAt"",
-                (SELECT m.storage_path FROM public.media_links ml JOIN public.media m ON ml.media_id = m.id WHERE ml.entity_id = pb.id AND ml.entity_type = 'product' ORDER BY ml.is_primary DESC LIMIT 1) AS ""productBImagePath"",
-                (SELECT ml.media_id FROM public.media_links ml WHERE ml.entity_id = pb.id AND ml.entity_type = 'product' ORDER BY ml.is_primary DESC LIMIT 1) AS ""productBMediaId""
-            FROM public.product_merge_candidates pmc
-            JOIN public.products pa ON pmc.product_a_id = pa.id
-            JOIN public.products pb ON pmc.product_b_id = pb.id
-            WHERE (pmc.product_a_id = @ProductId OR pmc.product_b_id = @ProductId)
-              AND pmc.status IN ('pending', 'dismissed')
-            ORDER BY pmc.similarity_score DESC";
-
-        var candidates = await conn.QueryAsync<dynamic>(new CommandDefinition(sql, new { ProductId = productId }, cancellationToken: ct));
+        var candidates = await conn.QueryAsync<dynamic>(new CommandDefinition(SimilarMatchesSql, new { ProductId = productId }, cancellationToken: ct));
         return Ok(candidates);
     }
 

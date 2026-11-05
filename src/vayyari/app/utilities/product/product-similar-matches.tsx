@@ -58,6 +58,9 @@ function resolveMatch(candidate: any, focalProductId: string) {
   const otherMediaId  = isAFocal ? candidate.productBMediaId : candidate.productAMediaId;
   const otherPath     = isAFocal ? candidate.productBImagePath : candidate.productAImagePath;
   const otherCreated  = isAFocal ? candidate.productBCreatedAt : candidate.productACreatedAt;
+  const otherIsDeleted = isAFocal ? Boolean(candidate.productBIsDeleted) : Boolean(candidate.productAIsDeleted);
+  const otherIsArchived = isAFocal ? Boolean(candidate.productBIsArchived) : Boolean(candidate.productAIsArchived);
+  const isInactive    = otherIsDeleted || otherIsArchived;
 
   const focalCreated  = isAFocal ? candidate.productACreatedAt : candidate.productBCreatedAt;
 
@@ -70,6 +73,9 @@ function resolveMatch(candidate: any, focalProductId: string) {
     otherTitle,
     otherSku,
     otherThumb: getThumbnailUrl(otherMediaId, otherPath),
+    otherIsDeleted,
+    otherIsArchived,
+    isInactive,
     // Merge strategy: keep the oldest product (focal if focal is older, else other)
     focalIsTarget: new Date(focalCreated) <= new Date(otherCreated),
   };
@@ -89,6 +95,7 @@ function MatchTile({
 }) {
   const theme = useTheme();
   const isDismissed = match.status === 'dismissed';
+  const isInactive = match.isInactive;
 
   const scoreColor =
     match.scorePercent >= 90 ? '#d32f2f'
@@ -100,10 +107,10 @@ function MatchTile({
       style={[
         styles.tile,
         selected && { borderColor: theme.colors.primary, borderWidth: 2 },
-        isDismissed && { opacity: 0.45 },
+        (isDismissed || isInactive) && { opacity: 0.5 },
       ]}
       onPress={onPress}
-      activeOpacity={0.8}
+      activeOpacity={isInactive ? 1 : 0.8}
     >
       <Image
         source={{ uri: match.otherThumb }}
@@ -119,23 +126,37 @@ function MatchTile({
       </View>
 
       {/* Selected indicator top-right circle */}
-      <View
-        style={[
-          styles.selectionCircle,
-          selected
-            ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
-            : { backgroundColor: 'rgba(0,0,0,0.25)', borderColor: 'rgba(255,255,255,0.8)' },
-        ]}
-      >
-        {selected && <View style={styles.selectionDot} />}
-      </View>
+      {!isInactive ? (
+        <View
+          style={[
+            styles.selectionCircle,
+            selected
+              ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
+              : { backgroundColor: 'rgba(0,0,0,0.25)', borderColor: 'rgba(255,255,255,0.8)' },
+          ]}
+        >
+          {selected && <View style={styles.selectionDot} />}
+        </View>
+      ) : (
+        <View style={[styles.selectionCircle, { backgroundColor: 'rgba(0,0,0,0.6)', borderColor: 'rgba(255,255,255,0.3)' }]}>
+          <IconButton icon="lock" size={10} iconColor="rgba(255,255,255,0.8)" style={{ margin: 0 }} />
+        </View>
+      )}
 
-      {/* Dismissed badge */}
-      {isDismissed && (
+      {/* Status badge: Deleted / Archived / Dismissed */}
+      {match.otherIsDeleted ? (
+        <View style={[styles.dismissedBadge, { backgroundColor: '#EF4444EE' }]}>
+          <Text style={styles.dismissedText}>Deleted</Text>
+        </View>
+      ) : match.otherIsArchived ? (
+        <View style={[styles.dismissedBadge, { backgroundColor: '#F59E0BEE' }]}>
+          <Text style={styles.dismissedText}>Archived</Text>
+        </View>
+      ) : isDismissed ? (
         <View style={[styles.dismissedBadge, { backgroundColor: 'rgba(0,0,0,0.55)' }]}>
           <Text style={styles.dismissedText}>Dismissed</Text>
         </View>
-      )}
+      ) : null}
 
       {/* Bottom info bar */}
       <View style={styles.tileOverlay}>
@@ -145,7 +166,7 @@ function MatchTile({
         ) : null}
       </View>
 
-      {/* View detail button */}
+      {/* View detail button - ALWAYS enabled for previewing */}
       <TouchableOpacity style={styles.viewBtn} onPress={onViewProduct} hitSlop={8}>
         <IconButton icon="open-in-new" size={14} iconColor="white" style={{ margin: 0 }} />
       </TouchableOpacity>
@@ -214,11 +235,15 @@ export default function ProductSimilarMatchesScreen() {
     }
   };
 
-  const toggleSelect = (candidateId: string) => {
+  const toggleSelect = (match: ReturnType<typeof resolveMatch>) => {
+    if (match.isInactive) {
+      setSnack(match.otherIsDeleted ? 'Cannot merge with soft-deleted product' : 'Cannot merge with archived product');
+      return;
+    }
     setSelectedIds(prev => {
       const next = new Set(prev);
-      if (next.has(candidateId)) next.delete(candidateId);
-      else next.add(candidateId);
+      if (next.has(match.candidateId)) next.delete(match.candidateId);
+      else next.add(match.candidateId);
       return next;
     });
   };
@@ -228,6 +253,11 @@ export default function ProductSimilarMatchesScreen() {
    * TARGET (oldest wins). Shows a warning dialog, then calls the merge API.
    */
   const handleMergeOne = async (match: ReturnType<typeof resolveMatch>) => {
+    if (match.isInactive) {
+      Alert.alert('Cannot Merge', match.otherIsDeleted ? 'This product is soft-deleted and cannot be merged.' : 'This product is archived and cannot be merged.');
+      return;
+    }
+
     const targetLabel = match.focalIsTarget ? 'THIS product (kept)' : `"${match.otherTitle}" (kept)`;
     const sourceLabel = match.focalIsTarget ? `"${match.otherTitle}" (merged in)` : 'THIS product (merged in)';
 
@@ -296,7 +326,7 @@ export default function ProductSimilarMatchesScreen() {
             key={match.candidateId}
             match={match}
             selected={selectedIds.has(match.candidateId)}
-            onPress={() => toggleSelect(match.candidateId)}
+            onPress={() => toggleSelect(match)}
             onViewProduct={() => router.push(`/product/${match.otherId}` as any)}
           />
         ))}

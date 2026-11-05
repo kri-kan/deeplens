@@ -23,6 +23,16 @@ public class PerceptualHashCache
         _logger = logger;
     }
 
+    public const string InitSql = @"
+        SELECT m.id AS MediaId, ml.entity_id AS ProductId, m.phash AS Phash, COALESCE(c.name, m.category, 'Others') AS Category
+        FROM public.media m
+        INNER JOIN public.media_links ml ON m.id = ml.media_id
+        INNER JOIN public.products p ON ml.entity_id = p.id
+        LEFT JOIN public.categories c ON p.category_id = c.id
+        WHERE m.phash IS NOT NULL
+          AND ml.entity_type = 'product'
+          AND LOWER(m.mime_type) != 'image/webp'";
+
     public class CacheEntry
     {
         public Guid MediaId { get; set; }
@@ -30,6 +40,8 @@ public class PerceptualHashCache
         public required string Phash { get; set; }
         public required string Category { get; set; }
     }
+
+    public bool IsInitialized => Volatile.Read(ref _isInitialized) == 1;
 
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
@@ -40,44 +52,63 @@ public class PerceptualHashCache
 
         _logger.LogInformation("Initializing PerceptualHashCache from database...");
 
-        try
+        const int maxRetries = 10;
+        int attempt = 0;
+
+        while (!cancellationToken.IsCancellationRequested)
         {
-            using var conn = new NpgsqlConnection(_connectionString);
-            await conn.OpenAsync(cancellationToken);
-
-            // Select all media with phash that are linked to a non-deleted product.
-            // Exclude image/webp (stickers) — they appear in every group and would
-            // produce false-positive duplicate matches across unrelated products.
-            const string sql = @"
-                SELECT m.id AS MediaId, ml.entity_id AS ProductId, m.phash AS Phash, COALESCE(c.name, m.category, 'Others') AS Category
-                FROM public.media m
-                INNER JOIN public.media_links ml ON m.id = ml.media_id
-                INNER JOIN public.products p ON ml.entity_id = p.id
-                LEFT JOIN public.categories c ON p.category_id = c.id
-                WHERE m.phash IS NOT NULL
-                  AND ml.entity_type = 'product'
-                  AND p.is_deleted = false
-                  AND LOWER(m.mime_type) != 'image/webp'";
-
-            var entries = await conn.QueryAsync<CacheEntry>(sql);
-            int count = 0;
-            lock (_lock)
+            attempt++;
+            try
             {
-                _cache.Clear();
-                foreach (var entry in entries)
+                using var conn = new NpgsqlConnection(_connectionString);
+                await conn.OpenAsync(cancellationToken);
+
+                // Select all media with phash that are linked to a non-deleted, non-archived product.
+                // Exclude image/webp (stickers) — they appear in every group and would
+                // produce false-positive duplicate matches across unrelated products.
+                var entries = await conn.QueryAsync<CacheEntry>(InitSql);
+                int count = 0;
+                lock (_lock)
                 {
-                    _cache.Add(entry);
-                    count++;
+                    _cache.Clear();
+                    foreach (var entry in entries)
+                    {
+                        _cache.Add(entry);
+                        count++;
+                    }
+                }
+
+                _logger.LogInformation("PerceptualHashCache initialized with {Count} entries from database.", count);
+                return;
+            }
+            catch (Exception ex)
+            {
+                if (attempt >= maxRetries)
+                {
+                    _isInitialized = 0; // Allow future retry
+                    _logger.LogError(ex, "Failed to initialize PerceptualHashCache from database after {MaxRetries} attempts.", maxRetries);
+                    throw;
+                }
+
+                _logger.LogWarning(ex, "Failed to initialize PerceptualHashCache (attempt {Attempt}/{MaxRetries}). Retrying in 3 seconds...", attempt, maxRetries);
+                try
+                {
+                    await Task.Delay(3000, cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    _isInitialized = 0;
+                    throw;
                 }
             }
-
-            _logger.LogInformation("PerceptualHashCache initialized with {Count} entries from database.", count);
         }
-        catch (Exception ex)
+    }
+
+    public async Task EnsureInitializedAsync(CancellationToken cancellationToken = default)
+    {
+        if (!IsInitialized)
         {
-            _isInitialized = 0; // Allow retry on failure
-            _logger.LogError(ex, "Failed to initialize PerceptualHashCache from database.");
-            throw;
+            await InitializeAsync(cancellationToken);
         }
     }
 

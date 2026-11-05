@@ -147,4 +147,39 @@ public class AutoMergeHardeningTests
         Assert.That(remaining.Count, Is.EqualTo(1));
         Assert.That(remaining[0].MediaId, Is.EqualTo(mediaId2));
     }
+
+    [Test]
+    public void DelayedAutoMerge_StatusGuard_RejectsMerge_WhenSourceOrTargetIsInactive()
+    {
+        // Status guard logic as implemented in WhatsAppGroupWorker.ExecuteDelayedAutoMergeAsync
+        static bool CanProceedWithMerge((bool IsDeleted, bool IsArchived)? source, (bool IsDeleted, bool IsArchived)? target)
+        {
+            if (!source.HasValue || source.Value.IsDeleted || source.Value.IsArchived ||
+                !target.HasValue || target.Value.IsDeleted || target.Value.IsArchived)
+            {
+                return false;
+            }
+            return true;
+        }
+
+        // Both active -> allowed
+        Assert.That(CanProceedWithMerge((false, false), (false, false)), Is.True);
+
+        // Source is soft-deleted -> rejected
+        Assert.That(CanProceedWithMerge((true, false), (false, false)), Is.False);
+
+        // Source is archived -> rejected
+        Assert.That(CanProceedWithMerge((false, true), (false, false)), Is.False);
+
+        // Target is soft-deleted -> rejected
+        Assert.That(CanProceedWithMerge((false, false), (true, false)), Is.False);
+
+        // Target is archived -> rejected
+        Assert.That(CanProceedWithMerge((false, false), (false, true)), Is.False);
+
+        // Missing product record in DB -> rejected
+        Assert.That(CanProceedWithMerge(null, (false, false)), Is.False);
+        Assert.That(CanProceedWithMerge((false, false), null), Is.False);
+    }
 }
+

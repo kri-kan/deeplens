@@ -505,6 +505,8 @@ public class ProductsController : ControllerBase
                 m.phash AS Phash, 
                 m.storage_path AS StoragePath,
                 c.name AS Category,
+                COALESCE(p.is_deleted, false) AS IsDeleted,
+                COALESCE(p.is_archived, false) AS IsArchived,
                 (SELECT COUNT(1) FROM public.media_links ml2 WHERE ml2.entity_id = p.id AND ml2.entity_type = 'product') AS MediaCount,
                 EXISTS (
                     SELECT 1 FROM public.instagram_product_links ipl 
@@ -518,8 +520,7 @@ public class ProductsController : ControllerBase
             FROM public.products p
             JOIN public.media_links ml ON p.id = ml.entity_id AND ml.entity_type = 'product'
             JOIN public.media m ON m.id = ml.media_id AND m.phash IS NOT NULL
-            LEFT JOIN public.categories c ON p.category_id = c.id
-            WHERE p.is_deleted = false",
+            LEFT JOIN public.categories c ON p.category_id = c.id",
             new { PostId = request.PostId ?? Guid.Empty }, cancellationToken: ct));
 
         var productBestMatches = new Dictionary<Guid, VisualSimilarityMatchDto>();
@@ -548,7 +549,9 @@ public class ProductsController : ControllerBase
                     Category = (string?)c.category,
                     MediaCount = Convert.ToInt32(c.mediacount ?? 0),
                     IsLinked = (bool)c.islinked,
-                    ExistingLinkType = (string?)c.existinglinktype
+                    ExistingLinkType = (string?)c.existinglinktype,
+                    IsDeleted = (bool)(c.isdeleted ?? false),
+                    IsArchived = (bool)(c.isarchived ?? false)
                 };
             }
         }

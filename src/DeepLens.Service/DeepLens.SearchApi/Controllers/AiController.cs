@@ -226,11 +226,13 @@ public class AiController : ControllerBase
         }
 
         var candidates = await conn.QueryAsync<dynamic>(
-            new CommandDefinition(@"SELECT p.id as ProductId, p.base_sku as Sku, p.title as Title, m.phash as Phash, m.storage_path as StoragePath
+            new CommandDefinition(@"SELECT p.id as ProductId, p.base_sku as Sku, p.title as Title, m.phash as Phash, m.storage_path as StoragePath,
+                     COALESCE(p.is_deleted, false) AS IsDeleted,
+                     COALESCE(p.is_archived, false) AS IsArchived
               FROM public.products p
               JOIN public.media_links ml ON p.id = ml.entity_id
               JOIN public.media m ON m.id = ml.media_id
-              WHERE ml.entity_type = 'product' AND p.is_deleted = false AND m.phash IS NOT NULL AND p.id != @ProductId",
+              WHERE ml.entity_type = 'product' AND m.phash IS NOT NULL AND p.id != @ProductId",
             new { ProductId = productId }, cancellationToken: ct)
         );
 
@@ -249,7 +251,9 @@ public class AiController : ControllerBase
                 Phash = candPhash,
                 Distance = dist,
                 SimilarityPercentage = pct,
-                StoragePath = c.storagepath
+                StoragePath = c.storagepath,
+                IsDeleted = (bool)(c.isdeleted ?? false),
+                IsArchived = (bool)(c.isarchived ?? false)
             });
         }
 
@@ -433,4 +437,10 @@ public class TestSimilarityMatch
     
     [JsonPropertyName("storagePath")]
     public string? StoragePath { get; set; }
+
+    [JsonPropertyName("isDeleted")]
+    public bool IsDeleted { get; set; }
+
+    [JsonPropertyName("isArchived")]
+    public bool IsArchived { get; set; }
 }

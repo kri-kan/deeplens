@@ -338,5 +338,40 @@ public class DtoSerializationTests
         Assert.That(deserialized.PostId, Is.Null);
         Assert.That(deserialized.MediaId, Is.Null);
     }
+
+    [Test]
+    public void VisualSimilarityMatchDto_SerializesAndDeserializes_IsDeleted_And_IsArchived_Flags()
+    {
+        var match = new VisualSimilarityMatchDto
+        {
+            ProductId = Guid.NewGuid(),
+            Sku = "VF1B6B",
+            Title = "Archived Saree Item",
+            IsDeleted = false,
+            IsArchived = true
+        };
+
+        var json = JsonSerializer.Serialize(match);
+
+        // Assert camelCase property naming
+        Assert.That(json, Contains.Substring("\"isDeleted\":false"));
+        Assert.That(json, Contains.Substring("\"isArchived\":true"));
+        Assert.That(json, Does.Not.Contain("\"IsDeleted\":"));
+        Assert.That(json, Does.Not.Contain("\"IsArchived\":"));
+
+        // Round-trip deserialization
+        var deserialized = JsonSerializer.Deserialize<VisualSimilarityMatchDto>(json);
+        Assert.That(deserialized, Is.Not.Null);
+        Assert.That(deserialized!.IsDeleted, Is.False);
+        Assert.That(deserialized.IsArchived, Is.True);
+
+        // Deserializing JSON without flags defaults gracefully to false
+        var jsonWithoutFlags = @"{""productId"":""" + Guid.NewGuid() + @""",""sku"":""ACTIVE-1""}";
+        var deserializedDefault = JsonSerializer.Deserialize<VisualSimilarityMatchDto>(jsonWithoutFlags);
+        Assert.That(deserializedDefault, Is.Not.Null);
+        Assert.That(deserializedDefault!.IsDeleted, Is.False);
+        Assert.That(deserializedDefault.IsArchived, Is.False);
+    }
 }
+
 

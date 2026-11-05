@@ -589,6 +589,13 @@ public class ProductService : IProductService
             "UPDATE products SET is_deleted = TRUE, updated_at = NOW() WHERE id = ANY(@Ids)",
             new { Ids = idArray });
 
+        // Auto-dismiss pending merge candidates for soft-deleted products
+        await db.ExecuteAsync(
+            @"UPDATE public.product_merge_candidates 
+              SET status = 'dismissed', resolved_at = NOW(), resolved_by = 'system_soft_delete' 
+              WHERE (product_a_id = ANY(@Ids) OR product_b_id = ANY(@Ids)) AND status = 'pending'",
+            new { Ids = idArray });
+
         var batchId = Guid.NewGuid();
         var cmd = new ProductDeleteBatchCommand
         {
@@ -782,6 +789,13 @@ public class ProductService : IProductService
             "UPDATE products SET is_archived = TRUE, updated_at = NOW() WHERE id = ANY(@Ids)",
             new { Ids = idArray });
 
+        // Auto-dismiss pending merge candidates for archived products
+        await db.ExecuteAsync(
+            @"UPDATE public.product_merge_candidates 
+              SET status = 'dismissed', resolved_at = NOW(), resolved_by = 'system_archive' 
+              WHERE (product_a_id = ANY(@Ids) OR product_b_id = ANY(@Ids)) AND status = 'pending'",
+            new { Ids = idArray });
+
         var batchId = Guid.NewGuid();
         var cmd = new ProductArchiveBatchCommand
         {
@@ -839,6 +853,12 @@ public class ProductService : IProductService
             // 1. Mark products as archived
             var archivedCount = await db.ExecuteAsync(
                 "UPDATE products SET is_archived = TRUE, updated_at = NOW() WHERE id = ANY(@Ids)",
+                new { Ids = idArray }, transaction);
+
+            await db.ExecuteAsync(
+                @"UPDATE public.product_merge_candidates 
+                  SET status = 'dismissed', resolved_at = NOW(), resolved_by = 'system_archive' 
+                  WHERE (product_a_id = ANY(@Ids) OR product_b_id = ANY(@Ids)) AND status = 'pending'",
                 new { Ids = idArray }, transaction);
 
             // 2. Fetch all media linked to these products via media_links (both product & vendor_listing links)

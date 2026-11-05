@@ -77,4 +77,10 @@ public class VisualSimilarityMatchDto
 
     [JsonPropertyName("existingLinkType")]
     public string? ExistingLinkType { get; set; }
+
+    [JsonPropertyName("isDeleted")]
+    public bool IsDeleted { get; set; }
+
+    [JsonPropertyName("isArchived")]
+    public bool IsArchived { get; set; }
 }
