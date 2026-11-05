@@ -20,6 +20,7 @@ export interface ReviewInboxItem {
     mediaCount: number;
     textCount: number;
     description: string | null;
+    lastMessageAt?: string | Date | null;
     updatedAt: string | Date;
     createdAt: string | Date;
     sampleMediaUrls: string[];
@@ -59,7 +60,10 @@ export async function fetchReviewInboxData(
             COUNT(*) FILTER (WHERE review_stage = 'catalog_ingestion') as "catalog_ingestion",
             COUNT(*) FILTER (WHERE review_stage = 'enrichment') as "enrichment"
         FROM wa.message_groups
-        WHERE status = 'needs_review'
+        INNER JOIN wa.chats ON wa.message_groups.jid = wa.chats.jid
+        WHERE wa.message_groups.status = 'needs_review'
+          AND wa.chats.vendor_id IS NOT NULL
+          AND wa.chats.enable_message_grouping = true
     `);
 
     const countsRow = stageCountsRes.rows[0] || {};
@@ -97,12 +101,15 @@ export async function fetchReviewInboxData(
             mg.media_count as "mediaCount",
             mg.text_count as "textCount",
             mg.description,
+            mg.last_message_at as "lastMessageAt",
             mg.updated_at as "updatedAt",
             mg.created_at as "createdAt"
          FROM wa.message_groups mg
-         LEFT JOIN wa.chats c ON mg.jid = c.jid
-         WHERE mg.status = 'needs_review' ${stageFilterSql}
-         ORDER BY mg.updated_at DESC
+         INNER JOIN wa.chats c ON mg.jid = c.jid
+         WHERE mg.status = 'needs_review'
+           AND c.vendor_id IS NOT NULL
+           AND c.enable_message_grouping = true ${stageFilterSql}
+         ORDER BY mg.last_message_at DESC NULLS LAST, mg.updated_at DESC
          LIMIT $${limitParamIdx} OFFSET $${offsetParamIdx}`,
         queryParams
     );

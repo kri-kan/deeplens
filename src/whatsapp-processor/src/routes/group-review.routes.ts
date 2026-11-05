@@ -356,14 +356,18 @@ export function createGroupReviewRoutes(io?: any): Router {
             }
 
             const msg = msgRes.rows[0];
-            if (msg.group_id !== groupId) {
-                return res.status(400).json({ success: false, message: 'Message does not belong to specified group' });
+            const targetGroupId = msg.group_id || groupId;
+            if (!targetGroupId) {
+                return res.status(400).json({ success: false, message: 'Message does not belong to any group' });
+            }
+            if (msg.group_id && msg.group_id !== groupId) {
+                logger.info({ messageId, requestedGroupId: groupId, actualGroupId: msg.group_id }, 'Message actual group differs from requested group; splitting actual group');
             }
 
             // Check if group is already created as product
             const groupRes = await client.query(
                 `SELECT status, process_as_product, deeplens_product_id FROM wa.message_groups WHERE group_id = $1`,
-                [groupId]
+                [targetGroupId]
             );
             const isProductCreated = groupRes.rows[0]?.status === 'product_created' || Boolean(groupRes.rows[0]?.deeplens_product_id);
             const processAsProduct = groupRes.rows[0]?.process_as_product || false;
@@ -375,10 +379,10 @@ export function createGroupReviewRoutes(io?: any): Router {
                 `UPDATE wa.messages
                  SET group_id = $1, updated_at = NOW()
                  WHERE group_id = $2 AND timestamp >= $3 AND jid = $4`,
-                [newGroupId, groupId, msg.timestamp, msg.jid]
+                [newGroupId, targetGroupId, msg.timestamp, msg.jid]
             );
 
-            await logAudit(groupId, 'split', 'operator', { action: 'split_at', messageId }, { targetGroupId: newGroupId });
+            await logAudit(targetGroupId, 'split', 'operator', { action: 'split_at', messageId }, { targetGroupId: newGroupId });
 
             // Create staging record for the new group
             await client.query(
@@ -387,13 +391,13 @@ export function createGroupReviewRoutes(io?: any): Router {
                  VALUES ($1, $2, 'staging', $3, 'Split group', 0, 0, NOW(), NOW(), NOW())`,
                 [newGroupId, msg.jid, processAsProduct]
             );
-            await logAudit(newGroupId, 'group_staged', 'operator', null, { status: 'staging', splitFrom: groupId });
+            await logAudit(newGroupId, 'group_staged', 'operator', null, { status: 'staging', splitFrom: targetGroupId });
 
             // Re-evaluate old group
             try {
-                await groupReadinessService.checkAndEmitGroupEvent(groupId);
+                await groupReadinessService.checkAndEmitGroupEvent(targetGroupId);
             } catch (err: any) {
-                logger.warn({ err: err.message, groupId }, 'Non-fatal: checkAndEmitGroupEvent failed on old group');
+                logger.warn({ err: err.message, targetGroupId }, 'Non-fatal: checkAndEmitGroupEvent failed on old group');
             }
 
             // Re-evaluate new group
@@ -406,13 +410,13 @@ export function createGroupReviewRoutes(io?: any): Router {
             // If old group was already a product, emit reprocessing event to unlink media on C# side
             if (isProductCreated) {
                 try {
-                    await groupReadinessService.emitReprocessEvent('split', groupId, newGroupId);
+                    await groupReadinessService.emitReprocessEvent('split', targetGroupId, newGroupId);
                 } catch (err: any) {
-                    logger.warn({ err: err.message, groupId, newGroupId }, 'Non-fatal: emitReprocessEvent for split failed');
+                    logger.warn({ err: err.message, targetGroupId, newGroupId }, 'Non-fatal: emitReprocessEvent for split failed');
                 }
             }
 
-            res.json({ success: true, message: 'Group split successful', newGroupId, splitCount: updateRes.rowCount });
+            res.json({ success: true, message: 'Group split successful', newGroupId, targetGroupId, splitCount: updateRes.rowCount });
         } catch (err: any) {
             logger.error({ err: err.message, groupId }, 'Failed to split group');
             res.status(500).json({ success: false, message: err.message });
@@ -553,8 +557,12 @@ export function createGroupReviewRoutes(io?: any): Router {
                 return res.status(404).json({ success: false, message: 'Message not found' });
             }
 
-            if (msgRes.rows[0].group_id !== groupId) {
-                return res.status(400).json({ success: false, message: 'Message does not belong to specified source group' });
+            const actualSourceGroupId = msgRes.rows[0].group_id || groupId;
+            if (!actualSourceGroupId) {
+                return res.status(400).json({ success: false, message: 'Message does not belong to any source group' });
+            }
+            if (msgRes.rows[0].group_id && msgRes.rows[0].group_id !== groupId) {
+                logger.info({ messageId, requestedGroupId: groupId, actualGroupId: msgRes.rows[0].group_id }, 'Message actual source group differs from requested group; reassigning from actual group');
             }
 
             // Check target group exists
@@ -569,7 +577,7 @@ export function createGroupReviewRoutes(io?: any): Router {
 
             const oldGroupRes = await client.query(
                 `SELECT status, deeplens_product_id FROM wa.message_groups WHERE group_id = $1`,
-                [groupId]
+                [actualSourceGroupId]
             );
             const isOldProductCreated = oldGroupRes.rows[0]?.status === 'product_created' || Boolean(oldGroupRes.rows[0]?.deeplens_product_id);
 
@@ -581,16 +589,16 @@ export function createGroupReviewRoutes(io?: any): Router {
                 [targetGroupId, messageId]
             );
 
-            await logAudit(groupId, 'message_reassigned', 'operator', { messageId }, { targetGroupId });
-            await logAudit(targetGroupId, 'message_reassigned', 'operator', null, { messageId, reassignedFrom: groupId });
+            await logAudit(actualSourceGroupId, 'message_reassigned', 'operator', { messageId }, { targetGroupId });
+            await logAudit(targetGroupId, 'message_reassigned', 'operator', null, { messageId, reassignedFrom: actualSourceGroupId });
 
             // Re-evaluate both groups
-            await groupReadinessService.checkAndEmitGroupEvent(groupId);
+            await groupReadinessService.checkAndEmitGroupEvent(actualSourceGroupId);
             await groupReadinessService.checkAndEmitGroupEvent(targetGroupId);
 
             // If the old group was already a product, emit reprocessing event to clean up media
             if (isOldProductCreated) {
-                await groupReadinessService.emitReprocessEvent('split', groupId, targetGroupId);
+                await groupReadinessService.emitReprocessEvent('split', actualSourceGroupId, targetGroupId);
             }
 
             res.json({ success: true, message: 'Message reassigned successfully' });
@@ -819,6 +827,19 @@ export function createGroupReviewRoutes(io?: any): Router {
         }
 
         try {
+            // Ensure chat has an assigned vendor and message grouping enabled
+            const chatRes = await client.query(
+                'SELECT enable_message_grouping, vendor_id FROM wa.chats WHERE jid = $1',
+                [jid]
+            );
+            const chat = chatRes.rows[0];
+            if (!chat || !chat.enable_message_grouping || !chat.vendor_id) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Chat must have an assigned vendor and message grouping enabled to be zoned.'
+                });
+            }
+
             const { zoningService } = await import('../services/zoning.service');
             const stats = await zoningService.rezoneChat(jid, client);
 

@@ -32,7 +32,7 @@ import {
   ReviewInboxItem,
   ReviewStageCounts,
 } from '@/services/wa-processor.service';
-import { formatDistanceToNow } from 'date-fns';
+import { formatISTTimestamp } from '@/utils/date-format';
 
 export interface WhatsAppReviewInboxPageProps {
   data?: ReviewInboxResponse | null;
@@ -152,17 +152,6 @@ export const WhatsAppReviewInboxPage: React.FC<WhatsAppReviewInboxPageProps> = (
     }
   };
 
-  const formatTimeDistance = (iso?: string | null) => {
-    if (!iso) return '';
-    try {
-      const d = new Date(iso);
-      if (isNaN(d.getTime())) return '';
-      return formatDistanceToNow(d, { addSuffix: true });
-    } catch {
-      return '';
-    }
-  };
-
   const renderReviewCard = ({ item }: { item: ReviewInboxItem }) => {
     const stageBadge = getStageBadge(item.reviewStage);
     const statusBadge = getStatusBadge(item.status);
@@ -190,7 +179,7 @@ export const WhatsAppReviewInboxPage: React.FC<WhatsAppReviewInboxPageProps> = (
             <XStack alignItems="center" gap="$2">
               <LuClock size={11} color="#64748B" />
               <Text style={styles.timeText}>
-                {formatTimeDistance(item.updatedAt || item.createdAt)}
+                {formatISTTimestamp(item.lastMessageAt || item.updatedAt || item.createdAt, item.groupId)}
               </Text>
               <Text style={styles.bulletSeparator}>&bull;</Text>
               <Text style={styles.groupIdText}>

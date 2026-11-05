@@ -1,19 +1,26 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
 import {
   Text,
   Card,
   List,
   Divider,
+  Badge,
   useTheme,
 } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { Section } from '@/components/layout/Section';
+import { waProcessorService } from '@/services/wa-processor.service';
 
 export default function WhatsAppAdminScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const [reviewCount, setReviewCount] = useState(0);
+
+  useEffect(() => {
+    waProcessorService.getReviewBadgeCount().then(setReviewCount).catch(() => {});
+  }, []);
 
   const menuItems = [
     { title: 'Review Inbox', subtitle: 'Multi-stage product triage & review', icon: 'alert-decagram-outline', route: '/utilities/whatsapp/review-inbox' },
@@ -32,19 +39,37 @@ export default function WhatsAppAdminScreen() {
       <ScrollView contentContainerStyle={styles.container}>
         <Section title="Management Tools">
           <Card style={styles.menuCard}>
-            {menuItems.map((item, i) => (
-              <React.Fragment key={item.route}>
-                <List.Item
-                  title={item.title}
-                  description={item.subtitle}
-                  left={props => <List.Icon {...props} icon={item.icon} color={theme.colors.primary} />}
-                  right={props => <List.Icon {...props} icon="chevron-right" />}
-                  onPress={() => router.push(item.route as any)}
-                  titleStyle={styles.itemTitle}
-                />
-                {i < menuItems.length - 1 && <Divider />}
-              </React.Fragment>
-            ))}
+            {menuItems.map((item, i) => {
+              const isReviewItem = item.route.includes('review-inbox');
+              return (
+                <React.Fragment key={item.route}>
+                  <List.Item
+                    title={item.title}
+                    description={item.subtitle}
+                    left={props => (
+                      <List.Icon
+                        {...props}
+                        icon={item.icon}
+                        color={isReviewItem && reviewCount > 0 ? '#D97706' : theme.colors.primary}
+                      />
+                    )}
+                    right={props => (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        {isReviewItem && reviewCount > 0 ? (
+                          <Badge style={{ backgroundColor: '#D97706', color: '#FFFFFF', fontWeight: 'bold' }}>
+                            {reviewCount}
+                          </Badge>
+                        ) : null}
+                        <List.Icon {...props} icon="chevron-right" />
+                      </View>
+                    )}
+                    onPress={() => router.push(item.route as any)}
+                    titleStyle={styles.itemTitle}
+                  />
+                  {i < menuItems.length - 1 && <Divider />}
+                </React.Fragment>
+              );
+            })}
           </Card>
         </Section>
 

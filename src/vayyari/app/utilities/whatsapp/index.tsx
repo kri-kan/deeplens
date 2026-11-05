@@ -32,20 +32,17 @@ export default function WhatsAppChatListScreen() {
   const [menuVisible, setMenuVisible] = useState(false);
   const [onlyTracked, setOnlyTracked] = useState(true);
   const [failedCount, setFailedCount] = useState(0);
-  const [reviewBadgeCount, setReviewBadgeCount] = useState(0);
 
   const fetchData = useCallback(async () => {
     try {
-      const [s, convs, failedList, reviewCount] = await Promise.all([
+      const [s, convs, failedList] = await Promise.all([
         waProcessorService.getStatus(),
         waProcessorService.fetchConversations(),
-        productService.fetchFailedEnrichments().catch(() => []),
-        waProcessorService.getReviewBadgeCount().catch(() => 0)
+        productService.fetchFailedEnrichments().catch(() => [])
       ]);
       setStatus(s);
       setConversations(convs);
       setFailedCount(failedList?.length || 0);
-      setReviewBadgeCount(reviewCount || 0);
     } catch (err: any) {
       console.warn('Failed to fetch WhatsApp data:', err);
     } finally {
@@ -170,16 +167,6 @@ export default function WhatsAppChatListScreen() {
             color={theme.colors.primary}
             style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
           />
-          {reviewBadgeCount > 0 && (
-            <IconButton 
-              icon="alert" 
-              iconColor="#D97706"
-              size={22}
-              style={{ margin: 0 }}
-              accessibilityLabel="Review Inbox"
-              onPress={() => router.push('/utilities/whatsapp/review-inbox')} 
-            />
-          )}
           {failedCount > 0 && (
             <IconButton 
               icon="alert-circle" 
@@ -276,22 +263,6 @@ export default function WhatsAppChatListScreen() {
           )}
         </Surface>
 
-        {reviewBadgeCount > 0 && (
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => router.push('/utilities/whatsapp/review-inbox')}
-            style={styles.reviewBanner}
-          >
-            <View style={styles.reviewBannerContent}>
-              <Text style={styles.reviewBannerIcon}>⚠️</Text>
-              <Text style={styles.reviewBannerText}>
-                {reviewBadgeCount} {reviewBadgeCount === 1 ? 'Item Needs' : 'Items Need'} Review
-              </Text>
-            </View>
-            <Text style={styles.reviewBannerAction}>Resolve &rarr;</Text>
-          </TouchableOpacity>
-        )}
-
         {loading && !refreshing ? (
           <ActivityIndicator style={{ marginTop: 40 }} />
         ) : (
@@ -321,34 +292,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
-  },
-  reviewBanner: {
-    backgroundColor: '#FEF3C7',
-    borderColor: '#F59E0B',
-    borderWidth: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  reviewBannerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  reviewBannerIcon: {
-    fontSize: 14,
-  },
-  reviewBannerText: {
-    color: '#92400E',
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  reviewBannerAction: {
-    color: '#B45309',
-    fontWeight: '700',
-    fontSize: 12,
   },
   searchHeader: {
     padding: 8,

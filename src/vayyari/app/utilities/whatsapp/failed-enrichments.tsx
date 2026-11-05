@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, Image, Alert } from 'react-native';
-import { Text, Card, Button, useTheme, ActivityIndicator, Surface, Chip, Checkbox } from 'react-native-paper';
+import { Text, Card, Button, useTheme, ActivityIndicator, Surface, Chip } from 'react-native-paper';
+import { CustomCheckbox } from '@/components/tamagui-ui/atoms/CustomCheckbox';
 import { useRouter } from 'expo-router';
 import { productService } from '@/services/productService';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
@@ -163,9 +164,9 @@ export default function FailedEnrichmentsScreen() {
           >
             <View style={styles.cardRow}>
               <View style={styles.checkboxContainer}>
-                <Checkbox
-                  status={selectedIds.has(item.groupId) ? 'checked' : 'unchecked'}
-                  onPress={() => handleToggleSelect(item.groupId)}
+                <CustomCheckbox
+                  checked={selectedIds.has(item.groupId)}
+                  onToggle={() => handleToggleSelect(item.groupId)}
                 />
               </View>
               <Image source={{ uri: getImageUrl(item.imagePath) }} style={styles.productImage} />

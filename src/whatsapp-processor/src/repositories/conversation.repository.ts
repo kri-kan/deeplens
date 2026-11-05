@@ -335,6 +335,7 @@ export class ConversationRepository {
         `;
 
         const selectFields = `
+            id,
             message_id as "messageId",
             jid as "chatJid",
             sender as "senderJid",
@@ -372,7 +373,7 @@ export class ConversationRepository {
                         FROM wa.messages
                         WHERE jid IN (SELECT jid FROM chat_jids) ${searchCondition}
                           AND timestamp <= $2
-                        ORDER BY timestamp DESC
+                        ORDER BY timestamp DESC, id DESC
                         LIMIT $3
                     ),
                     newer_msgs AS (
@@ -380,13 +381,13 @@ export class ConversationRepository {
                         FROM wa.messages
                         WHERE jid IN (SELECT jid FROM chat_jids) ${searchCondition}
                           AND timestamp > $2
-                        ORDER BY timestamp ASC
+                        ORDER BY timestamp ASC, id ASC
                         LIMIT $3
                     )
                     SELECT * FROM older_msgs
                     UNION ALL
                     SELECT * FROM newer_msgs
-                    ORDER BY timestamp DESC
+                    ORDER BY timestamp DESC, id DESC
                 `, [jid, targetTs, halfLimit]);
                 return res.rows;
             }
@@ -400,7 +401,7 @@ export class ConversationRepository {
                 FROM wa.messages
                 WHERE jid IN (SELECT jid FROM chat_jids) ${searchCondition}
                   AND timestamp >= $2 AND timestamp <= $3
-                ORDER BY timestamp DESC
+                ORDER BY timestamp DESC, id DESC
                 LIMIT $4
             `, [jid, fromTimestamp, toTimestamp, limit]);
             return res.rows;
@@ -414,7 +415,7 @@ export class ConversationRepository {
                 FROM wa.messages
                 WHERE jid IN (SELECT jid FROM chat_jids) ${searchCondition}
                   AND timestamp < $2
-                ORDER BY timestamp DESC
+                ORDER BY timestamp DESC, id DESC
                 LIMIT $3
             `, [jid, beforeTimestamp, limit]);
             return res.rows;
@@ -428,7 +429,7 @@ export class ConversationRepository {
                 FROM wa.messages
                 WHERE jid IN (SELECT jid FROM chat_jids) ${searchCondition}
                   AND timestamp > $2
-                ORDER BY timestamp ASC
+                ORDER BY timestamp ASC, id ASC
                 LIMIT $3
             `, [jid, afterTimestamp, limit]);
             // Reverse so rows are DESC ordered (matching default findMessages contract)
@@ -452,14 +453,6 @@ export class ConversationRepository {
                     SELECT group_id FROM wa.message_groups
                     WHERE deeplens_product_id IS NOT NULL 
                       AND deeplens_product_id IN (SELECT deeplens_product_id FROM wa.message_groups WHERE group_id = $3 AND deeplens_product_id IS NOT NULL)
-                    UNION
-                    -- Match other groups with same normalized description in the same chat
-                    SELECT mg2.group_id 
-                    FROM wa.message_groups mg1
-                    JOIN wa.message_groups mg2 ON mg1.jid = mg2.jid AND mg1.group_id != mg2.group_id
-                    WHERE (mg1.group_id = $3 OR mg1.deeplens_product_id::text = $3)
-                      AND LENGTH(REPLACE(COALESCE(mg1.description, ''), '*', '')) >= 20
-                      AND SUBSTRING(REPLACE(mg1.description, '*', ''), 1, 35) = SUBSTRING(REPLACE(COALESCE(mg2.description, ''), '*', ''), 1, 35)
                     UNION
                     -- Match groups linked through vendor listings
                     SELECT vl.source_group_id
@@ -494,6 +487,7 @@ export class ConversationRepository {
                 ),
                 group_msgs AS (
                     SELECT 
+                        id,
                         message_id as "messageId",
                         jid as "chatJid",
                         sender as "senderJid",
@@ -504,7 +498,7 @@ export class ConversationRepository {
                         timestamp,
                         is_from_me as "isFromMe",
                         metadata,
-                        CASE WHEN group_id IN (SELECT gid FROM matched_gids) THEN $3 ELSE group_id END as "groupId"
+                        group_id as "groupId"
                     FROM wa.messages
                     WHERE jid IN (SELECT jid FROM chat_jids) ${searchCondition}
                       AND group_id IN (SELECT gid FROM matched_gids)
@@ -515,7 +509,7 @@ export class ConversationRepository {
                     WHERE jid IN (SELECT jid FROM chat_jids) ${searchCondition}
                       AND timestamp < (SELECT min_ts FROM target_bounds)
                       AND (group_id NOT IN (SELECT gid FROM matched_gids) OR group_id IS NULL)
-                    ORDER BY timestamp DESC
+                    ORDER BY timestamp DESC, id DESC
                     LIMIT 25
                 ),
                 newer_msgs AS (
@@ -524,7 +518,7 @@ export class ConversationRepository {
                     WHERE jid IN (SELECT jid FROM chat_jids) ${searchCondition}
                       AND timestamp > (SELECT max_ts FROM target_bounds)
                       AND (group_id NOT IN (SELECT gid FROM matched_gids) OR group_id IS NULL)
-                    ORDER BY timestamp ASC
+                    ORDER BY timestamp ASC, id ASC
                     LIMIT 25
                 ),
                 fallback_msgs AS (
@@ -532,7 +526,7 @@ export class ConversationRepository {
                     FROM wa.messages
                     WHERE jid IN (SELECT jid FROM chat_jids) ${searchCondition}
                       AND (SELECT min_ts FROM target_bounds) IS NULL
-                    ORDER BY timestamp DESC
+                    ORDER BY timestamp DESC, id DESC
                     LIMIT $2
                 )
                 SELECT * FROM (
@@ -544,7 +538,7 @@ export class ConversationRepository {
                     UNION ALL
                     SELECT * FROM fallback_msgs
                 ) combined
-                ORDER BY timestamp DESC
+                ORDER BY timestamp DESC, id DESC
             `;
             const result = await this.client.query(query, params);
             return result.rows;
@@ -555,7 +549,7 @@ export class ConversationRepository {
                 SELECT ${selectFields}
                 FROM wa.messages
                 WHERE jid IN (SELECT jid FROM chat_jids) ${searchCondition}
-                ORDER BY timestamp DESC
+                ORDER BY timestamp DESC, id DESC
                 LIMIT $2 OFFSET $3
             `;
             const result = await this.client.query(query, params);

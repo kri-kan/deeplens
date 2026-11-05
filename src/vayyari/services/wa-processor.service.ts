@@ -599,6 +599,7 @@ export interface ReviewInboxItem {
   mediaCount: number;
   textCount: number;
   description: string | null;
+  lastMessageAt?: string | null;
   updatedAt: string;
   createdAt: string;
   sampleMediaUrls: string[];
@@ -634,7 +635,7 @@ export interface PipelineAuditEvent {
   id: number;
   groupId: string;
   event: string;
-  category: 'split_merge' | 'reprocess' | 'product_create' | 'media_sync' | 'lifecycle' | 'error' | 'other';
+  category: 'split_merge' | 'reprocess' | 'product_create' | 'media_sync' | 'lifecycle' | 'error' | 'store_publish' | 'other';
   actor: string;
   occurredAt: string;
   purposeDescription: string;
@@ -698,6 +699,7 @@ export interface EmojiSeparatorCandidate {
 }
 
 export interface Message {
+  id?: number;
   messageId: string;
   chatJid: string;
   senderJid: string;

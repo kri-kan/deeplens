@@ -68,13 +68,13 @@ export async function initializeMessageQueue() {
 
         // 1. Get Chat Config
         const chatRes = await client.query(
-            'SELECT enable_message_grouping, grouping_config FROM wa.chats WHERE jid = $1',
+            'SELECT enable_message_grouping, grouping_config, vendor_id FROM wa.chats WHERE jid = $1',
             [message.jid]
         );
-        const { enable_message_grouping, grouping_config } = chatRes.rows[0] || {};
+        const { enable_message_grouping, grouping_config, vendor_id } = chatRes.rows[0] || {};
 
-        if (!enable_message_grouping) {
-            logger.debug({ msgId: message.message_id }, 'Skipping - grouping disabled');
+        if (!enable_message_grouping || !vendor_id) {
+            logger.debug({ msgId: message.message_id, enable_message_grouping, hasVendor: !!vendor_id }, 'Skipping - grouping disabled or no vendor assigned');
             return;
         }
 

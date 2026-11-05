@@ -60,6 +60,10 @@ export class DeepLensIntegrationService {
         });
     }
 
+    public isHealthy(): boolean {
+        return this.isRunning;
+    }
+
     /**
      * Start the DeepLens integration service
      */
@@ -69,22 +73,46 @@ export class DeepLensIntegrationService {
             return;
         }
 
-        try {
-            logger.info('Starting DeepLens integration service...');
-            await this.producer.connect();
-            logger.info('Connected to Kafka for DeepLens integration');
+        this.connectAndStart().catch(err => {
+            logger.error({ err: err.message }, 'Unhandled error in DeepLensIntegrationService connectAndStart');
+        });
+    }
 
-            this.isRunning = true;
-            this.startProcessingLoop();
+    private async connectAndStart(): Promise<void> {
+        let delayMs = 2000;
+        const maxDelayMs = 15000;
+        let attempt = 0;
 
-            logger.info({
-                interval: this.PROCESSING_INTERVAL_MS,
-                batchSize: this.BATCH_SIZE,
-                topic: this.DEEPLENS_TOPIC
-            }, 'DeepLens integration service started');
-        } catch (err) {
-            logger.error({ err }, 'Failed to start DeepLens integration service');
-            throw err;
+        while (!this.isRunning) {
+            attempt++;
+            try {
+                logger.info({ brokers: KAFKA_CONFIG.brokers, attempt }, 'Starting DeepLens integration service...');
+                await this.producer.connect();
+                logger.info('Connected to Kafka for DeepLens integration');
+
+                this.isRunning = true;
+                this.startProcessingLoop();
+
+                logger.info({
+                    interval: this.PROCESSING_INTERVAL_MS,
+                    batchSize: this.BATCH_SIZE,
+                    topic: this.DEEPLENS_TOPIC
+                }, 'DeepLens integration service started');
+                return;
+            } catch (err: any) {
+                logger.warn(
+                    { err: err.message, attempt, nextRetryMs: delayMs },
+                    'Failed to start DeepLens integration service. Retrying in background...'
+                );
+
+                try {
+                    await new Promise(resolve => setTimeout(resolve, delayMs));
+                } catch {
+                    break;
+                }
+
+                delayMs = Math.min(Math.round(delayMs * 1.5), maxDelayMs);
+            }
         }
     }
 

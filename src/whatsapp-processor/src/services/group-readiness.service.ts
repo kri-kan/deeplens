@@ -198,6 +198,19 @@ export class GroupReadinessService {
             const chat = chatRes.rows[0];
             const vendorId = chat.vendor_id;
             const autoProcess = chat.auto_process_products;
+            const enableMessageGrouping = chat.enable_message_grouping;
+
+            // Chats without an assigned vendor or with message grouping disabled should NOT be staged or flagged for review
+            if (!vendorId || !enableMessageGrouping) {
+                logger.debug({ jid, groupId, enableMessageGrouping, hasVendor: !!vendorId }, 'Skipping group readiness check - chat unassigned or grouping disabled');
+                // Clean up non-product group if one was created previously
+                await client.query(
+                    `DELETE FROM wa.message_groups 
+                     WHERE group_id = $1 AND deeplens_product_id IS NULL`,
+                    [groupId]
+                );
+                return;
+            }
 
             // 4. Query current group status or create if not exists
             const groupRes = await client.query(
@@ -567,19 +580,22 @@ export class GroupReadinessService {
                 // Find all groups in 'staging' where the last message was updated/received more than debounceSeconds ago
                 // (ignore sticker groups and tombstoned groups).
                 const res = await client.query(
-                    `SELECT mg.group_id, mg.jid, mg.process_as_product, c.vendor_id, c.auto_process_products, mg.status as current_status
+                    `SELECT mg.group_id, mg.jid, mg.process_as_product, c.vendor_id, c.auto_process_products, c.enable_message_grouping, mg.status as current_status
                      FROM wa.message_groups mg
-                     LEFT JOIN wa.chats c ON mg.jid = c.jid
+                     INNER JOIN wa.chats c ON mg.jid = c.jid
                      WHERE mg.status IN ('staging')
                        AND mg.group_id LIKE 'product_%'
                        AND NOT (mg.group_id LIKE 'sticker_%')
+                       AND c.vendor_id IS NOT NULL
+                       AND c.enable_message_grouping = true
                        AND mg.updated_at < NOW() - CAST($1 || ' seconds' AS INTERVAL)
                        AND NOT EXISTS (SELECT 1 FROM wa.product_tombstones pt WHERE pt.source_group_id = mg.group_id)`,
                     [debounceSeconds]
                 );
 
                 for (const row of res.rows) {
-                    const { group_id, jid, process_as_product, vendor_id, auto_process_products } = row;
+                    const { group_id, jid, process_as_product, vendor_id, auto_process_products, enable_message_grouping } = row;
+                    if (!vendor_id || !enable_message_grouping) continue;
                     const enabled = process_as_product || auto_process_products;
                     if (!enabled) continue;
 
@@ -905,7 +921,8 @@ export class GroupReadinessService {
                  JOIN wa.chats c ON mg.jid = c.jid
                  WHERE ((mg.status = 'error' AND mg.error_detail LIKE 'Vendor not assigned%')
                         OR (mg.status = 'needs_review' AND mg.review_stage = 'qualification' AND (mg.error_detail = 'Vendor not assigned to chat.' OR mg.error_detail LIKE 'Vendor not assigned%' OR mg.error_detail = 'Chat missing vendor assignment or description invalid.')))
-                   AND c.vendor_id IS NOT NULL`
+                   AND c.vendor_id IS NOT NULL
+                   AND c.enable_message_grouping = true`
             );
             for (const row of vendorErrRes.rows) {
                 // Verify BOTH vendor is assigned AND description is valid before resetting to staging!

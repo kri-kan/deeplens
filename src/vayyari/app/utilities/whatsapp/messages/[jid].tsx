@@ -575,15 +575,16 @@ export default function FullMessageBrowser() {
   };
 
   const handleSplitGroup = async (msgId: string, groupId?: string) => {
-    if (!groupId) return;
+    const targetMsg = messages.find((m) => m.messageId === msgId);
+    const effectiveGroupId = targetMsg?.groupId || groupId;
+    if (!effectiveGroupId) return;
     
-    const group = groupsMap.get(groupId);
+    const group = groupsMap.get(effectiveGroupId);
     const linkedProductCode = group?.productCode || (group?.deeplensProductId ? `Product ${group.deeplensProductId.substring(0, 8)}` : null);
 
-    const targetMsg = messages.find((m) => m.messageId === msgId);
     const targetTs = targetMsg ? targetMsg.timestamp : 0;
 
-    const splitMessages = messages.filter((m) => m.groupId === groupId && m.timestamp >= targetTs);
+    const splitMessages = messages.filter((m) => m.groupId === effectiveGroupId && m.timestamp >= targetTs);
     const splitMediaCount = splitMessages.filter(isPhotoOrVideoMsg).length;
     const splitTextCount = splitMessages.filter((m) => !isPhotoOrVideoMsg(m) && cleanMessageText(m)?.trim()).length;
 
@@ -594,12 +595,12 @@ export default function FullMessageBrowser() {
 
     // 1. Optimistic Update: Immediately split in memory without blocking
     setMessages((prev) =>
-      prev.map((m) => (m.groupId === groupId && m.timestamp >= targetTs ? { ...m, groupId: tempNewGroupId } : m))
+      prev.map((m) => (m.groupId === effectiveGroupId && m.timestamp >= targetTs ? { ...m, groupId: tempNewGroupId } : m))
     );
 
     setGroups((prev) => {
       const updated = prev.map((g) => {
-        if (g.groupId === groupId) {
+        if (g.groupId === effectiveGroupId) {
           return {
             ...g,
             mediaCount: Math.max(0, (g.mediaCount || 0) - splitMediaCount),
@@ -626,7 +627,7 @@ export default function FullMessageBrowser() {
         messages: splitMessages.map((m) => ({ ...m, groupId: tempNewGroupId })),
       };
 
-      const oldIndex = updated.findIndex((g) => g.groupId === groupId);
+      const oldIndex = updated.findIndex((g) => g.groupId === effectiveGroupId);
       if (oldIndex !== -1) {
         updated.splice(oldIndex, 0, newGroupEntry);
       } else {
@@ -651,7 +652,7 @@ export default function FullMessageBrowser() {
 
     // 3. Fire API in background
     try {
-      const res = await waProcessorService.splitGroupZone(groupId, msgId);
+      const res = await waProcessorService.splitGroupZone(effectiveGroupId, msgId);
       const actualNewGroupId = res?.newGroupId;
       if (actualNewGroupId && actualNewGroupId !== tempNewGroupId) {
         setMessages((prev) =>
@@ -678,9 +679,11 @@ export default function FullMessageBrowser() {
   };
 
   const handleMoveGroup = async (msgId: string, groupId?: string, direction?: 'prev' | 'next') => {
-    if (!groupId || !direction) return;
+    const targetMsg = messages.find((m) => m.messageId === msgId);
+    const effectiveGroupId = targetMsg?.groupId || groupId;
+    if (!effectiveGroupId || !direction) return;
 
-    const groupIndex = groups.findIndex(g => g.groupId === groupId);
+    const groupIndex = groups.findIndex(g => g.groupId === effectiveGroupId);
     if (groupIndex === -1) return;
 
     let targetGroupId: string | undefined;
@@ -697,7 +700,7 @@ export default function FullMessageBrowser() {
 
     try {
       setRefreshing(true);
-      await waProcessorService.reassignGroupMessage(groupId, msgId, targetGroupId);
+      await waProcessorService.reassignGroupMessage(effectiveGroupId, msgId, targetGroupId);
       await onRefresh();
     } catch (err: any) {
       Alert.alert('Error', err?.message ?? 'Failed to move message');
@@ -1245,6 +1248,8 @@ export default function FullMessageBrowser() {
 
     if (isGroup) {
       const group = item as MediaGroup;
+      const albumStartMsg = group.messages.reduce((min, m) => m.timestamp < min.timestamp ? m : min, group.messages[0]);
+      const splitMsgId = albumStartMsg?.messageId || group.messages[0]?.messageId;
       const firstMsgId = group.messages[0]?.messageId;
       const activeMessages = group.messages.filter(hasActiveMedia);
       const missingMessages = group.messages.filter(m => !hasActiveMedia(m));
@@ -1419,7 +1424,7 @@ export default function FullMessageBrowser() {
                     <IconButton 
                       icon="content-cut" 
                       size={16} 
-                      onPress={() => handleSplitGroup(firstMsgId, group.groupId)} 
+                      onPress={() => splitMsgId && handleSplitGroup(splitMsgId, group.groupId)} 
                     />
                     <IconButton 
                       icon="arrow-down-bold" 

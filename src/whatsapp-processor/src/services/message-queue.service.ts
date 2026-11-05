@@ -36,10 +36,14 @@ class MessageProcessingQueue {
     private consumer: Consumer;
     private handler: ((message: ProcessableMessage) => Promise<void>) | null = null;
     private isPolling = false;
+    private isConnected = false;
+    private isConnecting = false;
+    private isStopping = false;
     private processingInterval: NodeJS.Timeout | null = null;
-    private readonly POLL_INTERVAL = parseInt(process.env.KAFKA_POLL_INTERVAL_MS || '5000'); // 5 seconds between polls
-    private readonly BATCH_SIZE = parseInt(process.env.KAFKA_BATCH_SIZE || '10'); // Process 10 messages per batch
-    private readonly MESSAGE_DELAY_MS = parseInt(process.env.KAFKA_MESSAGE_DELAY_MS || '500'); // 500ms delay between messages
+    private reconnectTimeout: NodeJS.Timeout | null = null;
+    private readonly POLL_INTERVAL = parseInt(process.env.KAFKA_POLL_INTERVAL_MS || '2000'); // 2 seconds between polls
+    private readonly BATCH_SIZE = parseInt(process.env.KAFKA_BATCH_SIZE || '50'); // Process 50 messages per batch
+    private readonly MESSAGE_DELAY_MS = parseInt(process.env.KAFKA_MESSAGE_DELAY_MS || '0'); // 0ms delay between local Kafka publishes
 
     constructor() {
         this.kafka = new Kafka({
@@ -67,55 +71,127 @@ class MessageProcessingQueue {
         });
     }
 
+    public isHealthy(): boolean {
+        return this.isConnected;
+    }
+
     public async start() {
-        await this.initialize();
+        this.isStopping = false;
+        // Start connection loop in background so app boot isn't blocked if Kafka is still starting
+        this.connectWithRetry().catch(err => {
+            logger.error({ err: err.message }, 'Unhandled error in Kafka connectWithRetry');
+        });
     }
 
     private get pool() {
         return getWhatsAppDbClient();
     }
 
-    private async initialize() {
-        try {
-            logger.info({ brokers: KAFKA_CONFIG.brokers }, 'Connecting to Kafka...');
+    private async connectWithRetry(): Promise<void> {
+        if (this.isConnected || this.isConnecting || this.isStopping) return;
+        this.isConnecting = true;
 
-            // Add timeout to prevent hanging
-            const connectTimeout = 10000; // 10 seconds
-            await Promise.race([
-                Promise.all([
-                    this.producer.connect(),
-                    this.consumer.connect()
-                ]),
-                new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('Kafka connection timeout')), connectTimeout)
-                )
-            ]);
+        let delayMs = 2000;
+        const maxDelayMs = 15000;
+        let attempt = 0;
 
-            logger.info({ topic: KAFKA_CONFIG.topic }, 'Subscribing to topic');
-            await this.consumer.subscribe({ topic: KAFKA_CONFIG.topic, fromBeginning: false });
+        while (!this.isConnected && !this.isStopping) {
+            attempt++;
+            try {
+                logger.info({ brokers: KAFKA_CONFIG.brokers, attempt }, 'Connecting to Kafka message queue...');
 
-            // Start Consumer
-            await this.consumer.run({
-                eachMessage: async ({ topic, partition, message }) => {
-                    const msgContent = message.value?.toString();
-                    if (!msgContent) return;
+                const connectTimeout = 15000; // 15 seconds per attempt
+                await Promise.race([
+                    Promise.all([
+                        this.producer.connect(),
+                        this.consumer.connect()
+                    ]),
+                    new Promise((_, reject) =>
+                        setTimeout(() => reject(new Error('Kafka connection timeout')), connectTimeout)
+                    )
+                ]);
 
-                    try {
-                        const parsedMsg = JSON.parse(msgContent) as ProcessableMessage;
-                        await this.handleConsumedMessage(parsedMsg);
-                    } catch (err) {
-                        logger.error({ err }, 'Failed to process consumed Kafka message');
+                logger.info({ topic: KAFKA_CONFIG.topic }, 'Subscribing consumer to Kafka topic');
+                await this.consumer.subscribe({ topic: KAFKA_CONFIG.topic, fromBeginning: false });
+
+                // Attach event listeners for unexpected disconnects
+                this.setupEventListeners();
+
+                // Start Consumer
+                await this.consumer.run({
+                    eachMessage: async ({ topic, partition, message }) => {
+                        const msgContent = message.value?.toString();
+                        if (!msgContent) return;
+
+                        try {
+                            const parsedMsg = JSON.parse(msgContent) as ProcessableMessage;
+                            await this.handleConsumedMessage(parsedMsg);
+                        } catch (err: any) {
+                            logger.error({ err: err.message }, 'Failed to process consumed Kafka message');
+                        }
                     }
+                });
+
+                this.isConnected = true;
+                this.isConnecting = false;
+
+                // Start Producer Poller (Transition 'ready' -> Kafka)
+                this.startProducerPoller();
+
+                logger.info('Message Processing Queue (Kafka) Initialized successfully and poller active');
+                return;
+            } catch (err: any) {
+                logger.warn(
+                    { err: err.message, attempt, nextRetryMs: delayMs, brokers: KAFKA_CONFIG.brokers },
+                    'Failed to connect to Kafka. Retrying in background...'
+                );
+
+                try {
+                    await new Promise(resolve => setTimeout(resolve, delayMs));
+                } catch {
+                    break;
                 }
-            });
 
-            // Start Producer Poller (Transition 'ready' -> Kafka)
-            this.startProducerPoller();
+                delayMs = Math.min(Math.round(delayMs * 1.5), maxDelayMs);
+            }
+        }
 
-            logger.info('Message Processing Queue (Kafka) Initialized');
-        } catch (err: any) {
-            logger.error({ err: err.message, brokers: KAFKA_CONFIG.brokers }, 'Failed to initialize Kafka Queue - message grouping will be disabled');
-            // Don't throw - allow app to continue without Kafka
+        this.isConnecting = false;
+    }
+
+    private setupEventListeners() {
+        this.consumer.on(this.consumer.events.CRASH, (e: any) => {
+            logger.error({ err: e.payload?.error?.message }, 'Kafka consumer crashed, scheduling reconnect');
+            this.handleDisconnect();
+        });
+
+        this.consumer.on(this.consumer.events.DISCONNECT, () => {
+            logger.warn('Kafka consumer disconnected');
+            this.handleDisconnect();
+        });
+
+        this.producer.on(this.producer.events.DISCONNECT, () => {
+            logger.warn('Kafka producer disconnected');
+            this.handleDisconnect();
+        });
+    }
+
+    private handleDisconnect() {
+        if (this.isStopping) return;
+        this.isConnected = false;
+
+        if (this.processingInterval) {
+            clearInterval(this.processingInterval);
+            this.processingInterval = null;
+        }
+
+        if (!this.reconnectTimeout && !this.isConnecting) {
+            this.reconnectTimeout = setTimeout(() => {
+                this.reconnectTimeout = null;
+                this.connectWithRetry().catch(err => {
+                    logger.error({ err: err.message }, 'Error during Kafka reconnection');
+                });
+            }, 3000);
         }
     }
 
@@ -189,8 +265,13 @@ class MessageProcessingQueue {
      * Polling Loop: Finds 'ready' messages in DB and pushes to Kafka
      */
     private startProducerPoller() {
-        this.processingInterval = setInterval(async () => {
-            if (this.isPolling) return;
+        if (this.processingInterval) {
+            clearInterval(this.processingInterval);
+            this.processingInterval = null;
+        }
+
+        const poll = async () => {
+            if (this.isPolling || !this.isConnected || this.isStopping) return;
             this.isPolling = true;
 
             const client = this.pool;
@@ -209,22 +290,30 @@ class MessageProcessingQueue {
                 );
 
                 if (result.rows.length > 0) {
-                    logger.debug(`Found ${result.rows.length} messages ready for Kafka (rate-limited processing)`);
+                    logger.info(`Found ${result.rows.length} messages ready for Kafka`);
 
                     for (const msg of result.rows) {
+                        if (!this.isConnected || this.isStopping) break;
                         await this.produceToKafka(msg);
-                        // Add delay between messages to prevent WhatsApp rate limiting
                         if (this.MESSAGE_DELAY_MS > 0) {
                             await new Promise(resolve => setTimeout(resolve, this.MESSAGE_DELAY_MS));
                         }
                     }
+
+                    // If a full batch was returned, schedule next batch immediately to drain backlog rapidly
+                    if (result.rows.length === this.BATCH_SIZE && this.isConnected && !this.isStopping) {
+                        setImmediate(poll);
+                    }
                 }
-            } catch (err) {
-                logger.error({ err }, 'Producer Poller Error');
+            } catch (err: any) {
+                logger.error({ err: err.message }, 'Producer Poller Error');
             } finally {
                 this.isPolling = false;
             }
-        }, this.POLL_INTERVAL);
+        };
+
+        this.processingInterval = setInterval(poll, this.POLL_INTERVAL);
+        setImmediate(poll);
     }
 
     /**
@@ -283,10 +372,26 @@ class MessageProcessingQueue {
         await this.markMessageReady(messageId);
     }
 
-    stopPolling() {
-        if (this.processingInterval) clearInterval(this.processingInterval);
-        this.consumer.disconnect();
-        this.producer.disconnect();
+    async stopPolling() {
+        this.isStopping = true;
+        this.isConnected = false;
+
+        if (this.processingInterval) {
+            clearInterval(this.processingInterval);
+            this.processingInterval = null;
+        }
+
+        if (this.reconnectTimeout) {
+            clearTimeout(this.reconnectTimeout);
+            this.reconnectTimeout = null;
+        }
+
+        try {
+            await this.consumer.disconnect();
+            await this.producer.disconnect();
+        } catch (err: any) {
+            logger.warn({ err: err.message }, 'Error disconnecting Kafka producer/consumer during shutdown');
+        }
     }
 }
 

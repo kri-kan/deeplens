@@ -36,7 +36,15 @@ export function useIntelligentChatTimeline({
     existing.forEach((m) => map.set(m.messageId, m));
     incoming.forEach((m) => map.set(m.messageId, m));
     const merged = Array.from(map.values());
-    merged.sort((a, b) => b.timestamp - a.timestamp); // DESC: newest first
+    merged.sort((a, b) => {
+      if (b.timestamp !== a.timestamp) {
+        return b.timestamp - a.timestamp; // DESC: newest first
+      }
+      if (b.id !== undefined && a.id !== undefined) {
+        return b.id - a.id;
+      }
+      return (b.messageId || '').localeCompare(a.messageId || '');
+    });
     return merged;
   }, []);
 

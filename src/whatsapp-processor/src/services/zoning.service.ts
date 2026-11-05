@@ -453,6 +453,17 @@ export class ZoningService {
      * Synchronizes the wa.message_groups table for newly formed product groups and updates counts
      */
     public async syncMessageGroups(jid: string, client: any): Promise<void> {
+        // Skip unassigned chats or chats where message grouping is disabled
+        const chatRes = await client.query(
+            `SELECT enable_message_grouping, vendor_id FROM wa.chats WHERE jid = $1`,
+            [jid]
+        );
+        const chat = chatRes.rows[0];
+        if (chat && (chat.enable_message_grouping === false || chat.vendor_id === null)) {
+            logger.debug({ jid }, 'Skipping syncMessageGroups - chat unassigned or grouping disabled');
+            return;
+        }
+
         // Insert new message groups that do not yet exist
         await client.query(`
             INSERT INTO wa.message_groups (
@@ -556,18 +567,30 @@ export class ZoningService {
 
         await this.refreshDynamicSeparators(dbClient);
 
-        // Find affected chats
+        // Find affected chats (only chats with message grouping enabled and an assigned vendor)
         let affectedChats: string[] = [];
         if (specificJid) {
+            const chatRes = await dbClient.query(
+                `SELECT enable_message_grouping, vendor_id FROM wa.chats WHERE jid = $1`,
+                [specificJid]
+            );
+            const chat = chatRes.rows[0];
+            if (chat && (chat.enable_message_grouping === false || chat.vendor_id === null)) {
+                logger.info({ specificJid }, 'Skipping repartitionForSeparator - grouping disabled or no vendor assigned');
+                return { affectedChats: [], totalMessages: 0, zonesCreated: 0, stickersFound: 0 };
+            }
             affectedChats = [specificJid];
         } else {
             const chatsRes = await dbClient.query(`
-                SELECT DISTINCT jid FROM wa.messages 
-                WHERE is_deleted = false 
+                SELECT DISTINCT jid FROM wa.messages m
+                INNER JOIN wa.chats c ON m.jid = c.jid
+                WHERE m.is_deleted = false 
+                  AND c.enable_message_grouping = true
+                  AND c.vendor_id IS NOT NULL
                   AND (
-                      content = $1 
-                      OR TRIM(content) = $1 
-                      OR REPLACE(REPLACE(REPLACE(TRIM(content), '*', ''), '_', ''), '~', '') = $1
+                      m.content = $1 
+                      OR TRIM(m.content) = $1 
+                      OR REPLACE(REPLACE(REPLACE(TRIM(m.content), '*', ''), '_', ''), '~', '') = $1
                   )
             `, [pattern]);
             affectedChats = chatsRes.rows.map((r: any) => r.jid);

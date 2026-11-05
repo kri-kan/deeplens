@@ -37,6 +37,13 @@ services:
       DATA_DIR: /usr/src/app/data
       API_PORT: 3000
       LOG_LEVEL: info
+
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/health | grep -q '\"status\":\"healthy\"' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
     
     volumes:
       # Application Code mapped from host (build cycle)
