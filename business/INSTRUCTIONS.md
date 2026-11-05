@@ -127,6 +127,9 @@ Whether performed directly by the agent, by a specialized subagent, by external 
 
 The agent synthesizes these findings into the `Evidence` and `Technical Feasibility` sections of the BEF artifact.
 
+> **Operational Note on Investigation & MCP Capabilities:**
+> The Generic Technical Investigation Contract and optional MCP/tooling integrations provide structured protocols for gathering technical context. However, their real-world effectiveness depends entirely on the tools, CLI privileges, and language server capabilities configured in the host environment. When specialized tools are missing or unavailable, the advisor relies on static repository inspection and must transparently disclose the boundaries of its technical findings.
+
 ---
 
 ## 6. Standalone Tooling & Validation

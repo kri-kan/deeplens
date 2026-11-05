@@ -1,8 +1,12 @@
-# BEF Advisor Behavioral Acceptance Verification
+# BEF Acceptance Criteria Verification & Classification
 
-This document verifies the BEF Advisor's behavioral scenarios specified in Section 15 of `business/BEF-IMPLEMENTATION-BRIEF.md` (AT-01 through AT-18).
+This document maps all 18 Acceptance Tests (AT-01 through AT-18) from `business/BEF-IMPLEMENTATION-BRIEF.md` to their concrete implementation and verification mechanisms.
 
-Each scenario details the trigger, observed advisor reasoning, and compliance criteria.
+### Verification Levels Defined:
+1. **Automated Behavioral Validation:** Formally verified by executable test code in `tests/bef_validation_tests.py` and `scripts/validate-bef.py`.
+2. **Demonstrated by Reference Artifacts:** Illustrated by concrete, consistent, and validated reference files in `business/examples/`.
+3. **Instruction-Level Specification:** Explicitly defined as operational protocols or contracts in `business/INSTRUCTIONS.md` and integration guides.
+4. **Model-Dependent Advisor Reasoning:** Described as conversational guidelines for AI agents; their real-world outcome depends on the runtime model and host tool environment.
 
 ---
 
