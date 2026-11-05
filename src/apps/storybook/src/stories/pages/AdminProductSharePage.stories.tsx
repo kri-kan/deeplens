@@ -28,7 +28,7 @@ const meta: Meta<any> = {
   argTypes: {
     ...THEME_ARG_TYPES,
     mode: {
-      control: 'radio',
+      control: 'select',
       options: ['catalog', 'post_planner'],
       description: 'Execution context: Catalog PDP (open) vs Post Planner (locked channel)',
     },
@@ -37,7 +37,7 @@ const meta: Meta<any> = {
       description: 'Force open the Post-Share Attribution Bottom Sheet',
     },
     initialAttributionPlatform: {
-      control: 'radio',
+      control: 'select',
       options: ['others', 'instagram'],
       description: 'Default attribution destination in bottom sheet',
     },

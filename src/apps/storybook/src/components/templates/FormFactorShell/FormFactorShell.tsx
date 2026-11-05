@@ -125,7 +125,7 @@ export function FormFactorShell({
   const isDesktop = factor === 'desktop';
 
   return (
-    <YStack flex={1} minHeight={"100vh" as any} backgroundColor={tokens.background}>
+    <YStack flex={1} height={"100%" as any} minHeight={0} backgroundColor={tokens.background}>
       {/* ================================================================= */}
       {/* 1. TOP EXTERNAL SELECTOR TOOLBAR (Outside the device shell frame) */}
       {/* ================================================================= */}
@@ -685,8 +685,8 @@ const styles = StyleSheet.create({
   canvasBackground: {
     flex: 1,
     width: '100%',
-    minHeight: 'calc(100vh - 65px)' as any,
-    overflow: 'visible' as any,
+    minHeight: 0,
+    overflow: 'auto' as any,
     display: 'flex' as any,
     flexDirection: 'column' as any,
   },
@@ -708,7 +708,8 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     maxWidth: 1280,
-    minHeight: 'calc(100vh - 100px)' as any,
+    height: '100%' as any,
+    maxHeight: 'calc(100vh - 130px)' as any,
     borderRadius: 12,
     borderWidth: 1,
     overflow: 'hidden',
@@ -732,8 +733,13 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     minHeight: 0,
-    display: 'flex' as any,
-    flexDirection: 'column' as any,
-    overflow: 'auto' as any,
+    display: 'flex',
+    flexDirection: 'column',
+    overflowY: 'auto',
+    overflowX: 'hidden',
+    position: 'relative',
+    WebkitOverflowScrolling: 'touch',
+    scrollbarWidth: 'thin',
+    overscrollBehavior: 'contain',
   },
-});
+} as any);

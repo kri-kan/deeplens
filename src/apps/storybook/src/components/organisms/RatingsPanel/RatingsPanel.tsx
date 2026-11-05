@@ -18,6 +18,7 @@ export type RatingsPanelProps = {
   breakdown: number[];
   photoColors?: string[];
   reviews: Review[];
+  borderless?: boolean;
 };
 
 export function RatingsPanel({
@@ -26,18 +27,19 @@ export function RatingsPanel({
   breakdown,
   photoColors = [],
   reviews,
+  borderless = false,
 }: RatingsPanelProps) {
   const { tokens } = useTheme();
 
   return (
     <YStack
-      paddingHorizontal={16}
-      paddingTop={24}
+      paddingHorizontal={borderless ? 4 : 16}
+      paddingTop={borderless ? 12 : 24}
       paddingBottom={16}
-      backgroundColor={tokens.surface}
-      borderWidth={1}
-      borderColor={tokens.border}
-      borderRadius={16}
+      backgroundColor={borderless ? 'transparent' : tokens.surface}
+      borderWidth={borderless ? 0 : 1}
+      borderColor={borderless ? 'transparent' : tokens.border}
+      borderRadius={borderless ? 0 : 16}
     >
       <Text fontSize={20} fontWeight="800" letterSpacing={-0.5} color={tokens.text} marginBottom={16}>
         Ratings &amp; Reviews

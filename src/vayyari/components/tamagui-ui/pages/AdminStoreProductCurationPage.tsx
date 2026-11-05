@@ -50,6 +50,7 @@ import {
   LuTrash2,
   LuSliders,
   LuInstagram,
+  LuCopy,
 } from '../icons/lu';
 import {
   ColorAssignmentPickerModal,
@@ -271,8 +272,48 @@ export function AdminStoreProductCurationPage({
   const [description, setDescription] = useState(initialDescription);
   const [mrp, setMrp] = useState(initialMrp.toString());
   const [salePrice, setSalePrice] = useState(initialSalePrice.toString());
+  const [presentationMode, setPresentationMode] = useState<'grouped' | 'split'>('grouped');
+  const [parentAvailableQty, setParentAvailableQty] = useState<string>('10');
+  const [parentAllowWaitlist, setParentAllowWaitlist] = useState<boolean>(true);
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [saveToast, setSaveToast] = useState(false);
+  const [copiedToast, setCopiedToast] = useState<string | null>(null);
+
+  const handleCopyText = async (text: string, label: string) => {
+    try {
+      if (typeof navigator !== 'undefined' && (navigator as any).clipboard?.writeText) {
+        await (navigator as any).clipboard.writeText(text);
+      } else {
+        const Clipboard = await import('expo-clipboard');
+        await Clipboard.setStringAsync(text);
+      }
+      setCopiedToast(`Copied ${label}: ${text}`);
+      setTimeout(() => setCopiedToast(null), 2000);
+    } catch (err) {
+      console.warn('Failed to copy to clipboard:', err);
+    }
+  };
+
+  const skuMetrics = useMemo(() => {
+    const totalStock = skuList.reduce((acc, s) => acc + (s.stockQuantity || 0), 0);
+    const inStock = skuList.filter((s) => (s.stockQuantity ?? 0) >= 5).length;
+    const lowStock = skuList.filter((s) => (s.stockQuantity ?? 0) > 0 && (s.stockQuantity ?? 0) < 5).length;
+    const outStock = skuList.filter((s) => (s.stockQuantity ?? 0) <= 0).length;
+    const wlCount = skuList.filter((s) => (s.stockQuantity ?? 0) <= 0 && s.allowWaitlist).length;
+    return { totalStock, inStock, lowStock, outStock, wlCount };
+  }, [skuList]);
+
+  const handleUpdateParentAvailableQty = (valStr: string) => {
+    setParentAvailableQty(valStr);
+    const num = Number(valStr.replace(/[^0-9]/g, '')) || 0;
+    setSkuList((prev) => prev.map((s) => ({ ...s, stockQuantity: num })));
+  };
+
+  const handleToggleParentWaitlist = () => {
+    const nextVal = !parentAllowWaitlist;
+    setParentAllowWaitlist(nextVal);
+    setSkuList((prev) => prev.map((s) => ({ ...s, allowWaitlist: nextVal })));
+  };
 
   // SKU Management Handlers
   const handleToggleSkuPriceInheritance = (skuId: string) => {
@@ -948,6 +989,9 @@ export function AdminStoreProductCurationPage({
       salePrice: parseFloat(salePrice) || 0,
       lifecycleState,
       description,
+      presentationMode,
+      stockQuantity: Number(parentAvailableQty) || 10,
+      allowWaitlist: parentAllowWaitlist,
       mediaList,
       colorGroups: updatedGroups,
       skus: skuList,
@@ -1061,10 +1105,11 @@ export function AdminStoreProductCurationPage({
       <YStack
         width="100%"
         maxWidth={isMobile ? '100%' : containerMaxWidth}
-        height={680}
+        flex={1}
+        height="100%"
         backgroundColor="#FFFFFF"
-        borderRadius={tokens.radius.lg}
-        borderWidth={1}
+        borderRadius={isMobile ? 0 : tokens.radius.lg}
+        borderWidth={isMobile ? 0 : 1}
         borderColor={tokens.border}
         overflow="hidden"
         alignSelf="center"
@@ -1489,6 +1534,23 @@ export function AdminStoreProductCurationPage({
         </XStack>
       )}
 
+      {/* Copied Notification Toast */}
+      {copiedToast && (
+        <XStack
+          backgroundColor="#1E293B"
+          paddingHorizontal={12}
+          paddingVertical={6}
+          alignItems="center"
+          justifyContent="center"
+          gap={6}
+        >
+          <LuCheck size={14} color="#10B981" strokeWidth={3} />
+          <Text fontSize={11} fontWeight="800" color="#FFFFFF">
+            {copiedToast}
+          </Text>
+        </XStack>
+      )}
+
       {/* ── STAGE DELIVERY TIMELINE PROGRESS STEPPER (QUALIFY & GROUP: 3 STAGES) ── */}
       {currentScreen === 'qualify_and_group' && (
         <YStack backgroundColor={tokens.surface} borderBottomWidth={1} borderBottomColor={tokens.border} paddingVertical={10} paddingHorizontal={pagePaddingHorizontal}>
@@ -1577,9 +1639,18 @@ export function AdminStoreProductCurationPage({
                   resizeMode="cover"
                 />
                 <YStack flex={1}>
-                  <Text fontSize={10} fontWeight="800" color={tokens.accent} textTransform="uppercase">
-                    {productCode} · {fabric}
-                  </Text>
+                  <Pressable
+                    onPress={() => handleCopyText(productCode, 'Product Code')}
+                    hitSlop={6}
+                    style={{ alignSelf: 'flex-start' }}
+                  >
+                    <XStack alignItems="center" gap={4}>
+                      <Text fontSize={10} fontWeight="800" color={tokens.accent} textTransform="uppercase">
+                        {productCode} · {fabric}
+                      </Text>
+                      <LuCopy size={11} color={tokens.accent} />
+                    </XStack>
+                  </Pressable>
                   <Text fontSize={14} fontWeight="900" color={tokens.text} numberOfLines={1}>
                     {title}
                   </Text>
@@ -1763,23 +1834,46 @@ export function AdminStoreProductCurationPage({
                         <View style={styles.hubMetricChip}>
                           <LuBox size={11} color="#2563EB" />
                           <Text fontSize={10} fontWeight="700" color={tokens.text}>
-                            {skuList.reduce((acc, s) => acc + (s.stockQuantity || 0), 0)} Total Stock
+                            {skuMetrics.totalStock} Total Stock
                           </Text>
                         </View>
-                        <View style={styles.hubMetricChip}>
-                          <LuSlidersHorizontal size={11} color={tokens.accent} />
-                          <Text fontSize={10} fontWeight="700" color={tokens.text}>
-                            {skuList.filter((s) => !s.isPriceInherited && s.price != null).length > 0
-                              ? `${skuList.filter((s) => !s.isPriceInherited && s.price != null).length} Overridden`
-                              : `Inherits ₹${Number(salePrice).toLocaleString('en-IN')}`}
-                          </Text>
-                        </View>
-                        <View style={styles.hubMetricChip}>
-                          <LuBell size={11} color="#D97706" />
-                          <Text fontSize={10} fontWeight="700" color="#D97706">
-                            {skuList.filter((s) => s.allowWaitlist).length} Waitlist Ready
-                          </Text>
-                        </View>
+                        {skuMetrics.inStock > 0 && (
+                          <View style={[styles.hubMetricChip, { backgroundColor: '#DCFCE7' }]}>
+                            <Text fontSize={10} fontWeight="800" color="#15803D">
+                              {skuMetrics.inStock} in stock
+                            </Text>
+                          </View>
+                        )}
+                        {skuMetrics.lowStock > 0 && (
+                          <View style={[styles.hubMetricChip, { backgroundColor: '#FEF3C7' }]}>
+                            <Text fontSize={10} fontWeight="800" color="#B45309">
+                              {skuMetrics.lowStock} low
+                            </Text>
+                          </View>
+                        )}
+                        {skuMetrics.outStock > 0 && (
+                          <View style={[styles.hubMetricChip, { backgroundColor: '#FEE2E2' }]}>
+                            <Text fontSize={10} fontWeight="800" color="#DC2626">
+                              {skuMetrics.outStock} Out
+                            </Text>
+                          </View>
+                        )}
+                        {skuMetrics.wlCount > 0 && (
+                          <View style={[styles.hubMetricChip, { backgroundColor: '#FFEDD5' }]}>
+                            <LuBell size={11} color="#EA580C" />
+                            <Text fontSize={10} fontWeight="800" color="#EA580C">
+                              {skuMetrics.wlCount} WL
+                            </Text>
+                          </View>
+                        )}
+                        {skuList.filter((s) => !s.isPriceInherited && s.price != null).length > 0 && (
+                          <View style={styles.hubMetricChip}>
+                            <LuSlidersHorizontal size={11} color={tokens.accent} />
+                            <Text fontSize={10} fontWeight="700" color={tokens.text}>
+                              {skuList.filter((s) => !s.isPriceInherited && s.price != null).length} Overridden
+                            </Text>
+                          </View>
+                        )}
                         {skuList.some((s) => !!s.customMessage) && (
                           <View style={styles.hubMetricChip}>
                             <LuTag size={11} color="#16A34A" />
@@ -2552,6 +2646,176 @@ export function AdminStoreProductCurationPage({
                 </YStack>
               </XStack>
             </YStack>
+
+            {/* Presentation Mode: Grouped vs Split */}
+            <YStack
+              backgroundColor={tokens.surface}
+              borderRadius={tokens.radius.md}
+              borderWidth={1}
+              borderColor={tokens.border}
+              padding={12}
+              gap={10}
+            >
+              <YStack gap={2}>
+                <Text fontSize={11} fontWeight="800" color={tokens.text} textTransform="uppercase">
+                  Store PDP &amp; Catalog Presentation Mode:
+                </Text>
+                <Text fontSize={10} color={tokens.textMuted}>
+                  {presentationMode === 'grouped'
+                    ? 'Grouped View: 1 single product card in catalog feed · Multi-swatch interactive PDP'
+                    : 'Split View: Each colorway SKU appears as its own product in catalog feed with dedicated PDP'}
+                </Text>
+              </YStack>
+
+              <XStack gap={8}>
+                <Pressable
+                  onPress={() => setPresentationMode('grouped')}
+                  style={[
+                    styles.presentationModeCard,
+                    presentationMode === 'grouped' && styles.presentationModeCardActive,
+                    { borderColor: presentationMode === 'grouped' ? tokens.accent : tokens.border },
+                  ]}
+                >
+                  <LuPalette size={14} color={presentationMode === 'grouped' ? tokens.accent : tokens.textMuted} />
+                  <YStack flex={1} gap={2}>
+                    <Text fontSize={12} fontWeight="800" color={presentationMode === 'grouped' ? tokens.accent : tokens.text}>
+                      Grouped Product
+                    </Text>
+                    <Text fontSize={9} color={tokens.textMuted}>
+                      Unified PDP · Swatch switches media
+                    </Text>
+                  </YStack>
+                  {presentationMode === 'grouped' && <LuCheck size={14} color={tokens.accent} />}
+                </Pressable>
+
+                <Pressable
+                  onPress={() => setPresentationMode('split')}
+                  style={[
+                    styles.presentationModeCard,
+                    presentationMode === 'split' && styles.presentationModeCardActive,
+                    { borderColor: presentationMode === 'split' ? tokens.accent : tokens.border },
+                  ]}
+                >
+                  <LuLayers size={14} color={presentationMode === 'split' ? tokens.accent : tokens.textMuted} />
+                  <YStack flex={1} gap={2}>
+                    <Text fontSize={12} fontWeight="800" color={presentationMode === 'split' ? tokens.accent : tokens.text}>
+                      Split SKU View
+                    </Text>
+                    <Text fontSize={9} color={tokens.textMuted}>
+                      1 PDP per colorway · Focused spotlight
+                    </Text>
+                  </YStack>
+                  {presentationMode === 'split' && <LuCheck size={14} color={tokens.accent} />}
+                </Pressable>
+              </XStack>
+            </YStack>
+
+            {/* Parent Inventory & Customer Waitlisting Controls */}
+            <YStack
+              backgroundColor={tokens.surface}
+              borderRadius={tokens.radius.md}
+              borderWidth={1}
+              borderColor={tokens.border}
+              padding={12}
+              gap={12}
+            >
+              <Text fontSize={11} fontWeight="800" color={tokens.text} textTransform="uppercase">
+                Parent Inventory &amp; Restock Controls:
+              </Text>
+
+              {/* Available Quantity */}
+              <YStack gap={6}>
+                <XStack alignItems="center" justifyContent="space-between">
+                  <Text fontSize={12} fontWeight="600" color={tokens.textMuted}>
+                    Available Quantity (per SKU):
+                  </Text>
+                  <Text fontSize={10} color={tokens.accent} fontWeight="700">
+                    Sets {parentAvailableQty || 0} units across all {skuList.length} SKUs
+                  </Text>
+                </XStack>
+                <XStack alignItems="center" gap={8}>
+                  <Pressable
+                    onPress={() => handleUpdateParentAvailableQty(String(Math.max(0, (Number(parentAvailableQty) || 0) - 1)))}
+                    style={styles.qtyStepperBtn}
+                    hitSlop={6}
+                  >
+                    <LuMinus size={14} color={tokens.text} />
+                  </Pressable>
+
+                  <TextInput
+                    value={parentAvailableQty}
+                    onChangeText={handleUpdateParentAvailableQty}
+                    keyboardType="numeric"
+                    style={styles.qtyInput}
+                    placeholder="10"
+                  />
+
+                  <Pressable
+                    onPress={() => handleUpdateParentAvailableQty(String((Number(parentAvailableQty) || 0) + 1))}
+                    style={styles.qtyStepperBtn}
+                    hitSlop={6}
+                  >
+                    <LuPlus size={14} color={tokens.text} />
+                  </Pressable>
+
+                  <XStack gap={6} marginLeft={4}>
+                    {[0, 5, 10, 20].map((preset) => (
+                      <Pressable
+                        key={preset}
+                        onPress={() => handleUpdateParentAvailableQty(String(preset))}
+                        style={[
+                          styles.qtyPresetBtn,
+                          {
+                            backgroundColor: Number(parentAvailableQty) === preset ? tokens.accent : '#F1F5F9',
+                            borderColor: Number(parentAvailableQty) === preset ? tokens.accent : '#E2E8F0',
+                          },
+                        ]}
+                      >
+                        <Text
+                          fontSize={11}
+                          fontWeight="700"
+                          color={Number(parentAvailableQty) === preset ? tokens.accentForeground : tokens.text}
+                        >
+                          {preset === 0 ? 'Out' : preset}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </XStack>
+                </XStack>
+              </YStack>
+
+              {/* Customer Waitlisting Toggle */}
+              <XStack alignItems="center" justifyContent="space-between" paddingTop={4}>
+                <YStack gap={1} flex={1}>
+                  <XStack alignItems="center" gap={6}>
+                    <LuBell size={13} color={parentAllowWaitlist ? '#15803D' : tokens.textMuted} />
+                    <Text fontSize={12} fontWeight="700" color={tokens.text}>
+                      Customer Waitlisting
+                    </Text>
+                  </XStack>
+                  <Text fontSize={10} color={tokens.textMuted}>
+                    Enable restock notification signup across all SKUs when out of stock
+                  </Text>
+                </YStack>
+
+                <Pressable
+                  onPress={handleToggleParentWaitlist}
+                  style={[
+                    styles.standardPillBtn,
+                    {
+                      backgroundColor: parentAllowWaitlist ? '#15803D' : '#94A3B8',
+                      borderColor: parentAllowWaitlist ? '#15803D' : '#94A3B8',
+                      paddingVertical: 5,
+                      paddingHorizontal: 14,
+                    },
+                  ]}
+                >
+                  <Text fontSize={11} fontWeight="800" color="#FFFFFF">
+                    {parentAllowWaitlist ? 'Enabled ✓' : 'Disabled'}
+                  </Text>
+                </Pressable>
+              </XStack>
+            </YStack>
           </YStack>
         )}
 
@@ -2662,11 +2926,17 @@ export function AdminStoreProductCurationPage({
                         }}
                       />
                       <YStack gap={1}>
-                        <XStack alignItems="center" gap={5}>
-                          <Text fontSize={12} fontWeight="900" color={tokens.text} fontFamily="$mono">
-                            {sku.skuCode}
-                          </Text>
-                        </XStack>
+                        <Pressable
+                          onPress={() => handleCopyText(sku.skuCode, 'SKU Code')}
+                          hitSlop={6}
+                        >
+                          <XStack alignItems="center" gap={5}>
+                            <Text fontSize={12} fontWeight="900" color={tokens.text} fontFamily="$mono">
+                              {sku.skuCode}
+                            </Text>
+                            <LuCopy size={11} color={tokens.textMuted} />
+                          </XStack>
+                        </Pressable>
                         <Text fontSize={11} color={tokens.textMuted} fontWeight="600">
                           {sku.colorwayName}
                         </Text>
@@ -2874,44 +3144,36 @@ export function AdminStoreProductCurationPage({
                     </XStack>
                   </YStack>
 
-                  {/* ── 3. Join Waitlist Toggle ── */}
-                  <YStack
-                    padding={10}
-                    borderRadius={8}
-                    backgroundColor={sku.allowWaitlist ? '#F0FDF4' : '#F8FAFC'}
-                    borderWidth={1}
-                    borderColor={sku.allowWaitlist ? '#BBF7D0' : tokens.border}
-                    gap={4}
+                  {/* ── 3. Customer Waitlisting Inline Toggle ── */}
+                  <XStack
+                    alignItems="center"
+                    justifyContent="space-between"
+                    paddingVertical={4}
                   >
-                    <XStack alignItems="center" justifyContent="space-between">
-                      <XStack alignItems="center" gap={6} flex={1}>
-                        <LuBell size={14} color={sku.allowWaitlist ? '#15803D' : tokens.textMuted} />
-                        <YStack flex={1}>
-                          <Text fontSize={11} fontWeight="800" color={tokens.text}>
-                            Join Waitlist when Out of Stock
-                          </Text>
-                          <Text fontSize={9} color={tokens.textMuted} lineHeight={13}>
-                            Shows '🔔 Join Waitlist' button on PDP for skus that have probability of restocking.
-                          </Text>
-                        </YStack>
-                      </XStack>
-
-                      <Pressable
-                        onPress={() => handleToggleSkuWaitlist(sku.id)}
-                        style={[
-                          styles.standardPillBtn,
-                          {
-                            backgroundColor: sku.allowWaitlist ? '#15803D' : '#94A3B8',
-                            borderColor: sku.allowWaitlist ? '#15803D' : '#94A3B8',
-                          },
-                        ]}
-                      >
-                        <Text fontSize={11} fontWeight="800" color="#FFFFFF">
-                          {sku.allowWaitlist ? 'Enabled ✓' : 'Disabled'}
-                        </Text>
-                      </Pressable>
+                    <XStack alignItems="center" gap={6}>
+                      <LuBell size={13} color={sku.allowWaitlist ? '#15803D' : tokens.textMuted} />
+                      <Text fontSize={11} fontWeight="700" color={tokens.text}>
+                        Customer Waitlisting
+                      </Text>
                     </XStack>
-                  </YStack>
+
+                    <Pressable
+                      onPress={() => handleToggleSkuWaitlist(sku.id)}
+                      style={[
+                        styles.standardPillBtn,
+                        {
+                          backgroundColor: sku.allowWaitlist ? '#15803D' : '#94A3B8',
+                          borderColor: sku.allowWaitlist ? '#15803D' : '#94A3B8',
+                          paddingVertical: 4,
+                          paddingHorizontal: 12,
+                        },
+                      ]}
+                    >
+                      <Text fontSize={10} fontWeight="800" color="#FFFFFF">
+                        {sku.allowWaitlist ? 'Enabled ✓' : 'Disabled'}
+                      </Text>
+                    </Pressable>
+                  </XStack>
 
                   {/* ── 4. Custom Message Field (Highlighted PDP Tag) ── */}
                   <YStack gap={6}>
@@ -5049,5 +5311,37 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 8,
     borderWidth: 1,
+  },
+  toastFloat: {
+    position: 'absolute',
+    bottom: 80,
+    alignSelf: 'center',
+    backgroundColor: '#0F172A',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+    zIndex: 9999,
+  },
+  presentationModeCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  presentationModeCardActive: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#2563EB',
   },
 });

@@ -308,3 +308,197 @@ export const ManageSkusScreen: Story = {
   },
 };
 
+const MOCK_SKUS_VARIED_INVENTORY = [
+  {
+    id: 'sku-vf2b56-01',
+    skuCode: 'VF2B5601',
+    colorwayName: 'Emerald & Gold Zari',
+    colorHex: '#1B4D3E',
+    secondaryHex: '#D4AF37',
+    stockQuantity: 12,
+    allowWaitlist: true,
+    price: null,
+    mrp: null,
+    isPriceInherited: true,
+  },
+  {
+    id: 'sku-vf2b56-02',
+    skuCode: 'VF2B5602',
+    colorwayName: 'Crimson & Rani Pink',
+    colorHex: '#C0392B',
+    secondaryHex: '#E91E63',
+    stockQuantity: 8,
+    allowWaitlist: true,
+    price: null,
+    mrp: null,
+    isPriceInherited: true,
+  },
+  {
+    id: 'sku-vf2b56-03',
+    skuCode: 'VF2B5603',
+    colorwayName: 'Royal Sapphire',
+    colorHex: '#1E3A8A',
+    secondaryHex: '#D4AF37',
+    stockQuantity: 6,
+    allowWaitlist: true,
+    price: 11499,
+    mrp: 15999,
+    isPriceInherited: false,
+  },
+  {
+    id: 'sku-vf2b56-04',
+    skuCode: 'VF2B5604',
+    colorwayName: 'Peacock Teal',
+    colorHex: '#0F766E',
+    secondaryHex: '#F59E0B',
+    stockQuantity: 5,
+    allowWaitlist: true,
+    price: null,
+    mrp: null,
+    isPriceInherited: true,
+  },
+  {
+    id: 'sku-vf2b56-05',
+    skuCode: 'VF2B5605',
+    colorwayName: 'Marigold Yellow',
+    colorHex: '#D97706',
+    secondaryHex: '#D4AF37',
+    stockQuantity: 3,
+    allowWaitlist: true,
+    price: null,
+    mrp: null,
+    isPriceInherited: true,
+  },
+  {
+    id: 'sku-vf2b56-06',
+    skuCode: 'VF2B5606',
+    colorwayName: 'Aubergine Purple',
+    colorHex: '#581C87',
+    secondaryHex: '#D4AF37',
+    stockQuantity: 2,
+    allowWaitlist: true,
+    price: null,
+    mrp: null,
+    isPriceInherited: true,
+  },
+  {
+    id: 'sku-vf2b56-07',
+    skuCode: 'VF2B5607',
+    colorwayName: 'Midnight Black',
+    colorHex: '#111827',
+    secondaryHex: '#D4AF37',
+    stockQuantity: 1,
+    allowWaitlist: true,
+    price: null,
+    mrp: null,
+    isPriceInherited: true,
+  },
+  {
+    id: 'sku-vf2b56-08',
+    skuCode: 'VF2B5608',
+    colorwayName: 'Rani Rose Pink',
+    colorHex: '#BE185D',
+    secondaryHex: '#D4AF37',
+    stockQuantity: 0,
+    allowWaitlist: true,
+    price: null,
+    mrp: null,
+    isPriceInherited: true,
+  },
+  {
+    id: 'sku-vf2b56-09',
+    skuCode: 'VF2B5609',
+    colorwayName: 'Olive Antique Green',
+    colorHex: '#3F6212',
+    secondaryHex: '#D4AF37',
+    stockQuantity: 0,
+    allowWaitlist: true,
+    price: null,
+    mrp: null,
+    isPriceInherited: true,
+  },
+];
+
+/**
+ * 8. Real-Time Inventory Metrics on Main Hub (4 In Stock, 3 Low, 2 Out, 2 WL):
+ * Demonstrates the dynamic inventory metrics chips (replacing '5 Waitlist Ready')
+ * with click-to-copy parent Product Code on header and instant toast feedback.
+ */
+export const HubWithRealtimeInventoryMetrics: Story = {
+  name: '8. Hub: Real-Time Stock Breakdown (4 In Stock, 3 Low, 2 Out, 2 WL)',
+  args: {
+    initialScreen: 'hub',
+    productCode: 'VF2B56',
+    isAlreadyInStore: true,
+    initialSkus: MOCK_SKUS_VARIED_INVENTORY,
+    initialShowPreview: false,
+  },
+  parameters: {
+    formFactorShell: {
+      defaultFactor: 'mobile',
+    },
+  },
+};
+
+/**
+ * 9. Metadata Page: Presentation Mode & Parent Inventory Controls:
+ * Demonstrates the new Store PDP & Catalog Presentation Mode selector (Grouped vs Split),
+ * Parent Available Quantity stepper (setting all child SKUs simultaneously), and Customer Waitlisting toggle.
+ */
+export const MetadataPresentationAndParentInventory: Story = {
+  name: '9. Metadata: Presentation Mode (Grouped vs Split) & Parent Stock',
+  args: {
+    initialScreen: 'metadata',
+    productCode: 'VF2B56',
+    isAlreadyInStore: true,
+    initialSkus: MOCK_SKUS_VARIED_INVENTORY,
+    initialShowPreview: false,
+  },
+  parameters: {
+    formFactorShell: {
+      defaultFactor: 'mobile',
+    },
+  },
+};
+
+/**
+ * 10. Manage SKUs: Compact Customer Waitlisting Toggle & Click-to-Copy SKU Code:
+ * Demonstrates the streamlined SKU item cards featuring the compact inline 'Customer Waitlisting' toggle
+ * and interactive click-to-copy SKU codes (e.g. VF2B5601).
+ */
+export const ManageSkusCompactWaitlistAndCopy: Story = {
+  name: '10. Manage SKUs: Compact Waitlist Toggle & Click-to-Copy SKU Codes',
+  args: {
+    initialScreen: 'manage_skus',
+    productCode: 'VF2B56',
+    isAlreadyInStore: true,
+    initialSkus: MOCK_SKUS_VARIED_INVENTORY,
+    initialShowPreview: false,
+  },
+  parameters: {
+    formFactorShell: {
+      defaultFactor: 'mobile',
+    },
+  },
+};
+
+/**
+ * 11. Full-Height Storefront PDP Preview (Zero Cropping):
+ * Demonstrates the uncropped, full viewport height PDP preview mode for flawless visual validation.
+ */
+export const FullHeightStorefrontPreviewUncropped: Story = {
+  name: '11. Preview: Full-Height Storefront Simulation (Uncropped)',
+  args: {
+    initialScreen: 'hub',
+    productCode: 'VF2B56',
+    isAlreadyInStore: true,
+    initialSkus: MOCK_SKUS_VARIED_INVENTORY,
+    initialShowPreview: true,
+  },
+  parameters: {
+    formFactorShell: {
+      defaultFactor: 'mobile',
+    },
+  },
+};
+

@@ -233,11 +233,14 @@ export default function StoreCurationScreen() {
     ? product.description
     : `${product.title}${product.fabric ? ` woven in ${product.fabric}` : ''}. Curated with authentic handloom craftsmanship for the Vayyari collection.`;
 
+  const parentProductCode = product.parentProductCode || product.productCode;
+  const parentProductId = product.parentCatalogId || product.id;
+
   return (
     <AdminStoreProductCurationPage
-      key={product.id}
-      productId={product.id}
-      productCode={product.productCode}
+      key={parentProductId}
+      productId={parentProductId}
+      productCode={parentProductCode}
       title={product.title}
       fabric={product.fabric || product.categoryName || 'Handloom'}
       baseCostPrice={product.baseCost || 0}

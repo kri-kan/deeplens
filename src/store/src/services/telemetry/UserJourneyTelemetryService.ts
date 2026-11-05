@@ -61,6 +61,9 @@ class UserJourneyTelemetryManager {
     this.deviceId = this.deviceMetadata.deviceId;
     this.sessionId = `ses_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
 
+    // Rehydrate any failed signals from previous offline sessions
+    this.rehydrateFailedSignals();
+
     // Initialize PostHog for Web
     this.initPostHog();
 
@@ -87,13 +90,21 @@ class UserJourneyTelemetryManager {
         posthog: () => posthog,
       };
 
-      // Flush signals on tab switch / page close
+      // Flush signals on tab switch / page close / iOS Safari pagehide
       window.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
           this.flushSignals();
         }
       });
+      window.addEventListener('pagehide', () => {
+        this.flushSignals();
+      });
       window.addEventListener('beforeunload', () => {
+        this.flushSignals();
+      });
+
+      // Auto-flush when device reconnects to network
+      window.addEventListener('online', () => {
         this.flushSignals();
       });
     }
@@ -232,6 +243,11 @@ class UserJourneyTelemetryManager {
       clientTimestamp: event.timestamp,
     });
 
+    // Safety cap buffer at 100 items to protect memory under offline conditions
+    if (this.signalBuffer.length > 100) {
+      this.signalBuffer.shift();
+    }
+
     const isCritical = ['session_start', 'checkout_initiated', 'order_placed', 'cart_shared_whatsapp'].includes(type);
     if (isCritical || this.signalBuffer.length >= 10) {
       this.flushSignals();
@@ -259,7 +275,39 @@ class UserJourneyTelemetryManager {
     this.flushTimer = setTimeout(() => {
       this.flushTimer = null;
       this.flushSignals();
-    }, 3000);
+    }, 2500);
+  }
+
+  private rehydrateFailedSignals() {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    try {
+      const stored = window.localStorage.getItem('vy_store_telemetry_retry_queue');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          this.signalBuffer.unshift(...parsed);
+          window.localStorage.removeItem('vy_store_telemetry_retry_queue');
+        }
+      }
+    } catch {}
+  }
+
+  private persistFailedSignals(signals: any[]) {
+    if (typeof window === 'undefined' || !window.localStorage || !signals || signals.length === 0) return;
+    try {
+      const existing = window.localStorage.getItem('vy_store_telemetry_retry_queue');
+      let combined = signals;
+      if (existing) {
+        const parsed = JSON.parse(existing);
+        if (Array.isArray(parsed)) {
+          combined = [...parsed, ...signals];
+        }
+      }
+      if (combined.length > 50) {
+        combined = combined.slice(combined.length - 50);
+      }
+      window.localStorage.setItem('vy_store_telemetry_retry_queue', JSON.stringify(combined));
+    } catch {}
   }
 
   public flushSignals() {
@@ -279,6 +327,15 @@ class UserJourneyTelemetryManager {
 
     const url = `${this.getStoreApiUrl()}/api/v1/telemetry/signals`;
 
+    // Web Beacon path for background/pagehide resilience
+    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.sendBeacon) {
+      try {
+        const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+        const success = navigator.sendBeacon(url, blob);
+        if (success) return;
+      } catch {}
+    }
+
     try {
       fetch(url, {
         method: 'POST',
@@ -288,11 +345,19 @@ class UserJourneyTelemetryManager {
         },
         body: JSON.stringify(payload),
         keepalive: true,
-      }).catch((err) => {
-        // Non-blocking catch to prevent UI interruption
-        console.debug('[Telemetry] Flush failed, will retry next cycle:', err);
-      });
-    } catch {}
+      })
+        .then((res) => {
+          if (!res.ok) {
+            throw new Error(`Server returned HTTP ${res.status}`);
+          }
+        })
+        .catch((err) => {
+          console.debug('[Telemetry] Flush failed, preserving signals for retry:', err);
+          this.persistFailedSignals(batch);
+        });
+    } catch {
+      this.persistFailedSignals(batch);
+    }
   }
 
   public getDeviceId(): string {

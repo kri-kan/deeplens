@@ -159,6 +159,9 @@ class PrelaunchTelemetryManager {
     this.deviceMetadata = getOrCreatePersistentDeviceId();
     this.sessionId = `ses_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
 
+    // Rehydrate any failed signals from previous offline sessions
+    this.rehydrateFailedSignals();
+
     // Initialize PostHog targeting the first-party /ingest proxy
     this.initPostHog();
 
@@ -177,12 +180,21 @@ class PrelaunchTelemetryManager {
         posthog: () => posthog,
       };
 
+      // Lifecycle flushes: visibility hidden, pagehide (iOS Safari), beforeunload
       window.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
           this.flushSignals();
         }
       });
+      window.addEventListener('pagehide', () => {
+        this.flushSignals();
+      });
       window.addEventListener('beforeunload', () => {
+        this.flushSignals();
+      });
+
+      // Auto-flush when device reconnects to WiFi/Cellular
+      window.addEventListener('online', () => {
         this.flushSignals();
       });
     }
@@ -293,6 +305,38 @@ class PrelaunchTelemetryManager {
     this.trackSignal('silhouette_viewed', silhouette);
   }
 
+  private rehydrateFailedSignals() {
+    if (typeof window === 'undefined') return;
+    try {
+      const stored = localStorage.getItem('vy_telemetry_retry_queue');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          this.signalBuffer.unshift(...parsed);
+          localStorage.removeItem('vy_telemetry_retry_queue');
+        }
+      }
+    } catch {}
+  }
+
+  private persistFailedSignals(signals: any[]) {
+    if (typeof window === 'undefined' || !signals || signals.length === 0) return;
+    try {
+      const existing = localStorage.getItem('vy_telemetry_retry_queue');
+      let combined = signals;
+      if (existing) {
+        const parsed = JSON.parse(existing);
+        if (Array.isArray(parsed)) {
+          combined = [...parsed, ...signals];
+        }
+      }
+      if (combined.length > 50) {
+        combined = combined.slice(combined.length - 50);
+      }
+      localStorage.setItem('vy_telemetry_retry_queue', JSON.stringify(combined));
+    } catch {}
+  }
+
   public flushSignals() {
     if (this.signalBuffer.length === 0) return;
     if (this.flushTimer) {
@@ -329,15 +373,22 @@ class PrelaunchTelemetryManager {
       }
     } catch {}
 
-    // Fallback to fetch with keepalive
+    // Fallback to fetch with keepalive & retry queue on error
     fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(requestBody),
       keepalive: true,
-    }).catch((err) => {
-      console.warn('[Telemetry] Flush error:', err);
-    });
+    })
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`Server returned HTTP ${res.status}`);
+        }
+      })
+      .catch((err) => {
+        console.warn('[Telemetry] Flush error, preserving signals for retry:', err);
+        this.persistFailedSignals(signalsToSend);
+      });
   }
 }
 

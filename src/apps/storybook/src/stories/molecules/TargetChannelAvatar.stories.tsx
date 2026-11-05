@@ -14,7 +14,7 @@ const meta: Meta<any> = {
   argTypes: {
     ...THEME_ARG_TYPES,
     isSelected: { control: 'boolean' },
-    size: { control: 'radio', options: ['sm', 'md', 'lg'] },
+    size: { control: 'select', options: ['sm', 'md', 'lg'] },
   },
 };
 

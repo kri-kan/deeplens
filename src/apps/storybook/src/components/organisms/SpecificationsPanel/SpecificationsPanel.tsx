@@ -150,6 +150,9 @@ export function SpecificationsPanel({
   sku,
   defaultViewMode = 'cards',
   enableViewModeToggle = true,
+  defaultCollapsed = true,
+  isCollapsible = true,
+  borderless = false,
 }: SpecificationsPanelProps) {
   const { tokens } = useTheme();
   const { isMobile, isTablet, isDesktop } = useResponsive();
@@ -157,7 +160,16 @@ export function SpecificationsPanel({
   const [viewMode, setViewMode] = useState<SpecificationsPanelViewMode>(defaultViewMode);
   const [activeCategoryTab, setActiveCategoryTab] = useState<string>('all');
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [isSectionCollapsed, setIsSectionCollapsed] = useState<boolean>(
+    isCollapsible ? (defaultCollapsed ?? true) : false
+  );
   const [copiedSku, setCopiedSku] = useState(false);
+
+  React.useEffect(() => {
+    if (isCollapsible && defaultCollapsed !== undefined) {
+      setIsSectionCollapsed(defaultCollapsed);
+    }
+  }, [defaultCollapsed, isCollapsible]);
 
   // Derive resolved groups
   const resolvedGroups = useMemo<SpecificationGroup[]>(() => {
@@ -219,61 +231,39 @@ export function SpecificationsPanel({
 
   return (
     <YStack
-      paddingHorizontal={isMobile ? 12 : 16}
-      paddingTop={isMobile ? 16 : 24}
+      paddingHorizontal={borderless ? 4 : (isMobile ? 12 : 16)}
+      paddingTop={borderless ? 12 : (isMobile ? 16 : 24)}
       paddingBottom={16}
       gap={14}
     >
-      {/* Header Row */}
+      {/* Header Row (Pressable when collapsible) */}
       <YStack gap={6}>
         <XStack justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={8}>
-          <XStack alignItems="center" gap={8}>
-            <Text
-              fontSize={isMobile ? 18 : 20}
-              fontWeight="800"
-              letterSpacing={-0.5}
-              color={tokens.text}
-            >
-              {title}
-            </Text>
-            <XStack
-              backgroundColor={tokens.surfaceRaised}
-              paddingHorizontal={8}
-              paddingVertical={2}
-              borderRadius={12}
-              borderWidth={1}
-              borderColor={tokens.border}
-            >
-              <Text fontSize={11} fontWeight="700" color={tokens.accent}>
-                {totalSpecCount} Attributes
+          <Pressable
+            onPress={() => isCollapsible && setIsSectionCollapsed((prev) => !prev)}
+            hitSlop={8}
+            style={{ cursor: isCollapsible ? 'pointer' : 'default' } as any}
+          >
+            <XStack alignItems="center" gap={8}>
+              <Text
+                fontSize={isMobile ? 18 : 20}
+                fontWeight="800"
+                letterSpacing={-0.5}
+                color={tokens.text}
+              >
+                {title || 'Specifications & Craft Details'} ({totalSpecCount})
               </Text>
+              {isCollapsible && (
+                <XStack padding={4}>
+                  {isSectionCollapsed ? (
+                    <LuChevronDown size={18} color={tokens.text} />
+                  ) : (
+                    <LuChevronUp size={18} color={tokens.text} />
+                  )}
+                </XStack>
+              )}
             </XStack>
-          </XStack>
-
-          {/* Optional SKU with copy button */}
-          {sku && (
-            <Pressable
-              onPress={handleCopySku}
-              style={[
-                styles.skuPill,
-                {
-                  borderColor: tokens.border,
-                  backgroundColor: tokens.surfaceRaised,
-                },
-              ]}
-            >
-              <XStack alignItems="center" gap={5}>
-                {copiedSku ? (
-                  <LuCheck size={12} color="#10B981" />
-                ) : (
-                  <LuCopy size={12} color={tokens.textSecondary} />
-                )}
-                <Text fontSize={11} fontWeight="600" color={copiedSku ? '#10B981' : tokens.textSecondary}>
-                  {copiedSku ? 'Copied SKU' : `SKU: ${sku}`}
-                </Text>
-              </XStack>
-            </Pressable>
-          )}
+          </Pressable>
         </XStack>
 
         {subtitle && (
@@ -282,6 +272,9 @@ export function SpecificationsPanel({
           </Text>
         )}
       </YStack>
+
+      {!isSectionCollapsed && (
+        <>
 
       {/* Authenticity Guarantee Banner */}
       {showSilkMarkBadge && (
@@ -331,99 +324,7 @@ export function SpecificationsPanel({
         </XStack>
       )}
 
-      {/* View Mode Switcher / Segmented Tabs */}
-      {enableViewModeToggle && (
-        <XStack
-          justifyContent="space-between"
-          alignItems="center"
-          flexWrap="wrap"
-          gap={8}
-          borderBottomWidth={1}
-          borderBottomColor={tokens.border}
-          paddingBottom={10}
-        >
-          {/* Category Tabs (when in tabs mode or as quick filter) */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoryScrollContainer}
-          >
-            <XStack gap={6} alignItems="center">
-              <Pressable
-                onPress={() => {
-                  setViewMode('tabs');
-                  setActiveCategoryTab('all');
-                }}
-                style={[
-                  styles.tabButton,
-                  viewMode === 'tabs' && activeCategoryTab === 'all'
-                    ? { backgroundColor: tokens.accent, borderColor: tokens.accent }
-                    : { backgroundColor: tokens.surfaceRaised, borderColor: tokens.border },
-                ]}
-              >
-                <Text
-                  fontSize={11.5}
-                  fontWeight={viewMode === 'tabs' && activeCategoryTab === 'all' ? '800' : '600'}
-                  color={
-                    viewMode === 'tabs' && activeCategoryTab === 'all'
-                      ? '#FFFFFF'
-                      : tokens.textSecondary
-                  }
-                >
-                  All ({totalSpecCount})
-                </Text>
-              </Pressable>
 
-              {resolvedGroups.map((group) => {
-                const isActive = viewMode === 'tabs' && activeCategoryTab === group.id;
-                return (
-                  <Pressable
-                    key={group.id}
-                    onPress={() => {
-                      setViewMode('tabs');
-                      setActiveCategoryTab(group.id);
-                    }}
-                    style={[
-                      styles.tabButton,
-                      isActive
-                        ? { backgroundColor: tokens.accent, borderColor: tokens.accent }
-                        : { backgroundColor: tokens.surfaceRaised, borderColor: tokens.border },
-                    ]}
-                  >
-                    <XStack alignItems="center" gap={4}>
-                      {renderGroupIcon(group.icon)}
-                      <Text
-                        fontSize={11.5}
-                        fontWeight={isActive ? '800' : '600'}
-                        color={isActive ? '#FFFFFF' : tokens.text}
-                      >
-                        {group.title.split(' ')[0]} ({group.specs.length})
-                      </Text>
-                    </XStack>
-                  </Pressable>
-                );
-              })}
-            </XStack>
-          </ScrollView>
-
-          {/* View Mode Switcher (reusing canonical SegmentedControl atom) */}
-          <SegmentedControl
-            activeId={viewMode}
-            onChange={(id) => {
-              const nextMode = id as SpecificationsPanelViewMode;
-              setViewMode(nextMode);
-              if (nextMode === 'tabs' && activeCategoryTab === 'all' && resolvedGroups.length > 0) {
-                setActiveCategoryTab(resolvedGroups[0].id);
-              }
-            }}
-            options={[
-              { id: 'cards', label: 'Cards' },
-              { id: 'tabs', label: 'Tabs' },
-              { id: 'accordion', label: 'Accordion' },
-            ]}
-          />
-        </XStack>
-      )}
 
       {/* Main Groups Rendering */}
       {visibleGroups.length === 0 ? (
@@ -563,20 +464,8 @@ export function SpecificationsPanel({
         </YStack>
       )}
 
-      {/* Artisan & Handloom Assurance Footer */}
-      <XStack
-        backgroundColor={tokens.surfaceRaised}
-        paddingHorizontal={12}
-        paddingVertical={8}
-        borderRadius={10}
-        alignItems="center"
-        gap={8}
-      >
-        <LuInfo size={14} color={tokens.textSecondary} />
-        <Text fontSize={11} color={tokens.textSecondary} flex={1}>
-          Every artisanal piece is woven by master craftsmen. Subtle irregularities in weave and selvedge are natural hallmarks of authentic handlooms.
-        </Text>
-      </XStack>
+        </>
+      )}
     </YStack>
   );
 }

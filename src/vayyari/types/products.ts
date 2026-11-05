@@ -177,6 +177,8 @@ export interface VisualSimilarityMatch {
   mediaCount?: number;
   isLinked: boolean;
   existingLinkType?: string | null;
+  isDeleted?: boolean;
+  isArchived?: boolean;
 }
 
 export interface VisualSimilaritySearchRequest {

@@ -18,7 +18,7 @@ const meta: Meta<any> = {
   argTypes: {
     ...THEME_ARG_TYPES,
     initialTab: {
-      control: 'radio',
+      control: 'select',
       options: ['starred', 'completed'],
       description: 'Active Curation header toggle',
     },

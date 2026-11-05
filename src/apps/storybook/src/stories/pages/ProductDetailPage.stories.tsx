@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-native';
-import { ProductDetailPage, PDP_PRESETS } from '../../components/pages/ProductDetailPage';
+import { ProductDetailPage, PDP_PRESETS, MOBILE_FLUSH_PRESET } from '../../components/pages/ProductDetailPage';
 import { DIVERSE_CATALOG_PRODUCTS, getProductBySku } from '../../data/catalog';
 import { withFormFactor } from '../utils/FormFactorPreview';
 import { THEME_ARG_TYPES, THEME_ARGS } from '../../utils/storyTheme';
@@ -112,5 +112,42 @@ export const VariantBTreatment: Story = {
   args: {
     product: getProductBySku('VF2B56') || DIVERSE_CATALOG_PRODUCTS[0],
     config: PDP_PRESETS.treatment,
+  },
+};
+
+export const VariantCMobileFlush: Story = {
+  name: 'Experiment: Variant C (Mobile Flush - Borderless Edge-to-Edge)',
+  decorators: [withFormFactor('mobile', 'Variant C (Mobile Flush)')],
+  args: {
+    product: getProductBySku('VF2B56') || DIVERSE_CATALOG_PRODUCTS[0],
+    config: MOBILE_FLUSH_PRESET,
+  },
+};
+
+/**
+ * Side-by-Side Mobile Layout Comparison Stories:
+ * Compare Boxed Cards (16px gutters) vs Borderless Flush (edge-to-edge).
+ */
+export const ComparisonMobileBoxedCards: Story = {
+  name: 'Mobile Layout: 1. Boxed Cards (16px Gutters)',
+  decorators: [withFormFactor('mobile', 'Boxed Cards (16px Gutters)')],
+  args: {
+    product: getProductBySku('VF2B56') || DIVERSE_CATALOG_PRODUCTS[0],
+    config: {
+      ...PDP_PRESETS.treatment,
+      containerStyle: 'cards',
+    },
+  },
+};
+
+export const ComparisonMobileBorderlessFlush: Story = {
+  name: 'Mobile Layout: 2. Borderless Flush (Reclaim Lateral Margin)',
+  decorators: [withFormFactor('mobile', 'Borderless Flush (Edge-to-Edge)')],
+  args: {
+    product: getProductBySku('VF2B56') || DIVERSE_CATALOG_PRODUCTS[0],
+    config: {
+      ...PDP_PRESETS.treatment,
+      containerStyle: 'borderless',
+    },
   },
 };

@@ -38,7 +38,7 @@ const meta: Meta<any> = {
   argTypes: {
     ...THEME_ARG_TYPES,
     selectedDayPart: {
-      control: 'radio',
+      control: 'select',
       options: ['morning', 'afternoon', 'evening', 'night'],
       description: 'Day-part timing preset',
     },

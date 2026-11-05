@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { YStack, XStack, Text } from 'tamagui';
-import { Platform, Share } from 'react-native';
+import { Platform, Share, Pressable } from 'react-native';
+import { LuEye } from 'react-icons/lu';
 import { useNavigation } from '../NavigationContext';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
@@ -57,6 +58,8 @@ export const ProductDetailPage: React.FC = () => {
   const [isOnWaitlist, setIsOnWaitlist] = useState<boolean>(false);
   const [isWaitlistLoading, setIsWaitlistLoading] = useState<boolean>(false);
   const [loginModalVisible, setLoginModalVisible] = useState<boolean>(false);
+  const [descriptionExpanded, setDescriptionExpanded] = useState<boolean>(false);
+  const [addedToBag, setAddedToBag] = useState(false);
 
   const targetCode = params.code || params.id || 'vf2b58';
 
@@ -463,7 +466,12 @@ export const ProductDetailPage: React.FC = () => {
   };
 
   const handleAddToBag = () => {
+    if (addedToBag) {
+      openDrawer();
+      return;
+    }
     const activeOption = colourOptions.find((o) => o.key === activeColorKey);
+    const activeSwatch = swatchesMap[activeColorKey];
     const swatch: EthnicSwatch = {
       id: activeColorKey,
       name: activeOption?.label || product.colorwayName || 'Original',
@@ -471,6 +479,7 @@ export const ProductDetailPage: React.FC = () => {
       primaryHex: activeOption?.primaryColor || product.colorHex || '#D4AF37',
       secondaryHex: activeOption?.secondaryColor,
       accentHex: activeOption?.tertiaryColor,
+      imageUrl: activeSwatch?.images?.[0]?.url,
     };
 
     const effectiveProduct = {
@@ -480,11 +489,11 @@ export const ProductDetailPage: React.FC = () => {
     };
 
     addItem(effectiveProduct, swatch, selectedSize);
+    setAddedToBag(true);
     showToast({
       message: `Added ${product.title.slice(0, 24)}... (${selectedSize}) to Bag`,
       type: 'success',
     });
-    openDrawer();
   };
 
   const handleToggleWishlist = () => {
@@ -530,6 +539,7 @@ export const ProductDetailPage: React.FC = () => {
   return (
     <>
       <ProductDetailTemplate
+        borderless={isMobile}
         breadcrumbs={
           <Breadcrumbs
             items={[
@@ -550,6 +560,7 @@ export const ProductDetailPage: React.FC = () => {
         }
         gallery={
           <ProductGallery
+            borderless={isMobile}
             swatches={swatchesMap}
             selectedColor={activeColorKey}
             onSelectColor={setSelectedColor}
@@ -568,12 +579,12 @@ export const ProductDetailPage: React.FC = () => {
         }
         purchasePanel={
           <YStack
-            backgroundColor={tokens.surface}
-            borderColor={tokens.border}
-            borderWidth={1}
-            borderRadius={isMobile ? 16 : 20}
-            padding={isMobile ? 16 : 24}
-            gap={isMobile ? 14 : 18}
+            backgroundColor={isMobile ? 'transparent' : tokens.surface}
+            borderColor={isMobile ? 'transparent' : tokens.border}
+            borderWidth={isMobile ? 0 : 1}
+            borderRadius={isMobile ? 0 : 20}
+            padding={isMobile ? 6 : 24}
+            gap={isMobile ? 12 : 18}
             width="100%"
           >
             {/* Brand Header & Rating Badge */}
@@ -588,7 +599,24 @@ export const ProductDetailPage: React.FC = () => {
                 >
                   {product.brand || 'VAANYA LUXE HERITAGE'}
                 </Text>
-                <RatingBadge rating={product.rating || 4.8} count={product.reviewCount || 248} />
+                <XStack alignItems="center" gap={8}>
+                  <XStack
+                    backgroundColor="#FEF3C7"
+                    borderColor="#FDE68A"
+                    borderWidth={1}
+                    paddingHorizontal={8}
+                    paddingVertical={3}
+                    borderRadius={12}
+                    alignItems="center"
+                    gap={4}
+                  >
+                    <LuEye size={12} color="#B45309" />
+                    <Text fontSize={11} fontWeight="800" color="#B45309">
+                      1.4k viewing
+                    </Text>
+                  </XStack>
+                  <RatingBadge rating={product.rating || 4.8} count={product.reviewCount || 248} />
+                </XStack>
               </XStack>
 
               <Text
@@ -622,10 +650,25 @@ export const ProductDetailPage: React.FC = () => {
                 </XStack>
               ) : null}
 
-              <Text fontSize={13} color={tokens.textSecondary} lineHeight={20}>
-                {product.description ||
-                  `Handcrafted authentic ${product.weaveOrigin || 'Chanderi'} weave with certified natural silk mark guarantee.`}
-              </Text>
+              <YStack gap={4}>
+                <Text
+                  fontSize={13}
+                  color={tokens.textSecondary}
+                  lineHeight={20}
+                  numberOfLines={descriptionExpanded ? undefined : 2}
+                >
+                  {product.description ||
+                    `Handcrafted authentic ${product.weaveOrigin || 'Chanderi'} weave with certified natural silk mark guarantee.`}
+                </Text>
+                <Pressable
+                  onPress={() => setDescriptionExpanded((prev) => !prev)}
+                  style={{ alignSelf: 'flex-start', marginTop: 2, cursor: 'pointer' } as any}
+                >
+                  <Text fontSize={12} fontWeight="700" color={tokens.accent}>
+                    {descriptionExpanded ? 'Show Less ↑' : 'Read More... ↓'}
+                  </Text>
+                </Pressable>
+              </YStack>
             </YStack>
 
             {/* Pricing Section */}
@@ -770,17 +813,17 @@ export const ProductDetailPage: React.FC = () => {
                 <XStack
                   flex={1}
                   height={46}
-                  backgroundColor={tokens.accent}
+                  backgroundColor={addedToBag ? '#16A34A' : tokens.accent}
                   borderRadius={12}
                   alignItems="center"
                   justifyContent="center"
                   cursor="pointer"
-                  onPress={handleAddToBag}
+                  onPress={addedToBag ? openDrawer : handleAddToBag}
                   hoverStyle={{ opacity: 0.92, scale: 1.02 }}
                   pressStyle={{ scale: 0.96 }}
                 >
                   <Text color={tokens.accentForeground} fontWeight="800" fontSize={14}>
-                    🛍 Add to Bag
+                    {addedToBag ? '🛍 Go to Bag →' : '🛍 Add to Bag'}
                   </Text>
                 </XStack>
               )}
@@ -821,6 +864,7 @@ export const ProductDetailPage: React.FC = () => {
         }
         crossSells={
           <FrequentlyBoughtTogether
+            borderless={isMobile}
             items={[
               {
                 id: product.id,
@@ -851,6 +895,7 @@ export const ProductDetailPage: React.FC = () => {
         }
         specifications={
           <SpecificationsPanel
+            borderless={isMobile}
             specs={[
               { label: 'Fabric Composition', value: product.fabric || '100% Pure Mulberry Silk' },
               { label: 'Weave Origin / Craft', value: product.weaveOrigin || 'Handloom Traditional Weave' },
@@ -864,10 +909,13 @@ export const ProductDetailPage: React.FC = () => {
                   : 'Made to Order (Ships in 4-6 Days)',
               },
             ]}
+            defaultCollapsed={true}
+            isCollapsible={true}
           />
         }
         reviews={
           <RatingsPanel
+            borderless={isMobile}
             averageRating={product.rating || 4.8}
             totalReviews={product.reviewCount || 248}
             breakdown={[180, 45, 15, 5, 3]}
@@ -893,10 +941,10 @@ export const ProductDetailPage: React.FC = () => {
         recommendations={
           relatedProducts.length > 0 ? (
             <YStack
-              backgroundColor={tokens.surface}
-              borderColor={tokens.border}
-              borderWidth={1}
-              borderRadius={20}
+              backgroundColor={isMobile ? 'transparent' : tokens.surface}
+              borderColor={isMobile ? 'transparent' : tokens.border}
+              borderWidth={isMobile ? 0 : 1}
+              borderRadius={isMobile ? 0 : 20}
               overflow="hidden"
             >
               <HorizontalProductStrip
@@ -937,6 +985,8 @@ export const ProductDetailPage: React.FC = () => {
                     ? () => {}
                     : handleJoinWaitlist
                   : () => {}
+                : addedToBag
+                ? openDrawer
                 : handleAddToBag
             }
             buttonLabel={
@@ -948,7 +998,9 @@ export const ProductDetailPage: React.FC = () => {
                     ? 'On Waitlist ✓'
                     : '🔔 Join Waitlist'
                   : 'Sold Out'
-                : undefined
+                : addedToBag
+                ? '🛍 Go to Bag →'
+                : '🛍 Add to Bag'
             }
             buttonBg={
               isOutOfStock
@@ -957,6 +1009,8 @@ export const ProductDetailPage: React.FC = () => {
                     ? '#059669'
                     : '#B45309'
                   : '#94A3B8'
+                : addedToBag
+                ? '#16A34A'
                 : undefined
             }
           />

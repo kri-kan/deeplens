@@ -539,6 +539,42 @@ Customers see ONLY these simplified states; internal complexity is hidden.
 
 ---
 
+## Section 12: Survey Framework & Mudras Reward Ledger Rules
+
+### 12.1 Audience Typing & Authentication Gating
+- **Audience Declaration**: Each survey is explicitly categorized as either `guest` or `registered` up-front.
+- **Guest Surveys**: Open to any anonymous or first-time visitor. Device signature (`virtual_user_id`) is captured via client fingerprinting. Login is not required to complete or earn points.
+- **Registered Surveys**: Restricted to authenticated patrons. If an unauthenticated visitor opens a registered survey, the `AuthSheet` modal intercepts before survey initiation.
+
+### 12.2 Synchronous Mudras Wallet Updating (No Event Queue Delay)
+- **Reward Formula**: Earned points = `questions_answered_count * points_per_question` (e.g. 4 steps × 175 = 700 Mudras).
+- **Synchronous Execution**: Submission to `/api/v1/surveys/{slug}/submit` executes an ACID transaction that writes to `survey_responses`, upserts `store_customer_wallets`, and records an audit row in `store_wallet_transactions`. No Kafka queue or AI reasoning pipeline is used for this critical path.
+- **Immediate Availability**: Earned Mudras are immediately available in the shopper's wallet HUD and checkout deduction rules.
+
+### 12.3 Multi-Device Identity Reconciliation ($1 \text{ User} \longleftrightarrow N \text{ Devices}$)
+- Non-registered submissions track `virtual_user_id`.
+- Registered submissions track both `user_id` (`usr_wa_...`) and `virtual_user_id`.
+- When a guest shopper subsequently registers or signs in, their device's accrued Mudras balance is reconciled and merged into their registered customer wallet.
+
+### 12.4 Draft-First Versioning Governance
+- **Uncommitted Drafts**: Surveys undergoing edits exist as unversioned drafts (`has_uncommitted_draft = true`).
+- **Publish Minting**: Sequential versions ($v1, v2, v3\dots$) are minted only when an admin explicitly publishes with a mandatory `version_comment`.
+- **Default Serving**: The latest non-archived version is served by default. Older versions remain immutable and can be archived (`is_archived = true`).
+
+### 12.5 Hidden Context Field Capture
+- Context parameters (`orderId`, `productId`, `utmCampaign`, etc.) passed via route parameters are mapped according to `hidden_fields_config` and stored in `survey_responses.hidden_fields_json` without displaying form inputs to the shopper.
+
+### 12.6 Private Customer Vault & File Upload Standardization
+- **Customer Storage Isolation**: All customer-uploaded media (photos, receipts, attachments) must be uploaded to the dedicated private MinIO bucket `customer-vault`. Anonymous public read (`s3:GetObject`) is strictly forbidden.
+- **Two-Phase Upload Protocol**:
+  1. The client requests an upload ticket from `POST /api/v1/surveys/{slug}/upload-ticket`.
+  2. The backend validates the question type (`file_upload`), file size, MIME type, and count constraints, and returns a time-limited presigned PUT URL (TTL: 15 minutes) scoped to `customer-vault/surveys/{slug}/{virtualUserId}/{questionKey}/{guid}_{fileName}`.
+  3. The client uploads binary content directly to MinIO via HTTP `PUT`.
+- **Submission Verification**: On survey submission (`POST /api/v1/surveys/{slug}/submit`), the backend validates that submitted file counts satisfy `minFiles` and `maxFiles`, and verifies object existence via MinIO `StatObjectAsync`.
+- **Ephemeral Admin Access**: Admin inspections via `GET /api/v1/admin/surveys/responses/{responseId}` dynamically decorate file references with short-lived presigned GET URLs (TTL: 1 hour) so customer privacy is guaranteed without permanent link leakage.
+
+---
+
 ## Decision Log
 
 | Decision                 | Context               | Options                              | Selected        | Rationale                                                   |
@@ -549,6 +585,7 @@ Customers see ONLY these simplified states; internal complexity is hidden.
 | Cart Merging Trigger     | Multi-device shopping | Auto-merge vs. Manual                | On Login        | Explicit user action provides transparency                  |
 | Max Qty Per SKU          | Quantity limits       | No limit vs. 5 vs. 10                | 5               | MVP scope (prevents bulk abuse); can raise for enterprise   |
 | Partial Shipment Allowed | Order fulfillment     | Combine vs. Ship separately          | Ship separately | Faster delivery; acceptable for handlooms (different items) |
+| Survey Module Ownership  | App code boundaries   | Monolithic vs New Package vs Split   | Split in @deeplens/ui | Shared Player in `@deeplens/ui`, runtime in Store app, studio in Admin app |
 
 ---
 

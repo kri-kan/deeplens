@@ -53,4 +53,5 @@ When delegating or assuming specialist roles:
 - **Observability**: Every backend service method MUST be instrumented with OpenTelemetry.
 - **Vayyari (Mobile)**: Never run `npx expo start` manually; use `tmux send-keys -t expo r C-m`.
 - **Deployments**: Always build & publish to `/data/hosting/{service}` using `--no-restore` and restart via Docker.
+- **Mobile PDP Design Pattern**: All consumer-facing PDP screens on mobile viewports (< 768px) MUST adopt the borderless flush layout (`borderless={isMobile}`): no card bounding boxes or lateral gutter padding, edge-to-edge gallery thumbnails, 2-line clamped story description with "Read More", collapsible specifications with attribute count pill `(12)`, and lean single-row horizontal color swatches in Add-to-Bag bottom sheets.
 - **State Recording**: Record major decisions via `squad_decide` so team state is persisted across sessions.

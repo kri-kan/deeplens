@@ -1,7 +1,19 @@
-import React, { ReactNode } from 'react';
-import { ScrollView } from 'react-native';
+import React, { ReactNode, useState, useCallback, createContext } from 'react';
+import { ScrollView, View } from 'react-native';
 import { YStack, XStack } from 'tamagui';
 import { useTheme, useResponsive } from '../../theme';
+
+export type FocusModeContextType = {
+  isFocusMode: boolean;
+  setFocusMode: (inFocus: boolean) => void;
+  setFocusOverlay: (overlay: ReactNode) => void;
+};
+
+export const FocusModeContext = createContext<FocusModeContextType>({
+  isFocusMode: false,
+  setFocusMode: () => {},
+  setFocusOverlay: () => {},
+});
 
 export type ProductDetailTemplateProps = {
   header?: ReactNode;
@@ -14,7 +26,11 @@ export type ProductDetailTemplateProps = {
   recommendations?: ReactNode;
   stickyBuyBar?: ReactNode;
   cartDrawer?: ReactNode;
+  borderless?: boolean;
   onScroll?: (e: any) => void;
+  isFocusMode?: boolean;
+  onFocusModeChange?: (inFocus: boolean) => void;
+  focusOverlay?: ReactNode;
 };
 
 export function ProductDetailTemplate({
@@ -28,19 +44,53 @@ export function ProductDetailTemplate({
   recommendations,
   stickyBuyBar,
   cartDrawer,
+  borderless,
   onScroll,
+  isFocusMode: isFocusModeProp,
+  onFocusModeChange,
+  focusOverlay: focusOverlayProp,
 }: ProductDetailTemplateProps) {
   const { tokens } = useTheme();
   const { isMobile, isTablet, isDesktop } = useResponsive();
 
-  return (
-    <YStack flex={1} backgroundColor={tokens.background} position="relative">
-      {/* Sticky / Top Header */}
-      {header}
+  const [internalFocusMode, setInternalFocusMode] = useState(false);
+  const [internalFocusOverlay, setInternalFocusOverlay] = useState<ReactNode>(null);
 
-      {/* Main PDP Scrollable Canvas */}
-      <ScrollView
-        style={{ flex: 1 }}
+  const isFocusMode = isFocusModeProp !== undefined ? isFocusModeProp : internalFocusMode;
+  const focusOverlay = focusOverlayProp !== undefined ? focusOverlayProp : internalFocusOverlay;
+
+  const handleSetFocusMode = useCallback(
+    (inFocus: boolean) => {
+      setInternalFocusMode(inFocus);
+      onFocusModeChange?.(inFocus);
+    },
+    [onFocusModeChange]
+  );
+
+  return (
+    <FocusModeContext.Provider
+      value={{
+        isFocusMode,
+        setFocusMode: handleSetFocusMode,
+        setFocusOverlay: setInternalFocusOverlay,
+      }}
+    >
+      <YStack
+        flex={1}
+        backgroundColor={tokens.background}
+        position="relative"
+        overflow={isFocusMode ? 'hidden' : undefined}
+      >
+        {/* Sticky / Top Header - Hidden in Focus Mode */}
+        {!isFocusMode && header}
+
+        {/* Main PDP Scrollable Canvas - Hidden in Focus Mode to prevent scrolling */}
+        <ScrollView
+          style={{
+            flex: 1,
+            ...(isFocusMode ? { display: 'none' } : {}),
+          }}
+          scrollEnabled={!isFocusMode}
         contentContainerStyle={{
           paddingBottom: isMobile ? 110 : 60,
         }}
@@ -52,8 +102,8 @@ export function ProductDetailTemplate({
           maxWidth={1240}
           width="100%"
           alignSelf="center"
-          paddingHorizontal={isMobile ? 12 : isTablet ? 20 : 28}
-          paddingTop={isMobile ? 12 : 20}
+          paddingHorizontal={borderless && isMobile ? 8 : (isMobile ? 12 : isTablet ? 20 : 28)}
+          paddingTop={isMobile ? (borderless ? 8 : 12) : 20}
           gap={isMobile ? 20 : 32}
         >
           {/* Breadcrumbs Navigation */}
@@ -114,11 +164,32 @@ export function ProductDetailTemplate({
         </YStack>
       </ScrollView>
 
-      {/* Mobile Sticky Add to Bag Floating Bar */}
-      {isMobile ? stickyBuyBar : null}
+        {/* Mobile Sticky Add to Bag Floating Bar - Hidden in Focus Mode */}
+        {!isFocusMode && isMobile ? stickyBuyBar : null}
 
-      {/* Slide-out Cart Drawer */}
-      {cartDrawer}
-    </YStack>
+        {/* Slide-out Cart Drawer - Hidden in Focus Mode */}
+        {!isFocusMode && cartDrawer}
+
+        {/* Fullscreen Edge-to-Edge Focus Mode Overlay (Top to Bottom, 0 padding, no header/bottom bar) */}
+        {isFocusMode && focusOverlay ? (
+          <View
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              width: '100%',
+              height: '100%',
+              zIndex: 999999,
+              backgroundColor: '#000000',
+              overflow: 'hidden',
+            }}
+          >
+            {focusOverlay}
+          </View>
+        ) : null}
+      </YStack>
+    </FocusModeContext.Provider>
   );
 }

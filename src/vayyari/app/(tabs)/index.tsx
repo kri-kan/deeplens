@@ -1,6 +1,6 @@
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect, useCallback } from 'react';
 import { View, StyleSheet, Pressable, useWindowDimensions, BackHandler } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
@@ -37,7 +37,6 @@ import {
   LuSparkles,
   LuPackage,
   LuActivity,
-  LuTriangleAlert,
 } from '@/components/tamagui-ui/icons/lu';
 import {
   RiWhatsappLine,
@@ -187,15 +186,6 @@ const SYSTEM_UTILITIES: RawUtilityItem[] = [
     permission: PERMISSIONS.WHATSAPP_VIEW,
   },
   {
-    id: 'whatsapp-review-inbox',
-    title: 'Review Inbox',
-    icon: <LuTriangleAlert size={36} color="#D97706" />,
-    route: '/utilities/whatsapp/review-inbox',
-    color: '#D97706',
-    description: 'Multi-stage WhatsApp product triage & review',
-    permission: PERMISSIONS.WHATSAPP_VIEW,
-  },
-  {
     id: 'pipeline-events',
     title: 'Pipeline Events',
     icon: <LuActivity size={36} color="#0284C7" />,
@@ -271,19 +261,21 @@ export default function UtilityScreen() {
     reduceMotion: ReduceMotion.Never,
   };
 
-  // Handle Android Hardware Back Button & System Back Gesture
-  useEffect(() => {
-    const onBackPress = () => {
-      if (translateX.value > -width + 10) {
-        translateX.value = withSpring(-width, springConfig);
-        return true;
-      }
-      return false;
-    };
+  // Handle Android Hardware Back Button & System Back Gesture (Active ONLY when Home Tab is Focused)
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        if (translateX.value > -width + 10) {
+          translateX.value = withSpring(-width, springConfig);
+          return true;
+        }
+        return false;
+      };
 
-    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-    return () => subscription.remove();
-  }, [translateX, width]);
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => subscription.remove();
+    }, [translateX, width])
+  );
 
   const filterItems = (items: RawUtilityItem[]): UtilityTileItem[] => {
     if (isSuperAdmin) {
@@ -355,7 +347,10 @@ export default function UtilityScreen() {
           <OperationsHubPage
             groups={groups}
             onLaunchTool={(route) => {
-              if (route) router.push(route as any);
+              if (route) {
+                translateX.value = -width;
+                router.push(route as any);
+              }
             }}
             onOpenAiAssistant={() => router.push('/ai' as any)}
             onOpenSettings={() => router.push('/modal' as any)}

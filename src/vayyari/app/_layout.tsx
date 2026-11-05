@@ -127,6 +127,8 @@ function InnerRootLayout() {
               <Stack
                 screenOptions={{
                   headerShown: false,
+                  gestureEnabled: true,
+                  animation: 'slide_from_right',
                 }}
               >
                 {!token ? (
@@ -134,10 +136,13 @@ function InnerRootLayout() {
                 ) : (
                   <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                 )}
-                <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Settings', headerShown: true }} />
-                <Stack.Screen name="ai" options={{ animation: 'slide_from_left', headerShown: false }} />
-                <Stack.Screen name="utilities-hub" options={{ animation: 'slide_from_left', headerShown: false }} />
+                <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Settings', headerShown: true, gestureEnabled: true }} />
+                <Stack.Screen name="ai" options={{ animation: 'slide_from_left', headerShown: false, gestureEnabled: false }} />
+                <Stack.Screen name="utilities-hub" options={{ animation: 'slide_from_left', headerShown: false, gestureEnabled: false }} />
                 <Stack.Screen name="share-target" options={{ headerShown: false }} />
+                <Stack.Screen name="store/devices/index" options={{ headerShown: false, gestureEnabled: true, animation: 'slide_from_right' }} />
+                <Stack.Screen name="store/devices/list" options={{ headerShown: false, gestureEnabled: true, animation: 'slide_from_right' }} />
+                <Stack.Screen name="store/administration" options={{ headerShown: false, gestureEnabled: true, animation: 'slide_from_right' }} />
               </Stack>
               <StatusBar style="auto" />
               <OTABanner />

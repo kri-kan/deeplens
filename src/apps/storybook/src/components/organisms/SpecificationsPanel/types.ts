@@ -27,4 +27,7 @@ export interface SpecificationsPanelProps {
   sku?: string;
   defaultViewMode?: SpecificationsPanelViewMode;
   enableViewModeToggle?: boolean;
+  defaultCollapsed?: boolean;
+  isCollapsible?: boolean;
+  borderless?: boolean;
 }

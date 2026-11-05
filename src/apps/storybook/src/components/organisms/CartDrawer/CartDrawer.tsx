@@ -1,3 +1,4 @@
+import { Image } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import { LinearGradient } from 'expo-linear-gradient';
 import { LuX } from 'react-icons/lu';
@@ -10,6 +11,8 @@ export type CartItem = {
   size: string;
   price: string;
   gradient: [string, string];
+  image?: string;
+  sku?: string;
 };
 
 export type CartDrawerProps = {
@@ -70,16 +73,30 @@ export function CartDrawer({ items, onClose, onCheckout }: CartDrawerProps) {
               borderRadius={12}
               hoverStyle={{ backgroundColor: tokens.surfaceRaised }}
             >
-              <LinearGradient
-                colors={item.gradient}
-                style={{
-                  width: 72,
-                  height: 90,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: tokens.border,
-                }}
-              />
+              {item.image ? (
+                <Image
+                  source={{ uri: item.image }}
+                  style={{
+                    width: 72,
+                    height: 90,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: tokens.border,
+                  }}
+                  resizeMode="cover"
+                />
+              ) : (
+                <LinearGradient
+                  colors={item.gradient}
+                  style={{
+                    width: 72,
+                    height: 90,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: tokens.border,
+                  }}
+                />
+              )}
               <YStack flex={1} gap={4}>
                 <Text fontSize={15} fontWeight="700" color={tokens.text}>
                   {item.name}

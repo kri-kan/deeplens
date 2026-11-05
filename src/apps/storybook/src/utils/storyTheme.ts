@@ -28,7 +28,7 @@ export const THEME_ARG_TYPES = {
     },
   },
   colorScheme: {
-    control: "radio",
+    control: "select",
     options: ["light", "dark"],
     description: "Light or dark color scheme",
     table: {

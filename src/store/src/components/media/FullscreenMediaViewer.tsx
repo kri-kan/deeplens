@@ -15,7 +15,7 @@ import {
   NativeScrollEvent,
 } from 'react-native';
 import {
-  X,
+  ArrowLeft,
   ChevronLeft,
   ChevronRight,
   ZoomIn,
@@ -264,6 +264,37 @@ export const FullscreenMediaViewer: React.FC<FullscreenMediaViewerProps> = ({
     );
   };
 
+  const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
+
+  const handleTouchStart = (e: any) => {
+    const touch = e.nativeEvent?.touches?.[0] || e;
+    touchStartXRef.current = touch.clientX ?? touch.pageX;
+    touchStartYRef.current = touch.clientY ?? touch.pageY;
+  };
+
+  const handleTouchEnd = (e: any) => {
+    if (touchStartXRef.current === null || touchStartYRef.current === null) return;
+    const touch = e.nativeEvent?.changedTouches?.[0] || e;
+    const endX = touch.clientX ?? touch.pageX;
+    const endY = touch.clientY ?? touch.pageY;
+    const diffX = endX - touchStartXRef.current;
+    const diffY = endY - touchStartYRef.current;
+
+    // Edge back swipe (< 120px on left and swiped right > 40px)
+    const isEdgeBackSwipe = touchStartXRef.current < 120 && diffX > 40;
+    // Downward swipe dismiss (> 70px)
+    const isDownSwipeDismiss = diffY > 70 && Math.abs(diffY) > Math.abs(diffX);
+    // General back swipe at start
+    const isFirstImageBackSwipe = activeIndex === 0 && diffX > 60;
+
+    if (isEdgeBackSwipe || isDownSwipeDismiss || isFirstImageBackSwipe) {
+      onClose();
+    }
+    touchStartXRef.current = null;
+    touchStartYRef.current = null;
+  };
+
   if (!visible || normalizedMedia.length === 0) return null;
 
   return (
@@ -275,7 +306,11 @@ export const FullscreenMediaViewer: React.FC<FullscreenMediaViewerProps> = ({
       statusBarTranslucent
     >
       <StatusBar barStyle="light-content" backgroundColor="#000000" />
-      <View style={styles.rootContainer}>
+      <View
+        style={styles.rootContainer}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
         {/* Main Edge-to-Edge Swiping Gallery */}
         <FlatList
           ref={flatListRef}
@@ -298,64 +333,16 @@ export const FullscreenMediaViewer: React.FC<FullscreenMediaViewerProps> = ({
           style={styles.flatList}
         />
 
-        {/* Top Header Overlay Bar */}
+        {/* Top-Left Navigation Arrow (Dismiss) */}
         {showControls && (
-          <View style={styles.topHeaderBar}>
-            {/* Close Button */}
-            <TouchableOpacity
-              style={styles.iconCircleBtn}
-              onPress={onClose}
-              activeOpacity={0.8}
-              accessibilityLabel="Close media viewer"
-            >
-              <X size={20} color="#FAF7F2" />
-            </TouchableOpacity>
-
-            {/* Product Title / Code Pill */}
-            {(productCode || productTitle) && (
-              <View style={styles.productPill}>
-                {productCode && (
-                  <Text style={styles.productCodeText}>{productCode}</Text>
-                )}
-                {productCode && productTitle && (
-                  <Text style={styles.productPillDivider}>·</Text>
-                )}
-                {productTitle && (
-                  <Text style={styles.productTitleText} numberOfLines={1}>
-                    {productTitle}
-                  </Text>
-                )}
-              </View>
-            )}
-
-            {/* Right Action Group: Zoom Toggle & Counter Pill */}
-            <View style={styles.topRightGroup}>
-              {!isCurrentVideo && (
-                <TouchableOpacity
-                  style={[
-                    styles.iconCircleBtn,
-                    isZoomed && styles.iconCircleBtnActive,
-                  ]}
-                  onPress={toggleZoom}
-                  activeOpacity={0.8}
-                  accessibilityLabel="Toggle zoom"
-                >
-                  {isZoomed ? (
-                    <ZoomOut size={18} color="#D4AF37" />
-                  ) : (
-                    <ZoomIn size={18} color="#FAF7F2" />
-                  )}
-                </TouchableOpacity>
-              )}
-
-              {/* Overlay Counter Badge */}
-              <View style={styles.counterBadge}>
-                <Text style={styles.counterText}>
-                  {activeIndex + 1} / {normalizedMedia.length}
-                </Text>
-              </View>
-            </View>
-          </View>
+          <TouchableOpacity
+            style={styles.topLeftBackBtn}
+            onPress={onClose}
+            activeOpacity={0.8}
+            accessibilityLabel="Back to PDP"
+          >
+            <ArrowLeft size={24} color="#FAF7F2" />
+          </TouchableOpacity>
         )}
 
         {/* Left Desktop Chevron */}
@@ -461,91 +448,25 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  topHeaderBar: {
+  topLeftBackBtn: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 44 : 20,
+    top: Platform.OS === 'ios' ? 44 : 16,
     left: 16,
-    right: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    zIndex: 20,
-  },
-  iconCircleBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(20, 20, 25, 0.75)',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 30,
     ...Platform.select({
       web: {
         backdropFilter: 'blur(8px)',
+        cursor: 'pointer',
       },
     }),
-  },
-  iconCircleBtnActive: {
-    borderColor: '#D4AF37',
-    backgroundColor: 'rgba(26, 54, 93, 0.85)',
-  },
-  productPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(20, 20, 25, 0.75)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    maxWidth: '50%',
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(8px)',
-      },
-    }),
-  },
-  productCodeText: {
-    color: '#D4AF37',
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  productPillDivider: {
-    color: 'rgba(255, 255, 255, 0.4)',
-    marginHorizontal: 6,
-    fontSize: 12,
-  },
-  productTitleText: {
-    color: '#FAF7F2',
-    fontSize: 12,
-    fontWeight: '500',
-    flexShrink: 1,
-  },
-  topRightGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  counterBadge: {
-    backgroundColor: 'rgba(20, 20, 25, 0.75)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(8px)',
-      },
-    }),
-  },
-  counterText: {
-    color: '#FAF7F2',
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0.5,
   },
   desktopNavBtn: {
     position: 'absolute',
@@ -575,17 +496,21 @@ const styles = StyleSheet.create({
   },
   bottomBarContainer: {
     position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 36 : 20,
+    bottom: 0,
     left: 0,
     right: 0,
-    alignItems: 'center',
+    backgroundColor: '#07090E',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.12)',
+    justifyContent: 'center',
+    paddingVertical: 8,
     zIndex: 20,
   },
   thumbnailStripContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 8,
     backgroundColor: 'rgba(15, 15, 20, 0.65)',
     borderRadius: 24,
