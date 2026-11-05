@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, StyleSheet, FlatList, TouchableOpacity, TouchableWithoutFeedback, Alert, Dimensions, Linking, ScrollView, DeviceEventEmitter, Modal, Animated, BackHandler } from 'react-native';
-import { Text, Button, Divider, useTheme, ActivityIndicator, Portal, Dialog, IconButton, TextInput, Icon, Menu, Checkbox } from 'react-native-paper';
+import { Text, Button, Divider, useTheme, ActivityIndicator, Portal, Dialog, IconButton, TextInput, Icon, Menu } from 'react-native-paper';
+import { CustomCheckbox } from '@/components/tamagui-ui/atoms/CustomCheckbox';
 import { useRouter, Stack, useFocusEffect, useNavigation } from 'expo-router';
 import { Image } from 'expo-image';
 import * as Clipboard from 'expo-clipboard';

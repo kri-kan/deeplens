@@ -1,6 +1,8 @@
 import React from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
-import { Text, Switch, SegmentedButtons, TextInput, Button, Divider, useTheme, Menu, TouchableRipple } from 'react-native-paper';
+import { Text, TextInput, Button, Divider, useTheme, Menu, TouchableRipple } from 'react-native-paper';
+import { ToggleSwitch } from '@/components/tamagui-ui/atoms/ToggleSwitch';
+import { SegmentedControl } from '@/components/tamagui-ui/atoms/SegmentedControl';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { useInstagramExplorer } from '@/hooks/useInstagramExplorer';
@@ -67,9 +69,9 @@ export default function ProfileSettingsScreen() {
                             {profile.isActive ? 'Active (Syncing)' : 'Paused (Ignored)'}
                         </Text>
                     </View>
-                    <Switch 
-                        value={profile.isActive} 
-                        onValueChange={() => toggleWatch(profile.username, profile.isActive)} 
+                    <ToggleSwitch 
+                        checked={profile.isActive} 
+                        onCheckedChange={() => toggleWatch(profile.username, profile.isActive)} 
                     />
                 </View>
 
@@ -100,7 +102,7 @@ export default function ProfileSettingsScreen() {
                 <Divider style={styles.divider} />
 
                 <Text variant="labelLarge" style={[styles.bold, styles.sectionTitle]}>Trigger Manual Sync</Text>
-                <SegmentedButtons
+                <SegmentedControl
                     value={syncMode}
                     onValueChange={v => setSyncMode(v as any)}
                     buttons={[

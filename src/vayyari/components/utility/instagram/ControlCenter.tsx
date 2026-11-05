@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
-import { Text, IconButton, Button, SegmentedButtons, Chip, useTheme, Portal, Modal } from 'react-native-paper';
+import { Text, IconButton, Button, Chip, useTheme, Portal, Modal } from 'react-native-paper';
+import { SegmentedControl } from '@/components/tamagui-ui/atoms/SegmentedControl';
 import { instagramService } from '../../../services/instagram.service';
 
 interface ControlCenterProps {
@@ -63,7 +64,7 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({
           <IconButton icon="autorenew" onPress={healQueue} />
         </View>
 
-        <SegmentedButtons
+        <SegmentedControl
           value={showHistory ? 'history' : 'active'}
           onValueChange={(v) => onToggleHistory(v === 'history')}
           buttons={[

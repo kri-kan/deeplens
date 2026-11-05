@@ -409,6 +409,18 @@ export default function VisualLensScreen() {
                     <View style={[styles.cardSimBadge, { backgroundColor: badgeColor }]}>
                       <Text style={styles.cardSimText}>{match.similarityPercentage}% Match</Text>
                     </View>
+                    {match.isDeleted && (
+                      <View style={[styles.statusFlagBadge, { backgroundColor: '#EF4444' }]}>
+                        <Icon source="delete-outline" size={13} color="#FFFFFF" />
+                        <Text style={styles.statusFlagText}>DELETED</Text>
+                      </View>
+                    )}
+                    {!match.isDeleted && match.isArchived && (
+                      <View style={[styles.statusFlagBadge, { backgroundColor: '#F59E0B' }]}>
+                        <Icon source="archive-outline" size={13} color="#FFFFFF" />
+                        <Text style={styles.statusFlagText}>ARCHIVED</Text>
+                      </View>
+                    )}
                     {match.isLinked && (
                       <View style={styles.linkedStatusBadge}>
                         <Icon source="check" size={14} color="#FFFFFF" />
@@ -433,17 +445,51 @@ export default function VisualLensScreen() {
                       {match.title}
                     </Text>
 
-                    {match.category && (
-                      <Chip compact textStyle={{ fontSize: 10 }} style={styles.categoryBadge}>
-                        {match.category}
-                      </Chip>
-                    )}
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+                      {match.category && (
+                        <Chip compact textStyle={{ fontSize: 10 }} style={styles.categoryBadge}>
+                          {match.category}
+                        </Chip>
+                      )}
+                      {match.isDeleted && (
+                        <Chip compact textStyle={{ fontSize: 10, color: '#FFFFFF', fontWeight: '700' }} style={{ backgroundColor: '#EF4444', height: 22 }}>
+                          Deleted
+                        </Chip>
+                      )}
+                      {!match.isDeleted && match.isArchived && (
+                        <Chip compact textStyle={{ fontSize: 10, color: '#FFFFFF', fontWeight: '700' }} style={{ backgroundColor: '#F59E0B', height: 22 }}>
+                          Archived
+                        </Chip>
+                      )}
+                    </View>
 
                     <Divider style={{ marginVertical: 8 }} />
 
                     {/* Quick Link Action Buttons */}
                     <View style={styles.linkingButtonsRow}>
-                      {match.isLinked ? (
+                      {match.isDeleted ? (
+                        <Button
+                          mode="outlined"
+                          compact
+                          disabled
+                          style={[styles.linkActionBtn, { flex: 1, borderColor: '#EF4444' }]}
+                          textColor="#EF4444"
+                          labelStyle={{ fontSize: 11 }}
+                        >
+                          Cannot Link (Deleted)
+                        </Button>
+                      ) : match.isArchived ? (
+                        <Button
+                          mode="outlined"
+                          compact
+                          disabled
+                          style={[styles.linkActionBtn, { flex: 1, borderColor: '#F59E0B' }]}
+                          textColor="#F59E0B"
+                          labelStyle={{ fontSize: 11 }}
+                        >
+                          Cannot Link (Archived)
+                        </Button>
+                      ) : match.isLinked ? (
                         <Button
                           mode="outlined"
                           compact
@@ -718,6 +764,23 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 11,
+  },
+  statusFlagBadge: {
+    position: 'absolute',
+    bottom: 10,
+    left: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  statusFlagText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 10,
+    letterSpacing: 0.5,
   },
   cardBody: {
     padding: 14,

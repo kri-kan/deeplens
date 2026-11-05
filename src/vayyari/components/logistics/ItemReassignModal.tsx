@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, Modal, ScrollView, Image } from 'react-native';
-import { Surface, Text, Button, IconButton, useTheme, RadioButton, Divider, TextInput } from 'react-native-paper';
+import { Surface, Text, Button, IconButton, useTheme, Divider, TextInput } from 'react-native-paper';
+import { RadioButton } from '@/components/tamagui-ui/atoms/RadioButton';
 import { FulfillmentItem, FulfillmentPackage, LogisticsOrder } from '@/types/logistics';
 
 interface ItemReassignModalProps {

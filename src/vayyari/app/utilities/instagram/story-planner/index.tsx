@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, ScrollView, FlatList, TouchableOpacity, Alert, Dimensions, RefreshControl, BackHandler, Switch } from 'react-native';
+import { View, StyleSheet, ScrollView, FlatList, TouchableOpacity, Alert, Dimensions, RefreshControl, BackHandler } from 'react-native';
 import { Text, Button, IconButton, Checkbox, TextInput, useTheme, Card, Portal, Dialog, Modal, ActivityIndicator, Divider, Icon, Menu } from 'react-native-paper';
+import { ToggleSwitch } from '@/components/tamagui-ui/atoms/ToggleSwitch';
 import { useRouter, Stack, useFocusEffect, useNavigation } from 'expo-router';
 import { Image } from 'expo-image';
 
@@ -1138,14 +1139,12 @@ export default function StoryPlannerDashboard() {
                 style={{ margin: 0 }}
               />
               <View style={{ flexDirection: 'column', alignItems: 'center', marginLeft: 4 }}>
-                <Switch
-                  value={!hideGroups}
-                  onValueChange={(val) => setHideGroups(!val)}
-                  thumbColor={hideGroups ? theme.colors.surfaceVariant : theme.colors.primary}
-                  trackColor={{ false: theme.colors.surfaceVariant, true: theme.colors.primaryContainer }}
-                  style={styles.headerToggleSwitch}
+                <ToggleSwitch
+                  size="sm"
+                  checked={!hideGroups}
+                  onCheckedChange={(val) => setHideGroups(!val)}
                 />
-                <Text style={[styles.headerToggleLabel, { color: hideGroups ? theme.colors.outline : theme.colors.primary, marginTop: -4 }]}>Groups</Text>
+                <Text style={[styles.headerToggleLabel, { color: hideGroups ? theme.colors.outline : theme.colors.primary, marginTop: 2 }]}>Groups</Text>
               </View>
             </View>
           </View>

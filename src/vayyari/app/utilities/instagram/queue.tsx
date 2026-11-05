@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
-import { Text, IconButton, SegmentedButtons, Chip, useTheme } from 'react-native-paper';
+import { Text, IconButton, Chip, useTheme } from 'react-native-paper';
+import { SegmentedControl } from '@/components/tamagui-ui/atoms/SegmentedControl';
 import { instagramService } from '@/services/instagram.service';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { Stack, useRouter } from 'expo-router';
@@ -70,7 +71,7 @@ export default function QueueScreen() {
             }} />
 
             <View style={styles.container}>
-                <SegmentedButtons
+                <SegmentedControl
                     value={showHistory ? 'history' : 'active'}
                     onValueChange={(v) => setShowHistory(v === 'history')}
                     buttons={[

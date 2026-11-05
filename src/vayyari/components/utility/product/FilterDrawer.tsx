@@ -9,7 +9,8 @@ import {
   Dimensions,
   StyleSheet,
 } from 'react-native';
-import { Text, Checkbox, ActivityIndicator, useTheme, TextInput } from 'react-native-paper';
+import { Text, ActivityIndicator, useTheme, TextInput } from 'react-native-paper';
+import { CustomCheckbox } from '@/components/tamagui-ui/atoms/CustomCheckbox';
 import MultiSlider from '@ptomasroos/react-native-multi-slider';
 import { productService } from '@/services/productService';
 
@@ -236,10 +237,9 @@ export function FilterDrawer({ visible, onClose, current, onApply }: FilterDrawe
               style={styles.checkRow}
               onPress={() => toggleCategory(cat.id)}
             >
-              <Checkbox
-                status={draft.categories.includes(cat.id) ? 'checked' : 'unchecked'}
-                onPress={() => toggleCategory(cat.id)}
-                color={theme.colors.primary}
+              <CustomCheckbox
+                checked={draft.categories.includes(cat.id)}
+                onToggle={() => toggleCategory(cat.id)}
               />
               <Text style={[styles.optionLabel, { color: textColor }]}>{cat.label}</Text>
             </TouchableOpacity>
@@ -326,10 +326,9 @@ export function FilterDrawer({ visible, onClose, current, onApply }: FilterDrawe
               style={styles.checkRow}
               onPress={() => toggleFabric(fabric)}
             >
-              <Checkbox
-                status={draft.fabrics.includes(fabric) ? 'checked' : 'unchecked'}
-                onPress={() => toggleFabric(fabric)}
-                color={theme.colors.primary}
+              <CustomCheckbox
+                checked={draft.fabrics.includes(fabric)}
+                onToggle={() => toggleFabric(fabric)}
               />
               <Text style={[styles.optionLabel, { color: textColor }]}>{fabric}</Text>
             </TouchableOpacity>
@@ -351,10 +350,9 @@ export function FilterDrawer({ visible, onClose, current, onApply }: FilterDrawe
               style={styles.checkRow}
               onPress={() => toggleVendor(vendor)}
             >
-              <Checkbox
-                status={draft.vendorNames.includes(vendor) ? 'checked' : 'unchecked'}
-                onPress={() => toggleVendor(vendor)}
-                color={theme.colors.primary}
+              <CustomCheckbox
+                checked={draft.vendorNames.includes(vendor)}
+                onToggle={() => toggleVendor(vendor)}
               />
               <Text style={[styles.optionLabel, { color: textColor }]}>{vendor}</Text>
             </TouchableOpacity>

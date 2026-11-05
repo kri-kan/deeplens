@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { BackHandler } from 'react-native';
+import { useRouter, useLocalSearchParams, useFocusEffect, Stack } from 'expo-router';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { useGetRegisteredDevicesQuery } from '@/store/api/telemetryApi';
 import { setSelectedDeviceId } from '@/store/slices/telemetryUiSlice';
@@ -34,8 +35,36 @@ export default function StoreDevicesListScreen() {
     [dispatch]
   );
 
+  // Android hardware back & system swipe-back gesture handling
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        if (selectedDeviceId) {
+          dispatch(setSelectedDeviceId(null));
+          return true;
+        }
+        if (router.canGoBack()) {
+          router.back();
+          return true;
+        }
+        return false;
+      };
+
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => subscription.remove();
+    }, [selectedDeviceId, dispatch, router])
+  );
+
   return (
-    <AdminDeviceFleetListPage
+    <>
+      <Stack.Screen
+        options={{
+          headerShown: false,
+          gestureEnabled: true,
+          animation: 'slide_from_right',
+        }}
+      />
+      <AdminDeviceFleetListPage
       devices={devices}
       loading={devicesLoading}
       refreshing={devicesFetching}
@@ -50,5 +79,6 @@ export default function StoreDevicesListScreen() {
       selectedDevice={selectedDevice}
       onCloseDeviceDrawer={() => dispatch(setSelectedDeviceId(null))}
     />
+    </>
   );
 }

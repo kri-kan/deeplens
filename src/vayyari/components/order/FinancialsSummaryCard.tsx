@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Surface, Text, TextInput, SegmentedButtons, useTheme, Divider, Chip } from 'react-native-paper';
+import { Surface, Text, TextInput, useTheme, Divider, Chip } from 'react-native-paper';
+import { SegmentedControl } from '@/components/tamagui-ui/atoms/SegmentedControl';
 import { OrderSource, PaymentMode } from '@/types/orders';
 
 interface FinancialsSummaryCardProps {
@@ -55,7 +56,7 @@ export const FinancialsSummaryCard: React.FC<FinancialsSummaryCardProps> = ({
       <Text variant="bodySmall" style={{ fontWeight: '600', color: theme.colors.onSurfaceVariant }}>
         Order Origin Platform:
       </Text>
-      <SegmentedButtons
+      <SegmentedControl
         value={source}
         onValueChange={val => onSourceChange(val as OrderSource)}
         buttons={[
@@ -90,7 +91,7 @@ export const FinancialsSummaryCard: React.FC<FinancialsSummaryCardProps> = ({
       <Text variant="bodySmall" style={{ fontWeight: '600', color: theme.colors.onSurfaceVariant }}>
         Payment Mode:
       </Text>
-      <SegmentedButtons
+      <SegmentedControl
         value={paymentMode}
         onValueChange={val => onPaymentModeChange(val as PaymentMode)}
         buttons={[

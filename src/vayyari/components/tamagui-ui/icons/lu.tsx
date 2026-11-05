@@ -328,6 +328,10 @@ export const LuSmartphone: React.FC<IconProps> = ({ size = 16, color = "#333333"
   <Feather name="smartphone" size={size} color={color} style={style} />
 );
 
+export const LuTablet: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="tablet" size={size} color={color} style={style} />
+);
+
 export const LuBell: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
   <Feather name="bell" size={size} color={color} style={style} />
 );

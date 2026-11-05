@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Alert } from 'react-native';
-import { Portal, Dialog, TextInput, Button, useTheme, Text, IconButton, Switch } from 'react-native-paper';
+import { Portal, Dialog, TextInput, Button, useTheme, Text, IconButton } from 'react-native-paper';
+import { ToggleSwitch } from '@/components/tamagui-ui/atoms/ToggleSwitch';
 import { instagramService } from '../../../services/instagram.service';
 
 interface MetaConfigEditorDialogProps {
@@ -163,7 +164,7 @@ export const MetaConfigEditorDialog: React.FC<MetaConfigEditorDialogProps> = ({
                 <Text variant="bodyLarge">Set as Default</Text>
                 <Text variant="bodySmall" style={{ opacity: 0.6 }}>Use this account for all background scraping jobs</Text>
               </View>
-              <Switch value={isDefault} onValueChange={setIsDefault} color={theme.colors.primary} />
+              <ToggleSwitch checked={isDefault} onCheckedChange={setIsDefault} />
             </View>
             
             <View style={styles.infoBox}>

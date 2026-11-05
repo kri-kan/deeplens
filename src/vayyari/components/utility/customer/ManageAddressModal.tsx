@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
-import { Text, Button, Modal, Checkbox, useTheme } from 'react-native-paper';
+import { Text, Button, Modal, useTheme } from 'react-native-paper';
+import { CustomCheckbox } from '@/components/tamagui-ui/atoms/CustomCheckbox';
 import { AddressFormComponent, AddressFormState } from './AddressFormComponent';
 import { customerService } from '@/services/customerService';
 import { vendorService } from '@/services/vendorService';
@@ -128,11 +129,11 @@ export const ManageAddressModal: React.FC<ManageAddressModalProps> = ({
         />
         
         <View style={styles.checkboxRow}>
-          <Checkbox
-            status={isDefault ? 'checked' : 'unchecked'}
-            onPress={() => setIsDefault(!isDefault)}
+          <CustomCheckbox
+            checked={isDefault}
+            onToggle={() => setIsDefault(!isDefault)}
+            label="Set as default address"
           />
-          <Text variant="bodyMedium">Set as default address</Text>
         </View>
 
         <View style={styles.actions}>

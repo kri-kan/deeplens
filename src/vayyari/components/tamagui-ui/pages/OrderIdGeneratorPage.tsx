@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { ScrollView, Switch, Pressable, TextInput } from 'react-native';
+import { ScrollView, Pressable, TextInput } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LuSettings, LuArrowLeft, LuHistory, LuInbox, LuSearch, LuX, LuChevronRight, LuChevronDown, LuCheck } from '../icons/lu';
 import { useTheme } from '@/theme';
+import { ToggleSwitch } from '../atoms/ToggleSwitch';
 import {
   OrderIdGeneratorCard,
   GeneratorSource,
@@ -289,17 +290,14 @@ export function OrderIdGeneratorPage({
                 </YStack>
 
                 {/* Show Deleted Toggle (Shifted right next to dropdown) */}
-                <XStack alignItems="center" gap={6}>
-                  <Text fontSize={12} color={tokens.textMuted} fontWeight="500">
-                    Deleted
-                  </Text>
-                  <Switch
-                    value={showDeleted}
-                    onValueChange={setShowDeleted}
-                    trackColor={{ false: tokens.border, true: tokens.accent }}
-                    thumbColor={tokens.surface}
-                  />
-                </XStack>
+                <ToggleSwitch
+                  size="sm"
+                  label="Deleted"
+                  labelPosition="left"
+                  checked={showDeleted}
+                  onCheckedChange={setShowDeleted}
+                  accessibilityLabel="Toggle show deleted orders"
+                />
               </XStack>
 
               {/* Right Group: Show All Button */}

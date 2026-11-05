@@ -2,6 +2,7 @@ import React from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YStack, XStack, Text } from 'tamagui';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { LuArrowLeft, LuRefreshCw, LuChevronRight, LuMonitor, LuClock, LuSparkles } from '../icons/lu';
 import { DeviceFleetStats, StoreDeviceItem, HourlyActivitySummary, DailyGrowthSummary, DailyAcquisitionItem, GrowthGranularity } from '@/services/storeAdminService';
 import { DeviceFleetMetricsHeader } from '../organisms/DeviceFleetMetricsHeader/DeviceFleetMetricsHeader';
@@ -61,45 +62,81 @@ export const AdminDeviceFleetDashboardPage: React.FC<AdminDeviceFleetDashboardPa
   const insets = useSafeAreaInsets();
   const liveDevices = recentDevices.length > 0 ? recentDevices : stats?.recentDevices || [];
 
-  return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* ── Top App Bar ── */}
-      <XStack
-        justifyContent="space-between"
-        alignItems="center"
-        paddingHorizontal="$4"
-        paddingVertical="$3"
-        borderBottomWidth={1}
-        borderBottomColor="#1F2937"
-      >
-        <XStack alignItems="center" gap="$3">
-          {onBack ? (
-            <Pressable onPress={onBack} style={styles.iconButton}>
-              <LuArrowLeft size={20} color="#FFFFFF" />
-            </Pressable>
-          ) : null}
-          <YStack>
-            <Text fontSize={17} fontWeight="700" color="#FFFFFF">
-              Device Fleet Intelligence
-            </Text>
-            <Text fontSize={11} color="#9CA3AF">
-              Unified Signal Ingestion &bull; Live Telemetry
-            </Text>
-          </YStack>
-        </XStack>
+  // Edge-to-right swipe-back gesture (< 60px from left edge)
+  const edgeSwipeBackGesture = Gesture.Pan()
+    .activeOffsetX(25)
+    .failOffsetY([-25, 25])
+    .hitSlop({ left: 0, width: 60 })
+    .cancelsTouchesInView(false)
+    .runOnJS(true)
+    .onEnd((e) => {
+      if (e.translationX > 45 || e.velocityX > 300) {
+        if (selectedDeviceId) {
+          onCloseDeviceDrawer?.();
+        } else if (onBack) {
+          onBack();
+        }
+      }
+    });
 
-        <XStack alignItems="center" gap="$2">
-          {onRefresh ? (
-            <Pressable
-              onPress={onRefresh}
-              disabled={refreshing}
-              style={[styles.iconButton, refreshing && styles.iconButtonDisabled]}
-            >
-              <LuRefreshCw size={18} color={refreshing ? '#6B7280' : '#10B981'} />
-            </Pressable>
-          ) : null}
-        </XStack>
-      </XStack>
+  // Header swipe-back gesture anywhere across the top bar
+  const headerSwipeBackGesture = Gesture.Pan()
+    .activeOffsetX(25)
+    .failOffsetY([-25, 25])
+    .cancelsTouchesInView(false)
+    .runOnJS(true)
+    .onEnd((e) => {
+      if (e.translationX > 45 || e.velocityX > 300) {
+        if (selectedDeviceId) {
+          onCloseDeviceDrawer?.();
+        } else if (onBack) {
+          onBack();
+        }
+      }
+    });
+
+  return (
+    <GestureDetector gesture={edgeSwipeBackGesture}>
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        {/* ── Top App Bar ── */}
+        <GestureDetector gesture={headerSwipeBackGesture}>
+          <XStack
+            justifyContent="space-between"
+            alignItems="center"
+            paddingHorizontal="$4"
+            paddingVertical="$3"
+            borderBottomWidth={1}
+            borderBottomColor="#1F2937"
+          >
+            <XStack alignItems="center" gap="$3">
+              {onBack ? (
+                <Pressable onPress={onBack} style={styles.iconButton}>
+                  <LuArrowLeft size={20} color="#FFFFFF" />
+                </Pressable>
+              ) : null}
+              <YStack>
+                <Text fontSize={17} fontWeight="700" color="#FFFFFF">
+                  Device Fleet Intelligence
+                </Text>
+                <Text fontSize={11} color="#9CA3AF">
+                  Unified Signal Ingestion &bull; Live Telemetry
+                </Text>
+              </YStack>
+            </XStack>
+
+            <XStack alignItems="center" gap="$2">
+              {onRefresh ? (
+                <Pressable
+                  onPress={onRefresh}
+                  disabled={refreshing}
+                  style={[styles.iconButton, refreshing && styles.iconButtonDisabled]}
+                >
+                  <LuRefreshCw size={18} color={refreshing ? '#6B7280' : '#10B981'} />
+                </Pressable>
+              ) : null}
+            </XStack>
+          </XStack>
+        </GestureDetector>
 
       {/* ── Main Scrollable Body ── */}
       <ScrollView
@@ -204,6 +241,7 @@ export const AdminDeviceFleetDashboardPage: React.FC<AdminDeviceFleetDashboardPa
         onClose={onCloseDeviceDrawer || (() => {})}
       />
     </View>
+    </GestureDetector>
   );
 };
 

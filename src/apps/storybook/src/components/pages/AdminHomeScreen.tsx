@@ -146,6 +146,14 @@ export const ADMIN_HOME_GROUPS: AdminGroupData[] = [
         route: '/store/publish',
         color: '#8B5CF6',
       },
+      {
+        id: 'store-administration',
+        title: 'Administration',
+        description: 'Storefront administration & fleet telemetry',
+        icon: <LuShieldCheck size={32} color="#06B6D4" />,
+        route: '/store/administration',
+        color: '#06B6D4',
+      },
     ],
   },
   {

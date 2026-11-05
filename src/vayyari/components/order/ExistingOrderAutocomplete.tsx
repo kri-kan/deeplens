@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, TouchableOpacity, FlatList } from 'react-native';
-import { Surface, Text, TextInput, IconButton, useTheme, SegmentedButtons, ActivityIndicator, Chip } from 'react-native-paper';
+import { Surface, Text, TextInput, IconButton, useTheme, ActivityIndicator, Chip } from 'react-native-paper';
+import { SegmentedControl } from '@/components/tamagui-ui/atoms/SegmentedControl';
 import { searchApiClient } from '@/api/client';
 import { API_ROUTES } from '@/constants/api-routes';
 import { OrderIdEntry } from '@/types/orders';
@@ -91,7 +92,7 @@ export const ExistingOrderAutocomplete: React.FC<ExistingOrderAutocompleteProps>
         Order Mode & Reference
       </Text>
 
-      <SegmentedButtons
+      <SegmentedControl
         value={mode}
         onValueChange={val => {
           const newMode = val as 'create_new' | 'attach_existing';

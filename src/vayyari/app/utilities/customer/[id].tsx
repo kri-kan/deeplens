@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, Platform } from 'react-native';
-import { Text, Avatar, Button, List, Card, Switch, ActivityIndicator, useTheme, Chip, Portal, IconButton, Snackbar, Appbar } from 'react-native-paper';
+import { Text, Avatar, Button, List, Card, ActivityIndicator, useTheme, Chip, Portal, IconButton, Snackbar, Appbar } from 'react-native-paper';
+import { ToggleSwitch } from '@/components/tamagui-ui/atoms/ToggleSwitch';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 
@@ -422,10 +423,10 @@ export default function CustomerDetailScreen() {
                       />
                     )}
                     right={() => (
-                      <Switch 
-                        value={isSubscribed} 
-                        onValueChange={() => toggleSubscription(channel.id)} 
-                        color="#25D366"
+                      <ToggleSwitch 
+                        checked={isSubscribed} 
+                        onCheckedChange={() => toggleSubscription(channel.id)} 
+                        activeColor="#25D366"
                       />
                     )}
                     style={styles.listItem}

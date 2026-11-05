@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, Dimensions, TouchableOpacity, Linking, FlatList, ScrollView, ActivityIndicator, Alert, useWindowDimensions, Modal } from 'react-native';
-import { Text, IconButton, useTheme, Button, Portal, Dialog, List, Divider, Switch, Icon } from 'react-native-paper';
+import { Text, IconButton, useTheme, Button, Portal, Dialog, List, Divider, Icon } from 'react-native-paper';
+import { ToggleSwitch } from '@/components/tamagui-ui/atoms/ToggleSwitch';
 import { YStack, XStack, Text as TamaguiText } from 'tamagui';
 import { useTheme as useAppTheme } from '@/theme';
 import {
@@ -1196,10 +1197,9 @@ export const InstagramPostDetailItem = ({
                                     <Text variant="bodySmall" style={{ opacity: 0.6 }}>Forces comments refresh, bypassing optimizations</Text>
                                 </View>
                             </View>
-                            <Switch 
-                                value={isDeepSync} 
-                                onValueChange={(val) => setIsDeepSync(val)} 
-                                color={theme.colors.primary}
+                            <ToggleSwitch 
+                                checked={isDeepSync} 
+                                onCheckedChange={(val) => setIsDeepSync(val)} 
                             />
                         </View>
                         <Divider style={{ marginVertical: 12 }} />

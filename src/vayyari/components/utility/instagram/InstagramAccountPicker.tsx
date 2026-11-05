@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import { Modal, Portal, Text, Button, RadioButton, useTheme, Chip, ActivityIndicator } from 'react-native-paper';
+import { Modal, Portal, Text, Button, useTheme, Chip, ActivityIndicator } from 'react-native-paper';
+import { RadioButton } from '@/components/tamagui-ui/atoms/RadioButton';
 import type { InstagramAccountOption } from '@/types/products';
 import { ProfileAvatar } from './ProfileAvatar';
 

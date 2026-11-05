@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
-import { TextInput, Button, IconButton, Text, useTheme, Switch } from 'react-native-paper';
+import { TextInput, Button, IconButton, Text, useTheme } from 'react-native-paper';
+import { ToggleSwitch } from '@/components/tamagui-ui/atoms/ToggleSwitch';
 import { SmartAddressFill, SmartAddressData } from './SmartAddressFill';
 
 export interface AddressFormState {
@@ -133,11 +134,10 @@ export const AddressFormComponent: React.FC<AddressFormComponentProps> = ({
           {onSetDefault && (
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
               <Text variant="bodyMedium">Set as Default Address</Text>
-              <Switch 
-                value={value.isDefault || false} 
-                onValueChange={onSetDefault} 
+              <ToggleSwitch 
+                checked={value.isDefault || false} 
+                onCheckedChange={onSetDefault} 
                 disabled={disabled} 
-                color={theme.colors.primary}
               />
             </View>
           )}

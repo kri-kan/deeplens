@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import { Text, Switch, useTheme, Icon, Portal, Dialog, Button, TextInput, Chip, ActivityIndicator } from 'react-native-paper';
+import { Text, useTheme, Icon, Portal, Dialog, Button, TextInput, Chip, ActivityIndicator } from 'react-native-paper';
+import { ToggleSwitch } from '@/components/tamagui-ui/atoms/ToggleSwitch';
 import { useRouter } from 'expo-router';
 import {
   CompetitorProfile,
@@ -305,11 +306,10 @@ export const CompetitorProfileItem: React.FC<CompetitorProfileItemProps> = ({
 
         {/* Tracking Switch */}
         <View style={styles.switchWrapper}>
-          <Switch
-            value={isTracked}
-            onValueChange={handleToggle}
+          <ToggleSwitch
+            checked={isTracked}
+            onCheckedChange={handleToggle}
             disabled={isToggling}
-            color={theme.colors.primary}
           />
           <Text
             variant="labelSmall"

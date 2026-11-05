@@ -1,6 +1,8 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { Surface, Text, IconButton, Switch, SegmentedButtons, TextInput, Button, Divider, useTheme, Menu, TouchableRipple } from 'react-native-paper';
+import { Surface, Text, IconButton, TextInput, Button, Divider, useTheme, Menu, TouchableRipple } from 'react-native-paper';
+import { ToggleSwitch } from '@/components/tamagui-ui/atoms/ToggleSwitch';
+import { SegmentedControl } from '@/components/tamagui-ui/atoms/SegmentedControl';
 
 interface SettingsModalProps {
   visible: boolean;
@@ -52,7 +54,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {profile.isActive ? 'Active (Syncing)' : 'Paused (Ignored)'}
           </Text>
         </View>
-        <Switch value={profile.isActive} onValueChange={onToggleWatch} />
+        <ToggleSwitch checked={profile.isActive} onCheckedChange={onToggleWatch} />
       </View>
 
       <View style={[styles.toggleRow, { flexDirection: 'column', alignItems: 'stretch' }]}>
@@ -82,7 +84,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       <Divider style={styles.divider} />
 
       <Text variant="labelLarge" style={[styles.bold, styles.sectionTitle]}>Trigger Manual Sync</Text>
-      <SegmentedButtons
+      <SegmentedControl
         value={syncMode}
         onValueChange={v => onSyncModeChange(v as any)}
         buttons={[
