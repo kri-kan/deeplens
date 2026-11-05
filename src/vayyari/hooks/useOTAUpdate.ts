@@ -5,15 +5,39 @@ import {
   getLocalOTAVersion,
   getOTAState,
   subscribeOTAState,
+  markOTABundleHealthy,
+  isNativeOTAEligible,
   LocalOTAVersion,
   OTAProgressInfo,
 } from '../services/selfHostedOTA';
 
 export function useOTAUpdate() {
-  const [otaState, setOtaState] = useState<OTAProgressInfo>(getOTAState());
-  const [localVersion, setLocalVersion] = useState<LocalOTAVersion | null>(null);
+  const isNative = isNativeOTAEligible(Platform.OS);
+  const [otaState, setOtaState] = useState<OTAProgressInfo>(
+    isNative
+      ? getOTAState()
+      : {
+          stage: 'idle',
+          percent: 0,
+          bytesDownloaded: 0,
+          totalBytes: 0,
+          currentVersion: 'web',
+        }
+  );
+  const [localVersion, setLocalVersion] = useState<LocalOTAVersion | null>(
+    isNative
+      ? null
+      : {
+          version: 'web',
+          baseVersion: 'web',
+          subversion: 0,
+          installedAt: '',
+        }
+  );
 
   useEffect(() => {
+    if (!isNative) return;
+
     // Initial fetch of local version file
     getLocalOTAVersion().then((ver) => {
       setLocalVersion(ver);
@@ -27,15 +51,15 @@ export function useOTAUpdate() {
     return () => {
       unsubscribe();
     };
-  }, []);
+  }, [isNative]);
 
   useEffect(() => {
-    if (Platform.OS === 'web') return;
+    if (!isNative) return;
 
-    // Trigger initial background check after 3 seconds so initial app screen paint is instant
-    const timer = setTimeout(async () => {
+    // Trigger initial background silent check after 3 seconds so initial app screen paint is instant
+    const updateTimer = setTimeout(async () => {
       try {
-        await checkAndApplyOTAUpdate({ silent: false });
+        await checkAndApplyOTAUpdate({ silent: true });
         const refreshed = await getLocalOTAVersion();
         setLocalVersion(refreshed);
       } catch (e) {
@@ -43,18 +67,37 @@ export function useOTAUpdate() {
       }
     }, 3000);
 
-    return () => clearTimeout(timer);
-  }, []);
+    // After 5 seconds of stable execution, mark the current active bundle healthy (protecting against crash-loops)
+    const healthTimer = setTimeout(async () => {
+      try {
+        await markOTABundleHealthy();
+      } catch (e) {
+        console.warn('[useOTAUpdate] Failed to mark bundle healthy:', e);
+      }
+    }, 5000);
 
-  const checkForUpdates = useCallback(async (force = false) => {
-    const res = await checkAndApplyOTAUpdate({ silent: false, force });
-    const refreshed = await getLocalOTAVersion();
-    setLocalVersion(refreshed);
-    return res;
-  }, []);
+    return () => {
+      clearTimeout(updateTimer);
+      clearTimeout(healthTimer);
+    };
+  }, [isNative]);
+
+  const checkForUpdates = useCallback(
+    async (force = false) => {
+      if (!isNative) {
+        return { updateAvailable: false, applied: false, currentVersion: 'web' };
+      }
+      const res = await checkAndApplyOTAUpdate({ silent: false, force });
+      const refreshed = await getLocalOTAVersion();
+      setLocalVersion(refreshed);
+      return res;
+    },
+    [isNative]
+  );
 
   return {
     ...otaState,
+    isNative,
     localVersion,
     isChecking: otaState.stage === 'checking',
     isDownloading: otaState.stage === 'downloading',

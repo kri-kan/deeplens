@@ -7,10 +7,10 @@ import { useOTAUpdate } from '@/hooks/useOTAUpdate';
 
 export function OTABanner() {
   const insets = useSafeAreaInsets();
-  const { isDownloading, updateReady, newVersion, percent, bytesDownloaded, totalBytes } = useOTAUpdate();
+  const { isNative, isDownloading, updateReady, newVersion, percent, bytesDownloaded, totalBytes } = useOTAUpdate();
   const [dismissedVersion, setDismissedVersion] = useState<string | null>(null);
 
-  if (Platform.OS === 'web') return null;
+  if (!isNative) return null;
 
   // Don't show if user dismissed this specific version's ready alert
   if (updateReady && dismissedVersion === newVersion) return null;

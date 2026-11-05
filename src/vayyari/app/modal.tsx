@@ -88,6 +88,7 @@ export default function ModalScreen() {
 
   // OTA Updates State & Triggers
   const {
+    isNative,
     stage: otaStage,
     isChecking: otaChecking,
     isDownloading: otaDownloading,
@@ -761,59 +762,92 @@ export default function ModalScreen() {
           </View>
           <Divider style={styles.infoDivider} />
 
-          <View style={styles.infoRow}>
-            <View>
-              <Text variant="bodySmall" style={{ color: theme.colors.outline }}>
-                Active OTA Version
-              </Text>
-              {otaLocalVersion?.installedAt ? (
-                <Text variant="labelSmall" style={{ color: theme.colors.outline, fontSize: 10 }}>
-                  Installed: {new Date(otaLocalVersion.installedAt).toLocaleDateString()}
-                </Text>
-              ) : null}
-            </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Chip
-                compact
-                style={{
-                  backgroundColor: otaUpdateReady
-                    ? 'rgba(245, 158, 11, 0.2)'
-                    : otaLocalVersion?.subversion
-                    ? 'rgba(16, 185, 129, 0.15)'
-                    : (theme.colors as any).surfaceContainerHigh || theme.colors.surfaceVariant,
-                }}
-                textStyle={{
-                  color: otaUpdateReady ? '#D97706' : otaLocalVersion?.subversion ? '#059669' : theme.colors.onSurface,
-                  fontSize: 11,
-                  fontWeight: '700',
-                }}
-              >
-                {otaLocalVersion?.version ? `v${otaLocalVersion.version}` : 'Bundled Asset'}
-              </Chip>
-            </View>
-          </View>
-          <Divider style={styles.infoDivider} />
+          {!isNative ? (
+            <>
+              <View style={styles.infoRow}>
+                <View>
+                  <Text variant="bodySmall" style={{ color: theme.colors.outline }}>
+                    Platform Architecture
+                  </Text>
+                  <Text variant="labelSmall" style={{ color: theme.colors.outline, fontSize: 10 }}>
+                    Silent instant updates via Browser Service Worker
+                  </Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Chip
+                    compact
+                    style={{
+                      backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                    }}
+                    textStyle={{
+                      color: '#059669',
+                      fontSize: 11,
+                      fontWeight: '700',
+                    }}
+                  >
+                    Web / PWA
+                  </Chip>
+                </View>
+              </View>
+              <Divider style={styles.infoDivider} />
+            </>
+          ) : (
+            <>
+              <View style={styles.infoRow}>
+                <View>
+                  <Text variant="bodySmall" style={{ color: theme.colors.outline }}>
+                    Active OTA Version
+                  </Text>
+                  {otaLocalVersion?.installedAt ? (
+                    <Text variant="labelSmall" style={{ color: theme.colors.outline, fontSize: 10 }}>
+                      Installed: {new Date(otaLocalVersion.installedAt).toLocaleDateString()}
+                    </Text>
+                  ) : null}
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Chip
+                    compact
+                    style={{
+                      backgroundColor: otaUpdateReady
+                        ? 'rgba(245, 158, 11, 0.2)'
+                        : otaLocalVersion?.subversion
+                        ? 'rgba(16, 185, 129, 0.15)'
+                        : (theme.colors as any).surfaceContainerHigh || theme.colors.surfaceVariant,
+                    }}
+                    textStyle={{
+                      color: otaUpdateReady ? '#D97706' : otaLocalVersion?.subversion ? '#059669' : theme.colors.onSurface,
+                      fontSize: 11,
+                      fontWeight: '700',
+                    }}
+                  >
+                    {otaLocalVersion?.version ? `v${otaLocalVersion.version}` : 'Bundled Asset'}
+                  </Chip>
+                </View>
+              </View>
+              <Divider style={styles.infoDivider} />
 
-          {/* On-Demand Check for Updates Button */}
-          <View style={{ marginTop: 12, marginBottom: 8 }}>
-            <Button
-              mode="contained-tonal"
-              icon={otaChecking || manualChecking ? undefined : otaDownloading ? 'cloud-download' : otaUpdateReady ? 'sparkles' : 'refresh'}
-              loading={otaChecking || manualChecking}
-              disabled={otaChecking || manualChecking || otaDownloading}
-              onPress={handleCheckForUpdates}
-              style={{ borderRadius: 10 }}
-            >
-              {otaChecking || manualChecking
-                ? 'Checking for updates...'
-                : otaDownloading
-                ? `Downloading (${otaPercent}%)...`
-                : otaUpdateReady
-                ? `v${otaNewVersion || ''} Ready (Restart App)`
-                : 'Check for Updates'}
-            </Button>
-          </View>
-          <Divider style={styles.infoDivider} />
+              {/* On-Demand Check for Updates Button */}
+              <View style={{ marginTop: 12, marginBottom: 8 }}>
+                <Button
+                  mode="contained-tonal"
+                  icon={otaChecking || manualChecking ? undefined : otaDownloading ? 'cloud-download' : otaUpdateReady ? 'sparkles' : 'refresh'}
+                  loading={otaChecking || manualChecking}
+                  disabled={otaChecking || manualChecking || otaDownloading}
+                  onPress={handleCheckForUpdates}
+                  style={{ borderRadius: 10 }}
+                >
+                  {otaChecking || manualChecking
+                    ? 'Checking for updates...'
+                    : otaDownloading
+                    ? `Downloading (${otaPercent}%)...`
+                    : otaUpdateReady
+                    ? `v${otaNewVersion || ''} Ready (Restart App)`
+                    : 'Check for Updates'}
+                </Button>
+              </View>
+              <Divider style={styles.infoDivider} />
+            </>
+          )}
 
           <View style={styles.infoRow}>
             <Text variant="bodySmall" style={{ color: theme.colors.outline }}>
