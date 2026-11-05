@@ -3,6 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-native';
 import {
   AdminVayyariStorePublishPage,
   MOCK_STARRED_PRODUCTS,
+  MOCK_FAILED_PRODUCTS,
 } from '../../components/pages/AdminVayyariStorePublishPage';
 import { withFormFactor } from '../utils/FormFactorPreview';
 import { THEME_ARG_TYPES, THEME_ARGS } from '../../utils/storyTheme';
@@ -14,6 +15,7 @@ const meta: Meta<any> = {
   args: {
     ...THEME_ARGS,
     products: MOCK_STARRED_PRODUCTS,
+    failedProducts: MOCK_FAILED_PRODUCTS,
     publishedCount: 2,
   },
   argTypes: {
@@ -37,6 +39,7 @@ export const InteractivePublishWorkbench: Story = {
   name: '1. Interactive 3-Column Catalog Grid Tile Publish Workbench',
   args: {
     products: MOCK_STARRED_PRODUCTS,
+    failedProducts: MOCK_FAILED_PRODUCTS,
   },
 };
 
@@ -48,5 +51,20 @@ export const EmptyStarredProducts: Story = {
   name: '2. Empty State (0 Starred Products Available)',
   args: {
     products: [],
+    failedProducts: [],
   },
 };
+
+/**
+ * 3. Failed Publishings Review & Retry Queue:
+ * Displays products where publishing failed due to media errors or network drops.
+ * Merchandisers can review the exact failure diagnostic and trigger batch retries.
+ */
+export const FailedPublishingsRetryQueue: Story = {
+  name: '3. Failed Publishings Review & Retry Queue',
+  args: {
+    products: [],
+    failedProducts: MOCK_FAILED_PRODUCTS,
+  },
+};
+

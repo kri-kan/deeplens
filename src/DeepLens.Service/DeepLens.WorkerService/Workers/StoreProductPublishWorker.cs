@@ -147,18 +147,23 @@ public class StoreProductPublishWorker : BackgroundService
         _logger.LogInformation("Processing publish request for Product {ProductId} (Action: {Action}, Job: {JobId})", 
             evt.ProductId, evt.Action, evt.JobId);
 
+        var newlyCopiedMediaKeys = new List<string>();
+        CatalogProductRecord? catalogProduct = null;
+        string productCode = !string.IsNullOrWhiteSpace(evt.ProductCode) ? evt.ProductCode : "PROD";
+        NpgsqlTransaction? storeTx = null;
+
+        await using var storeConn = new NpgsqlConnection(_storeConnStr);
+        await storeConn.OpenAsync(ct);
+
+        // 1. Mark job as in_progress if still queued
+        const string markJobSql = @"
+            UPDATE publish_jobs 
+            SET status = 'in_progress', updated_at = NOW() 
+            WHERE id = @JobId AND status = 'queued';";
+        await storeConn.ExecuteAsync(markJobSql, new { JobId = evt.JobId });
+
         try
         {
-            // 1. Mark job as in_progress if still queued
-            await using var storeConn = new NpgsqlConnection(_storeConnStr);
-            await storeConn.OpenAsync(ct);
-
-            const string markJobSql = @"
-                UPDATE publish_jobs 
-                SET status = 'in_progress', updated_at = NOW() 
-                WHERE id = @JobId AND status = 'queued';";
-            await storeConn.ExecuteAsync(markJobSql, new { JobId = evt.JobId });
-
             // 2. Fetch Catalog Product & Media from deeplens_platform
             await using var platformConn = new NpgsqlConnection(_platformConnStr);
             await platformConn.OpenAsync(ct);
@@ -179,13 +184,13 @@ public class StoreProductPublishWorker : BackgroundService
                 LEFT JOIN categories c ON p.category_id = c.id
                 WHERE p.id = @ProductId;";
 
-            var catalogProduct = await platformConn.QuerySingleOrDefaultAsync<CatalogProductRecord>(fetchCatalogSql, new { ProductId = evt.ProductId });
+            catalogProduct = await platformConn.QuerySingleOrDefaultAsync<CatalogProductRecord>(fetchCatalogSql, new { ProductId = evt.ProductId });
             if (catalogProduct == null)
             {
                 throw new InvalidOperationException($"Catalog product {evt.ProductId} not found in deeplens_platform.");
             }
 
-            var productCode = !string.IsNullOrWhiteSpace(evt.ProductCode) ? evt.ProductCode : catalogProduct.ProductCode;
+            productCode = !string.IsNullOrWhiteSpace(evt.ProductCode) ? evt.ProductCode : catalogProduct.ProductCode;
 
             // 3. Check existing product in deeplens_store
             const string findStoreSql = @"
@@ -215,7 +220,7 @@ public class StoreProductPublishWorker : BackgroundService
                 var url = incomingUrls[i];
                 var order = i + 1;
                 var isCover = i == 0;
-                var ingested = await IngestMediaAsync(storeProductId, productCode, url, order, isCover, ct);
+                var ingested = await IngestMediaAsync(storeProductId, productCode, url, order, isCover, newlyCopiedMediaKeys, ct);
                 mediaList.Add(ingested);
             }
 
@@ -228,6 +233,9 @@ public class StoreProductPublishWorker : BackgroundService
             var salePrice = catalogProduct.Price > 0 ? Math.Round(catalogProduct.Price * 1.3m, 0) : 7999m;
 
             var isSyncUpdates = evt.Action == "sync_updates" || existingStore != null;
+
+            // 5. ATOMIC LOCAL TRANSACTION IN deeplens_store
+            storeTx = await storeConn.BeginTransactionAsync(ct);
 
             if (existingStore != null)
             {
@@ -256,7 +264,7 @@ public class StoreProductPublishWorker : BackgroundService
                     BaseCost = catalogProduct.Price,
                     MediaOrder = mediaJson,
                     Tags = tagsJson
-                });
+                }, transaction: storeTx);
 
                 // Cascade review pending to sibling variants
                 const string cascadeSql = @"
@@ -270,7 +278,7 @@ public class StoreProductPublishWorker : BackgroundService
                     ProductId = evt.ProductId,
                     ParentCatalogId = existingStore.ParentCatalogId,
                     Id = existingStore.Id
-                });
+                }, transaction: storeTx);
             }
             else
             {
@@ -304,19 +312,27 @@ public class StoreProductPublishWorker : BackgroundService
                     SalePrice = salePrice,
                     MediaOrder = mediaJson,
                     Tags = tagsJson
-                });
+                }, transaction: storeTx);
             }
 
-            // 4b. Synchronize deeplens_platform.products (store_publish_updated_at & is_published)
+            // 6. Synchronize deeplens_platform.products BEFORE committing store transaction
             const string syncPlatformSql = @"
                 UPDATE products 
                 SET is_published = TRUE,
                     store_publish_updated_at = NOW(),
                     updated_at = NOW()
                 WHERE id = @ProductId;";
-            await platformConn.ExecuteAsync(syncPlatformSql, new { ProductId = evt.ProductId });
+            var affectedPlatform = await platformConn.ExecuteAsync(syncPlatformSql, new { ProductId = evt.ProductId });
+            if (affectedPlatform == 0)
+            {
+                throw new InvalidOperationException($"Catalog product {evt.ProductId} could not be updated in deeplens_platform (0 rows affected).");
+            }
 
-            // 5. Update Publish Job counters
+            // 7. COMMIT store transaction only after platform sync succeeded
+            await storeTx.CommitAsync(ct);
+            storeTx = null;
+
+            // 8. Update Publish Job counters
             const string incrementSuccessSql = @"
                 UPDATE publish_jobs 
                 SET processed_count = processed_count + 1,
@@ -327,7 +343,7 @@ public class StoreProductPublishWorker : BackgroundService
                 WHERE id = @JobId;";
             await storeConn.ExecuteAsync(incrementSuccessSql, new { JobId = evt.JobId });
 
-            // 6. Emit StoreProductSyncCompletedEvent to Kafka
+            // 9. Emit StoreProductSyncCompletedEvent to Kafka
             var completedEvt = new StoreProductSyncCompletedEvent(
                 EventId: Guid.NewGuid(),
                 JobId: evt.JobId,
@@ -351,41 +367,107 @@ public class StoreProductPublishWorker : BackgroundService
                 ct
             );
 
-            _logger.LogInformation("Successfully completed async publish for Product {ProductId} ({ProductCode})", 
+            _logger.LogInformation("Successfully completed atomic publish for Product {ProductId} ({ProductCode})", 
                 evt.ProductId, productCode);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to publish Product {ProductId} for Job {JobId}", evt.ProductId, evt.JobId);
+            _logger.LogError(ex, "Failed to publish Product {ProductId} for Job {JobId}. Executing complete rollback.", evt.ProductId, evt.JobId);
 
-            // Record error in publish_jobs
+            // 1. Rollback store transaction if active
+            if (storeTx != null)
+            {
+                try
+                {
+                    await storeTx.RollbackAsync(ct);
+                    _logger.LogInformation("Rolled back store database transaction for Product {ProductId}", evt.ProductId);
+                }
+                catch (Exception rbEx)
+                {
+                    _logger.LogError(rbEx, "Error during storeTx rollback for Product {ProductId}", evt.ProductId);
+                }
+            }
+
+            // 2. Delete newly copied MinIO media objects to prevent orphans
+            if (_minioClient != null && newlyCopiedMediaKeys.Count > 0)
+            {
+                foreach (var key in newlyCopiedMediaKeys)
+                {
+                    try
+                    {
+                        await _minioClient.RemoveObjectAsync(new RemoveObjectArgs()
+                            .WithBucket(_storeBucketName)
+                            .WithObject(key), CancellationToken.None);
+                        _logger.LogInformation("Deleted orphaned MinIO object {Key} after publish rollback", key);
+                    }
+                    catch (Exception minioEx)
+                    {
+                        _logger.LogWarning(minioEx, "Failed to remove orphaned MinIO object {Key}", key);
+                    }
+                }
+            }
+
+            // 3. Ensure platform record is NOT marked published
             try
             {
-                await using var storeConn = new NpgsqlConnection(_storeConnStr);
-                await storeConn.OpenAsync(ct);
+                await using var platformConn = new NpgsqlConnection(_platformConnStr);
+                await platformConn.OpenAsync(ct);
+                const string revertPlatformSql = @"
+                    UPDATE products 
+                    SET is_published = FALSE, updated_at = NOW() 
+                    WHERE id = @ProductId 
+                      AND (store_publish_updated_at IS NULL);";
+                await platformConn.ExecuteAsync(revertPlatformSql, new { ProductId = evt.ProductId });
+            }
+            catch (Exception platEx)
+            {
+                _logger.LogWarning(platEx, "Could not check/revert platform is_published for Product {ProductId}", evt.ProductId);
+            }
+
+            // 4. Record rich error in publish_jobs
+            try
+            {
+                await using var storeConnErr = new NpgsqlConnection(_storeConnStr);
+                await storeConnErr.OpenAsync(ct);
+
+                var primaryUrl = catalogProduct?.MediaUrls?.FirstOrDefault() ?? string.Empty;
 
                 var errorObj = JsonSerializer.Serialize(new
                 {
+                    jobId = evt.JobId,
                     productId = evt.ProductId,
-                    productCode = evt.ProductCode,
+                    productCode = productCode,
+                    title = catalogProduct?.Title ?? productCode,
+                    category = catalogProduct?.Category ?? "Saree",
+                    fabric = catalogProduct?.Fabric ?? "Silk",
+                    price = catalogProduct?.Price ?? 8000m,
+                    primaryImageUri = primaryUrl,
+                    mediaCount = catalogProduct?.MediaUrls?.Length ?? 0,
                     error = ex.Message,
-                    timestamp = DateTime.UtcNow
+                    action = evt.Action,
+                    failedAt = DateTime.UtcNow,
+                    canRetry = true,
+                    retried = false
                 });
 
                 const string incrementFailSql = @"
                     UPDATE publish_jobs 
                     SET failed_count = failed_count + 1,
                         error_details = COALESCE(error_details, '[]'::jsonb) || @ErrorJson::jsonb,
-                        status = CASE WHEN processed_count + failed_count + 1 >= total_count THEN 'partial' ELSE 'in_progress' END,
+                        status = CASE 
+                            WHEN processed_count + failed_count + 1 >= total_count 
+                            THEN (CASE WHEN processed_count > 0 THEN 'partial' ELSE 'failed' END)
+                            ELSE 'in_progress' 
+                        END,
                         updated_at = NOW()
                     WHERE id = @JobId;";
-                await storeConn.ExecuteAsync(incrementFailSql, new { JobId = evt.JobId, ErrorJson = errorObj });
+                await storeConnErr.ExecuteAsync(incrementFailSql, new { JobId = evt.JobId, ErrorJson = errorObj });
 
                 var failedEvt = new StoreProductPublishFailedEvent(
                     EventId: Guid.NewGuid(),
                     JobId: evt.JobId,
                     ProductId: evt.ProductId,
-                    ProductCode: evt.ProductCode,
+                    ProductCode: productCode,
                     ErrorMessage: ex.Message,
                     Timestamp: DateTime.UtcNow
                 );
@@ -402,7 +484,7 @@ public class StoreProductPublishWorker : BackgroundService
             }
             catch (Exception recordEx)
             {
-                _logger.LogError(recordEx, "Failed to update publish_jobs with error for Product {ProductId}", evt.ProductId);
+                _logger.LogError(recordEx, "Failed to record publish failure in publish_jobs for Product {ProductId}", evt.ProductId);
             }
         }
     }
@@ -413,6 +495,7 @@ public class StoreProductPublishWorker : BackgroundService
         string sourceUrl,
         int order,
         bool isCover,
+        List<string> newlyCopiedMediaKeys,
         CancellationToken ct)
     {
         var mediaId = $"m_{order}_{productId:N}"[..12];
@@ -466,6 +549,7 @@ public class StoreProductPublishWorker : BackgroundService
                             .WithObject(sourceKey));
 
                     await _minioClient.CopyObjectAsync(copyArgs, ct);
+                    newlyCopiedMediaKeys.Add(destKey);
                     var publicUrl = $"{_publicBaseUrl.TrimEnd('/')}/{destKey}";
                     _logger.LogInformation("Server-side MinIO copy succeeded: {SourceBucket}/{SourceKey} -> {Dest}", 
                         sourceBucket, sourceKey, publicUrl);
@@ -499,6 +583,7 @@ public class StoreProductPublishWorker : BackgroundService
                     .WithContentType("image/jpeg");
 
                 await _minioClient.PutObjectAsync(putArgs, ct);
+                newlyCopiedMediaKeys.Add(storageKey);
                 var publicUrl = $"{_publicBaseUrl.TrimEnd('/')}/{storageKey}";
                 return new WorkerMediaItemDto(mediaId, publicUrl, 1, order, 0.0, isCover, sourceUrl);
             }

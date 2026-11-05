@@ -61,6 +61,9 @@ export interface VayyariStarredProductItem {
   swatchesCount?: number;
   siblingSwatches?: any[];
   parentProductCode?: string;
+  errorMessage?: string;
+  failedAt?: string;
+  canRetry?: boolean;
 }
 
 export type StoreSortOption = 'newest' | 'price_low' | 'price_high' | 'media_count';
@@ -68,6 +71,7 @@ export type PriceRangeOption = 'all' | 'under_5k' | '5k_10k' | '10k_20k' | 'abov
 
 export interface AdminVayyariStorePublishPageProps {
   products?: VayyariStarredProductItem[];
+  failedProducts?: VayyariStarredProductItem[];
   publishedCount?: number;
   loading?: boolean;
   refreshing?: boolean;
@@ -77,10 +81,12 @@ export interface AdminVayyariStorePublishPageProps {
   onLoadMore?: () => void;
   onBack?: () => void;
   onPublishBatch?: (selectedIds: string[]) => void;
+  onRetryPublishBatch?: (selectedIds: string[]) => void;
   onNavigateToStoreInventory?: () => void;
   onOpenPdp?: (productId: string) => void;
   disableSafeArea?: boolean;
 }
+
 
 export const CATEGORIES = ['All', 'Saree', 'Dress Material', 'Kurti / Set', 'Lehenga', 'Gown', 'Western', 'Kids'];
 export const FABRIC_OPTIONS = ['All', 'Pure Silk', 'Kanjivaram', 'Banarasi', 'Georgette', 'Chiffon', 'Cotton', 'Linen', 'Organza', 'Tussar'];
@@ -100,6 +106,7 @@ export const SORT_OPTIONS: { id: StoreSortOption; label: string }[] = [
 
 export function AdminVayyariStorePublishPage({
   products = [],
+  failedProducts = [],
   publishedCount = 0,
   loading = false,
   refreshing = false,
@@ -109,6 +116,7 @@ export function AdminVayyariStorePublishPage({
   onLoadMore,
   onBack,
   onPublishBatch,
+  onRetryPublishBatch,
   onNavigateToStoreInventory,
   onOpenPdp,
   disableSafeArea = false,
@@ -119,7 +127,7 @@ export function AdminVayyariStorePublishPage({
   const bottomInset = disableSafeArea ? 0 : insets.bottom;
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [activeQueue, setActiveQueue] = useState<'all' | 'publish_updates'>('all');
+  const [activeQueue, setActiveQueue] = useState<'all' | 'publish_updates' | 'failed'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedFabric, setSelectedFabric] = useState('All');
@@ -134,6 +142,7 @@ export function AdminVayyariStorePublishPage({
     () => products.filter((p) => !p.isPublishedToStore && !p.isPublished).length,
     [products]
   );
+  const failedCount = useMemo(() => failedProducts.length, [failedProducts]);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -153,7 +162,8 @@ export function AdminVayyariStorePublishPage({
   };
 
   const filteredProducts = useMemo(() => {
-    let list = products.filter((p) => {
+    const source = activeQueue === 'failed' ? failedProducts : products;
+    let list = source.filter((p) => {
       const catLower = (p.category || '').toLowerCase();
       const selCatLower = selectedCategory.toLowerCase();
       const matchCat =
@@ -190,7 +200,7 @@ export function AdminVayyariStorePublishPage({
 
     if (activeQueue === 'publish_updates') {
       list = filterPublishUpdatesQueue(list);
-    } else {
+    } else if (activeQueue === 'all') {
       list = list.filter((p) => !p.isPublishedToStore && !p.isPublished);
     }
 
@@ -203,7 +213,7 @@ export function AdminVayyariStorePublishPage({
     }
 
     return list;
-  }, [products, activeQueue, selectedCategory, selectedFabric, selectedPriceRange, selectedSort, searchQuery]);
+  }, [products, failedProducts, activeQueue, selectedCategory, selectedFabric, selectedPriceRange, selectedSort, searchQuery]);
 
   const toggleSelectProduct = (id: string) => {
     if (selectedIds.includes(id)) {
@@ -225,20 +235,30 @@ export function AdminVayyariStorePublishPage({
     if (selectedIds.length === 0 || isPublishing) return;
     setIsPublishing(true);
     try {
-      await onPublishBatch?.(selectedIds);
-      setPublishSuccessToast(
-        activeQueue === 'publish_updates'
-          ? `🚀 Successfully synced updates for ${selectedIds.length} product${selectedIds.length === 1 ? '' : 's'} to Store!`
-          : `🚀 Successfully published ${selectedIds.length} product${selectedIds.length === 1 ? '' : 's'} to Store!`
-      );
+      if (activeQueue === 'failed') {
+        if (onRetryPublishBatch) {
+          await onRetryPublishBatch(selectedIds);
+        } else if (onPublishBatch) {
+          await onPublishBatch(selectedIds);
+        }
+        setPublishSuccessToast(`🔄 Dispatched retry publish for ${selectedIds.length} failed product${selectedIds.length === 1 ? '' : 's'}!`);
+      } else {
+        await onPublishBatch?.(selectedIds);
+        setPublishSuccessToast(
+          activeQueue === 'publish_updates'
+            ? `🚀 Successfully synced updates for ${selectedIds.length} product${selectedIds.length === 1 ? '' : 's'} to Store!`
+            : `🚀 Successfully published ${selectedIds.length} product${selectedIds.length === 1 ? '' : 's'} to Store!`
+        );
+      }
       setSelectedIds([]);
       setTimeout(() => setPublishSuccessToast(null), 3500);
     } catch (err) {
-      console.error('Failed to publish products:', err);
+      console.error('Failed to trigger publish/retry:', err);
     } finally {
       setIsPublishing(false);
     }
   };
+
 
   const renderItem = ({ item: product }: { item: VayyariStarredProductItem }) => {
     const isSelected = selectedIds.includes(product.id);
@@ -284,6 +304,28 @@ export function AdminVayyariStorePublishPage({
         <View style={styles.starBadge}>
           <LuStar size={11} color="#F59E0B" />
         </View>
+
+        {/* Failure Diagnostic Badge */}
+        {Boolean(product.errorMessage) && (
+          <View
+            style={{
+              position: 'absolute',
+              top: 28,
+              left: 4,
+              right: 4,
+              backgroundColor: 'rgba(220, 38, 38, 0.94)',
+              borderRadius: 4,
+              paddingHorizontal: 4,
+              paddingVertical: 2,
+              zIndex: 10,
+            }}
+          >
+            <Text fontSize={8} fontWeight="700" color="#fff" numberOfLines={2}>
+              ⚠️ {product.errorMessage}
+            </Text>
+          </View>
+        )}
+
 
         {/* Media Delta Badge */}
         {hasPendingStoreUpdates(product) && (
@@ -383,7 +425,7 @@ export function AdminVayyariStorePublishPage({
         borderBottomColor={tokens.border}
         paddingHorizontal={12}
         paddingVertical={6}
-        gap={8}
+        gap={6}
       >
         <Pressable
           onPress={() => setActiveQueue('all')}
@@ -396,18 +438,18 @@ export function AdminVayyariStorePublishPage({
           }}
         >
           <Text
-            fontSize={12}
+            fontSize={11}
             fontWeight="700"
             color={activeQueue === 'all' ? tokens.accentForeground : tokens.text}
           >
-            All Starred ({allStarredCount})
+            All ({allStarredCount})
           </Text>
         </Pressable>
 
         <Pressable
           onPress={() => setActiveQueue('publish_updates')}
           style={{
-            flex: 1,
+            flex: 1.1,
             paddingVertical: 7,
             borderRadius: 6,
             alignItems: 'center',
@@ -417,17 +459,42 @@ export function AdminVayyariStorePublishPage({
           }}
         >
           <XStack alignItems="center" gap={4}>
-            <LuSparkles size={12} color={activeQueue === 'publish_updates' ? '#B45309' : tokens.textMuted} />
+            <LuSparkles size={11} color={activeQueue === 'publish_updates' ? '#B45309' : tokens.textMuted} />
             <Text
-              fontSize={12}
+              fontSize={11}
               fontWeight="700"
               color={activeQueue === 'publish_updates' ? '#B45309' : tokens.text}
             >
-              Publish Updates ({publishUpdatesCount})
+              Updates ({publishUpdatesCount})
+            </Text>
+          </XStack>
+        </Pressable>
+
+        <Pressable
+          onPress={() => setActiveQueue('failed')}
+          style={{
+            flex: 1,
+            paddingVertical: 7,
+            borderRadius: 6,
+            alignItems: 'center',
+            backgroundColor: activeQueue === 'failed' ? '#FEE2E2' : 'rgba(0,0,0,0.03)',
+            borderWidth: activeQueue === 'failed' ? 1 : 0,
+            borderColor: '#EF4444',
+          }}
+        >
+          <XStack alignItems="center" gap={4}>
+            <LuRotateCcw size={11} color={activeQueue === 'failed' ? '#B91C1C' : tokens.textMuted} />
+            <Text
+              fontSize={11}
+              fontWeight="700"
+              color={activeQueue === 'failed' ? '#B91C1C' : tokens.text}
+            >
+              Failed ({failedCount})
             </Text>
           </XStack>
         </Pressable>
       </XStack>
+
 
       {/* ── SEARCH & FILTER CONTROLS ── */}
       <YStack backgroundColor={tokens.surface} paddingHorizontal={12} paddingVertical={8} gap={8} borderBottomWidth={1} borderBottomColor={tokens.border}>
@@ -712,15 +779,32 @@ export function AdminVayyariStorePublishPage({
             disabled={isPublishing}
             style={({ pressed }) => [
               styles.publishBtn,
-              { backgroundColor: tokens.accent, opacity: pressed || isPublishing ? 0.9 : 1 },
+              {
+                backgroundColor: activeQueue === 'failed' ? '#DC2626' : tokens.accent,
+                opacity: pressed || isPublishing ? 0.9 : 1,
+              },
             ]}
           >
             <XStack alignItems="center" justifyContent="center" gap={8}>
-              <LuSparkles size={16} color={tokens.accentForeground} />
-              <Text fontSize={14} fontWeight="800" color={tokens.accentForeground}>
+              {activeQueue === 'failed' ? (
+                <LuRotateCcw size={16} color="#fff" />
+              ) : (
+                <LuSparkles size={16} color={tokens.accentForeground} />
+              )}
+              <Text
+                fontSize={14}
+                fontWeight="800"
+                color={activeQueue === 'failed' ? '#fff' : tokens.accentForeground}
+              >
                 {isPublishing
-                  ? (activeQueue === 'publish_updates' ? 'Syncing Updates...' : 'Publishing to Store...')
-                  : (activeQueue === 'publish_updates'
+                  ? (activeQueue === 'failed'
+                      ? 'Retrying Publish...'
+                      : activeQueue === 'publish_updates'
+                      ? 'Syncing Updates...'
+                      : 'Publishing to Store...')
+                  : (activeQueue === 'failed'
+                      ? `Retry Publish for ${selectedIds.length} Product${selectedIds.length === 1 ? '' : 's'}`
+                      : activeQueue === 'publish_updates'
                       ? `Publish Updates for ${selectedIds.length} Product${selectedIds.length === 1 ? '' : 's'}`
                       : `Publish ${selectedIds.length} Product${selectedIds.length === 1 ? '' : 's'} to Store`)}
               </Text>
@@ -728,6 +812,7 @@ export function AdminVayyariStorePublishPage({
           </Pressable>
         </YStack>
       )}
+
 
       {/* ── FLOATING SUCCESS TOAST ── */}
       {publishSuccessToast && (

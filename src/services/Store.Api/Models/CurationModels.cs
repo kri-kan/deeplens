@@ -142,3 +142,25 @@ public record PublishJobDto(
     [property: JsonPropertyName("createdAt")] DateTime CreatedAt,
     [property: JsonPropertyName("updatedAt")] DateTime UpdatedAt
 );
+
+public record PublishFailureDto(
+    [property: JsonPropertyName("jobId")] Guid JobId,
+    [property: JsonPropertyName("productId")] Guid ProductId,
+    [property: JsonPropertyName("productCode")] string ProductCode,
+    [property: JsonPropertyName("title")] string Title,
+    [property: JsonPropertyName("category")] string Category,
+    [property: JsonPropertyName("fabric")] string Fabric,
+    [property: JsonPropertyName("price")] decimal Price,
+    [property: JsonPropertyName("primaryImageUri")] string PrimaryImageUri,
+    [property: JsonPropertyName("mediaCount")] int MediaCount,
+    [property: JsonPropertyName("errorMessage")] string ErrorMessage,
+    [property: JsonPropertyName("failedAt")] DateTime FailedAt,
+    [property: JsonPropertyName("action")] string Action,
+    [property: JsonPropertyName("canRetry")] bool CanRetry
+);
+
+public record RetryPublishBatchRequest(
+    [property: JsonPropertyName("productIds")] List<Guid> ProductIds,
+    [property: JsonPropertyName("action")] string? Action = null
+);
+

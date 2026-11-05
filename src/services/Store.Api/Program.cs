@@ -761,6 +761,26 @@ app.MapGet("/api/v1/admin/products/publish-jobs/{id}", async (Guid id, ICuration
 .WithName("AdminGetPublishJob")
 .WithOpenApi();
 
+// 1c. Get Failed Publishings Queue
+app.MapGet("/api/v1/admin/products/publish-failures", async (ICurationService curationService) =>
+{
+    var failures = await curationService.GetPublishFailuresAsync();
+    return Results.Ok(failures);
+})
+.WithName("AdminGetPublishFailures")
+.WithOpenApi();
+
+// 1d. Retry Failed Product Publishings (202 Accepted)
+app.MapPost("/api/v1/admin/products/publish-failures/retry", async ([FromBody] RetryPublishBatchRequest request, HttpContext ctx, ICurationService curationService) =>
+{
+    var author = GetAuthorEmail(ctx);
+    var job = await curationService.RetryPublishFailuresAsync(request, author);
+    return Results.Accepted($"/api/v1/admin/products/publish-jobs/{job.Id}", job);
+})
+.WithName("AdminRetryPublishFailures")
+.WithOpenApi();
+
+
 
 // 2. List In-Store Products (For In-Store Inventory Screen)
 app.MapGet("/api/v1/admin/products/in-store", async ([FromQuery] string? category, [FromQuery] string? search, [FromQuery] string? lifecycle, ICurationService curationService) =>

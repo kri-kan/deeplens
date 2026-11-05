@@ -30,17 +30,58 @@ export interface VayyariStarredProductItem {
   swatchesCount?: number;
   siblingSwatches?: any[];
   parentProductCode?: string;
+  errorMessage?: string;
+  failedAt?: string;
+  canRetry?: boolean;
 }
 
 export interface AdminVayyariStorePublishPageProps {
   products?: VayyariStarredProductItem[];
+  failedProducts?: VayyariStarredProductItem[];
   publishedCount?: number;
   onBack?: () => void;
   onPublishBatch?: (selectedIds: string[]) => void;
+  onRetryPublishBatch?: (selectedIds: string[]) => void;
   onNavigateToStoreInventory?: () => void;
 }
 
+export const MOCK_FAILED_PRODUCTS: VayyariStarredProductItem[] = [
+  {
+    id: 'fail-1',
+    productCode: 'SAR-KAN-999',
+    title: 'Kanjivaram Bridal Brocade',
+    category: 'Saree',
+    fabric: 'Pure Silk',
+    color: 'Ruby Red',
+    mediaCount: 5,
+    primaryImageUri: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=600&q=80',
+    descriptions: ['Bridal heritage weave with rich zari pallu.'],
+    isStarred: true,
+    isPublishedToStore: false,
+    errorMessage: 'MinIO server copy timeout on object general/product_999/image_3.jpg',
+    failedAt: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
+    canRetry: true,
+  },
+  {
+    id: 'fail-2',
+    productCode: 'SAR-BAN-888',
+    title: 'Banarasi Meenakari Silk',
+    category: 'Saree',
+    fabric: 'Katan Silk',
+    color: 'Royal Blue',
+    mediaCount: 4,
+    primaryImageUri: 'https://images.unsplash.com/photo-1617627143750-d86bc21e42bb?w=600&q=80',
+    descriptions: ['Fine handwoven gold and silver zari.'],
+    isStarred: true,
+    isPublishedToStore: false,
+    errorMessage: 'Catalog product not found in platform database during sync.',
+    failedAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
+    canRetry: true,
+  },
+];
+
 export const MOCK_STARRED_PRODUCTS: VayyariStarredProductItem[] = [
+
   {
     id: 'p-1',
     productCode: 'SAR-KAN-901',

@@ -73,6 +73,23 @@ export interface PublishJobStatusResponse extends PublishJobResponse {
   errorDetails?: string | null;
 }
 
+export interface PublishFailureItem {
+  jobId: string;
+  productId: string;
+  productCode: string;
+  title: string;
+  category: string;
+  fabric: string;
+  price: number;
+  primaryImageUri: string;
+  mediaCount: number;
+  errorMessage: string;
+  failedAt: string;
+  action: string;
+  canRetry: boolean;
+}
+
+
 export interface StoreMediaItem {
   id: string;
   url: string;
@@ -248,6 +265,37 @@ class StoreAdminService {
 
     return res.json();
   }
+
+  async getPublishFailures(): Promise<PublishFailureItem[]> {
+    const headers = await this.getAuthHeaders();
+    const baseUrl = getStoreApiUrl();
+    const res = await fetch(`${baseUrl}/api/v1/admin/products/publish-failures`, {
+      headers,
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to get publish failures: ${res.status} ${res.statusText}`);
+    }
+
+    return res.json();
+  }
+
+  async retryPublishFailures(productIds: string[], action: 'initial_publish' | 'sync_updates' = 'initial_publish'): Promise<PublishJobResponse> {
+    const headers = await this.getAuthHeaders();
+    const baseUrl = getStoreApiUrl();
+    const res = await fetch(`${baseUrl}/api/v1/admin/products/publish-failures/retry`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ productIds, action }),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to retry publish failures: ${res.status} ${res.statusText}`);
+    }
+
+    return res.json();
+  }
+
 
   async getInStoreProducts(params?: {
     category?: string;

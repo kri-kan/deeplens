@@ -1133,6 +1133,175 @@ public class CurationService : ICurationService
         return await conn.QuerySingleOrDefaultAsync<PublishJobDto>(sql, new { Id = jobId });
     }
 
+    public async Task<List<PublishFailureDto>> GetPublishFailuresAsync(CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        // 1. Fetch published product IDs from store to filter out already resolved/published items
+        const string publishedSql = @"
+            SELECT COALESCE(parent_catalog_id, vayyari_product_id) AS ProductId
+            FROM products
+            WHERE is_published = true AND (parent_catalog_id IS NOT NULL OR vayyari_product_id IS NOT NULL);";
+        var publishedIds = (await conn.QueryAsync<Guid>(publishedSql)).ToHashSet();
+
+        // 2. Fetch jobs with failed_count > 0
+        const string failedJobsSql = @"
+            SELECT id, action, error_details::text AS ErrorDetailsJson, created_at AS CreatedAt, updated_at AS UpdatedAt
+            FROM publish_jobs
+            WHERE failed_count > 0
+            ORDER BY updated_at DESC
+            LIMIT 50;";
+
+        var rows = await conn.QueryAsync(failedJobsSql);
+        var failuresByProduct = new Dictionary<Guid, PublishFailureDto>();
+
+        foreach (var row in rows)
+        {
+            string? errorJson = row.errordetailsjson;
+            if (string.IsNullOrWhiteSpace(errorJson) || errorJson == "[]") continue;
+
+            try
+            {
+                using var doc = JsonDocument.Parse(errorJson);
+                if (doc.RootElement.ValueKind != JsonValueKind.Array) continue;
+
+                foreach (var el in doc.RootElement.EnumerateArray())
+                {
+                    if (!el.TryGetProperty("productId", out var pIdProp)) continue;
+                    if (!Guid.TryParse(pIdProp.GetString(), out var productId)) continue;
+
+                    // If product was subsequently published successfully, ignore failure
+                    if (publishedIds.Contains(productId)) continue;
+
+                    // Check if already marked as retried
+                    var isRetried = el.TryGetProperty("retried", out var rProp) && rProp.GetBoolean();
+                    if (isRetried) continue;
+
+                    // Only take the latest failure for this product
+                    if (failuresByProduct.ContainsKey(productId)) continue;
+
+                    var pCode = el.TryGetProperty("productCode", out var pcProp) ? pcProp.GetString() ?? "" : "";
+                    var title = el.TryGetProperty("title", out var tProp) ? tProp.GetString() ?? pCode : pCode;
+                    var category = el.TryGetProperty("category", out var cProp) ? cProp.GetString() ?? "Saree" : "Saree";
+                    var fabric = el.TryGetProperty("fabric", out var fProp) ? fProp.GetString() ?? "Silk" : "Silk";
+                    var price = el.TryGetProperty("price", out var prProp) && prProp.TryGetDecimal(out var pVal) ? pVal : 8000m;
+                    var img = el.TryGetProperty("primaryImageUri", out var imgProp) ? imgProp.GetString() ?? "" : "";
+                    var mCount = el.TryGetProperty("mediaCount", out var mcProp) && mcProp.TryGetInt32(out var mcVal) ? mcVal : 0;
+                    var err = el.TryGetProperty("error", out var eProp) ? eProp.GetString() ?? "Publish failed" : "Publish failed";
+                    var failedAt = el.TryGetProperty("failedAt", out var faProp) && faProp.TryGetDateTime(out var faVal) ? faVal : (DateTime)row.updatedat;
+                    var action = el.TryGetProperty("action", out var aProp) ? aProp.GetString() ?? (string)row.action : (string)row.action;
+
+                    failuresByProduct[productId] = new PublishFailureDto(
+                        JobId: (Guid)row.id,
+                        ProductId: productId,
+                        ProductCode: pCode,
+                        Title: title,
+                        Category: category,
+                        Fabric: fabric,
+                        Price: price,
+                        PrimaryImageUri: img,
+                        MediaCount: mCount,
+                        ErrorMessage: err,
+                        FailedAt: failedAt,
+                        Action: action,
+                        CanRetry: true
+                    );
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to parse error_details JSON for publish job {JobId}", (Guid)row.id);
+            }
+        }
+
+        return failuresByProduct.Values.OrderByDescending(f => f.FailedAt).ToList();
+    }
+
+    public async Task<PublishJobDto> RetryPublishFailuresAsync(RetryPublishBatchRequest request, string authorEmail, CancellationToken ct = default)
+    {
+        if (request.ProductIds == null || request.ProductIds.Count == 0)
+        {
+            throw new ArgumentException("At least one product ID is required to retry.");
+        }
+
+        var action = !string.IsNullOrWhiteSpace(request.Action) ? request.Action : "initial_publish";
+
+        // Create new publish job
+        var submitReq = new SubmitPublishJobRequest(
+            Action: action,
+            ProductIds: request.ProductIds,
+            Options: new SubmitPublishJobOptions()
+        );
+
+        var newJob = await CreatePublishJobAsync(submitReq, authorEmail, ct);
+
+        // Mark retried = true in previous failed jobs
+        try
+        {
+            await using var conn = new NpgsqlConnection(_connectionString);
+            await conn.OpenAsync(ct);
+
+            const string failedJobsSql = @"
+                SELECT id, error_details::text AS ErrorDetailsJson
+                FROM publish_jobs
+                WHERE failed_count > 0
+                ORDER BY updated_at DESC
+                LIMIT 50;";
+
+            var rows = await conn.QueryAsync(failedJobsSql);
+            var retrySet = request.ProductIds.ToHashSet();
+
+            foreach (var row in rows)
+            {
+                string? json = row.errordetailsjson;
+                if (string.IsNullOrWhiteSpace(json) || json == "[]") continue;
+
+                var modified = false;
+                var updatedElements = new List<Dictionary<string, object?>>();
+
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.ValueKind != JsonValueKind.Array) continue;
+
+                foreach (var el in doc.RootElement.EnumerateArray())
+                {
+                    var dict = JsonSerializer.Deserialize<Dictionary<string, object?>>(el.GetRawText());
+                    if (dict != null && dict.TryGetValue("productId", out var pVal) && pVal != null)
+                    {
+                        if (Guid.TryParse(pVal.ToString(), out var pGuid) && retrySet.Contains(pGuid))
+                        {
+                            dict["retried"] = true;
+                            dict["retriedAt"] = DateTime.UtcNow;
+                            dict["retriedJobId"] = newJob.Id;
+                            modified = true;
+                        }
+                    }
+                    if (dict != null) updatedElements.Add(dict);
+                }
+
+                if (modified)
+                {
+                    const string updateJobErrSql = @"
+                        UPDATE publish_jobs 
+                        SET error_details = @NewJson::jsonb, updated_at = NOW() 
+                        WHERE id = @JobId;";
+                    await conn.ExecuteAsync(updateJobErrSql, new 
+                    { 
+                        JobId = (Guid)row.id, 
+                        NewJson = JsonSerializer.Serialize(updatedElements) 
+                    });
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to update retried flag on previous publish_jobs.");
+        }
+
+        return newJob;
+    }
+
+
     private class ExistingProductRecord
     {
         public Guid Id { get; set; }

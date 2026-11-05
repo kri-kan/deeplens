@@ -13,6 +13,7 @@ const PAGE_SIZE = 60;
 export default function StorePublishScreen() {
   const router = useRouter();
   const [starredProducts, setStarredProducts] = useState<VayyariStarredProductItem[]>([]);
+  const [failedProducts, setFailedProducts] = useState<VayyariStarredProductItem[]>([]);
   const [publishedCount, setPublishedCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -137,9 +138,8 @@ export default function StorePublishScreen() {
 
       const inStoreMap = await fetchInStoreMetadata();
 
-      // Concurrently fetch published catalog items (guarantees published updates show up even if unstarred, e.g. VF1FC22)
-      // and starred catalog items (first-time publishing queue)
-      const [publishedRes, starredRes] = await Promise.allSettled([
+      // Concurrently fetch published catalog items, starred catalog items, and failed publishings
+      const [publishedRes, starredRes, failuresRes] = await Promise.allSettled([
         productService.getCatalog({
           isPublished: true,
           skip: 0,
@@ -150,6 +150,7 @@ export default function StorePublishScreen() {
           skip: 0,
           take: PAGE_SIZE,
         }),
+        storeAdminService.getPublishFailures(),
       ]);
 
       const productMap = new Map<string, any>();
@@ -169,6 +170,29 @@ export default function StorePublishScreen() {
           }
         });
       }
+
+      // Map failed publishings
+      if (failuresRes.status === 'fulfilled' && failuresRes.value) {
+        const mappedFailures: VayyariStarredProductItem[] = failuresRes.value.map((f) => ({
+          id: f.productId,
+          productCode: f.productCode || 'PROD',
+          title: f.title || 'Handloom Saree',
+          category: f.category || 'Saree',
+          fabric: f.fabric || 'Pure Silk',
+          price: f.price || 8000,
+          mediaCount: f.mediaCount || 0,
+          primaryImageUri: f.primaryImageUri || 'https://picsum.photos/seed/saree/600/800',
+          descriptions: [],
+          isStarred: true,
+          isPublishedToStore: false,
+          isPublished: false,
+          errorMessage: f.errorMessage,
+          failedAt: f.failedAt,
+          canRetry: f.canRetry,
+        }));
+        setFailedProducts(mappedFailures);
+      }
+
 
       // Ensure all in-store products are present in the list so published delta updates can be surfaced
       const missingInStoreIds = Array.from(inStoreMap.keys()).filter((id) => !productMap.has(id.toLowerCase()));
@@ -279,9 +303,35 @@ export default function StorePublishScreen() {
     }
   };
 
+  const handleRetryBatch = async (selectedIds: string[]) => {
+
+    if (selectedIds.length === 0) return;
+
+    try {
+      // 1. Submit retry publish job
+      const isUpdating = starredProducts.some((p) => selectedIds.includes(p.id) && p.isPublishedToStore);
+      const action = isUpdating ? 'sync_updates' : 'initial_publish';
+      const job = await storeAdminService.retryPublishFailures(selectedIds, action);
+      console.log('Dispatched retry publish job:', job);
+
+      // 2. Remove retried items from local failedProducts list
+      setFailedProducts((prev) => prev.filter((p) => !selectedIds.includes(p.id)));
+
+      // 3. Reload data from backend
+      setTimeout(() => {
+        loadData(true);
+      }, 1500);
+    } catch (err) {
+      console.error('Failed to retry publish job:', err);
+      Alert.alert('Error', 'Failed to retry publish job to Store.');
+      throw err;
+    }
+  };
+
   return (
     <AdminVayyariStorePublishPage
       products={starredProducts}
+      failedProducts={failedProducts}
       publishedCount={publishedCount}
       loading={loading}
       refreshing={refreshing}
@@ -291,8 +341,10 @@ export default function StorePublishScreen() {
       onLoadMore={handleLoadMore}
       onBack={() => router.back()}
       onPublishBatch={handlePublishBatch}
+      onRetryPublishBatch={handleRetryBatch}
       onNavigateToStoreInventory={() => router.push('/store/inventory' as any)}
       onOpenPdp={(id) => router.push(`/product/${id}` as any)}
     />
   );
 }
+
