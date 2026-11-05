@@ -333,15 +333,33 @@ public class StoreProductPublishWorker : BackgroundService
             storeTx = null;
 
             // 8. Update Publish Job counters
+            var primarySuccessUrl = mediaList.FirstOrDefault()?.Url ?? catalogProduct?.MediaUrls?.FirstOrDefault() ?? string.Empty;
+            var successObj = JsonSerializer.Serialize(new
+            {
+                jobId = evt.JobId,
+                productId = evt.ProductId,
+                productCode = productCode,
+                title = catalogProduct?.Title ?? productCode,
+                category = catalogProduct?.Category ?? "Saree",
+                fabric = catalogProduct?.Fabric ?? "Silk",
+                price = catalogProduct?.Price ?? 8000m,
+                primaryImageUri = primarySuccessUrl,
+                mediaCount = mediaList.Count,
+                action = evt.Action,
+                status = "completed",
+                publishedAt = DateTime.UtcNow
+            });
+
             const string incrementSuccessSql = @"
                 UPDATE publish_jobs 
                 SET processed_count = processed_count + 1,
+                    success_details = COALESCE(success_details, '[]'::jsonb) || @SuccessJson::jsonb,
                     status = CASE WHEN processed_count + failed_count + 1 >= total_count 
                                   THEN (CASE WHEN failed_count > 0 THEN 'partial' ELSE 'completed' END)
                                   ELSE 'in_progress' END,
                     updated_at = NOW()
                 WHERE id = @JobId;";
-            await storeConn.ExecuteAsync(incrementSuccessSql, new { JobId = evt.JobId });
+            await storeConn.ExecuteAsync(incrementSuccessSql, new { JobId = evt.JobId, SuccessJson = successObj });
 
             // 9. Emit StoreProductSyncCompletedEvent to Kafka
             var completedEvt = new StoreProductSyncCompletedEvent(

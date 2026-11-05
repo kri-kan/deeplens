@@ -71,6 +71,79 @@ export interface PublishJobResponse {
 
 export interface PublishJobStatusResponse extends PublishJobResponse {
   errorDetails?: string | null;
+  successDetails?: string | null;
+  productIds?: string | null;
+}
+
+export interface BatchProductTileItem {
+  productId: string;
+  productCode: string;
+  title: string;
+  category: string;
+  fabric?: string;
+  price?: number;
+  primaryImageUri: string;
+  mediaCount?: number;
+  status: 'completed' | 'failed';
+  error?: string;
+  timestamp?: string;
+}
+
+export function extractBatchProducts(job: PublishJobStatusResponse): BatchProductTileItem[] {
+  const items: BatchProductTileItem[] = [];
+
+  // 1. Parse successful products
+  if (job.successDetails) {
+    try {
+      const parsed = typeof job.successDetails === 'string' ? JSON.parse(job.successDetails) : job.successDetails;
+      if (Array.isArray(parsed)) {
+        parsed.forEach(p => {
+          items.push({
+            productId: p.productId,
+            productCode: p.productCode || 'PROD',
+            title: p.title || p.productCode || 'Product',
+            category: p.category || 'Saree',
+            fabric: p.fabric || 'Silk',
+            price: p.price ?? 8000,
+            primaryImageUri: p.primaryImageUri || '',
+            mediaCount: p.mediaCount ?? 0,
+            status: 'completed',
+            timestamp: p.publishedAt
+          });
+        });
+      }
+    } catch (e) {
+      console.warn('Failed to parse successDetails', e);
+    }
+  }
+
+  // 2. Parse failed products
+  if (job.errorDetails) {
+    try {
+      const parsed = typeof job.errorDetails === 'string' ? JSON.parse(job.errorDetails) : job.errorDetails;
+      if (Array.isArray(parsed)) {
+        parsed.forEach(p => {
+          items.push({
+            productId: p.productId,
+            productCode: p.productCode || 'PROD',
+            title: p.title || p.productCode || 'Product',
+            category: p.category || 'Saree',
+            fabric: p.fabric || 'Silk',
+            price: p.price ?? 8000,
+            primaryImageUri: p.primaryImageUri || '',
+            mediaCount: p.mediaCount ?? 0,
+            status: 'failed',
+            error: p.error || p.errorMessage || 'Publishing failed',
+            timestamp: p.failedAt
+          });
+        });
+      }
+    } catch (e) {
+      console.warn('Failed to parse errorDetails', e);
+    }
+  }
+
+  return items;
 }
 
 export interface PublishFailureItem {

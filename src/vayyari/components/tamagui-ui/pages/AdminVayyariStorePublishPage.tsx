@@ -126,6 +126,7 @@ export interface AdminVayyariStorePublishPageProps {
   onDismissFailures?: (selectedIds: string[]) => void;
   onRefreshJobs?: () => void;
   onNavigateToStoreInventory?: () => void;
+  onNavigateToBatches?: () => void;
   onOpenPdp?: (productId: string) => void;
   disableSafeArea?: boolean;
 }
@@ -148,6 +149,7 @@ export function AdminVayyariStorePublishPage({
   onDismissFailures,
   onRefreshJobs,
   onNavigateToStoreInventory,
+  onNavigateToBatches,
   onOpenPdp,
   disableSafeArea = false,
 }: AdminVayyariStorePublishPageProps) {
@@ -407,7 +409,7 @@ export function AdminVayyariStorePublishPage({
 
               {/* ── QUEUE / BATCHES ICON RIGHT NEXT TO HEADING ── */}
               <Pressable
-                onPress={() => setIsJobsModalOpen(true)}
+                onPress={() => onNavigateToBatches ? onNavigateToBatches() : setIsJobsModalOpen(true)}
                 hitSlop={8}
                 style={({ pressed }) => [
                   styles.queueHeaderBtn,

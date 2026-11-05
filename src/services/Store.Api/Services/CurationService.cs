@@ -1074,12 +1074,13 @@ public class CurationService : ICurationService
 
         const string sql = @"
             INSERT INTO publish_jobs (
-                id, action, status, total_count, processed_count, failed_count, requested_by, created_at, updated_at
+                id, action, status, total_count, processed_count, failed_count, requested_by, product_ids, created_at, updated_at
             ) VALUES (
-                @Id, @Action, 'queued', @TotalCount, 0, 0, @RequestedBy, NOW(), NOW()
+                @Id, @Action, 'queued', @TotalCount, 0, 0, @RequestedBy, @ProductIdsJson::jsonb, NOW(), NOW()
             )
             RETURNING id, action, status, total_count AS TotalCount, processed_count AS ProcessedCount, 
                       failed_count AS FailedCount, error_details::text AS ErrorDetails, 
+                      success_details::text AS SuccessDetails, product_ids::text AS ProductIds,
                       requested_by AS RequestedBy, created_at AS CreatedAt, updated_at AS UpdatedAt;";
 
         var job = await conn.QuerySingleAsync<PublishJobDto>(sql, new
@@ -1087,7 +1088,8 @@ public class CurationService : ICurationService
             Id = jobId,
             Action = action,
             TotalCount = totalCount,
-            RequestedBy = authorEmail
+            RequestedBy = authorEmail,
+            ProductIdsJson = JsonSerializer.Serialize(request.ProductIds ?? new List<Guid>())
         });
 
         // Publish events in background without blocking the HTTP response
@@ -1140,6 +1142,7 @@ public class CurationService : ICurationService
         const string sql = @"
             SELECT id, action, status, total_count AS TotalCount, processed_count AS ProcessedCount, 
                    failed_count AS FailedCount, error_details::text AS ErrorDetails, 
+                   success_details::text AS SuccessDetails, product_ids::text AS ProductIds,
                    requested_by AS RequestedBy, created_at AS CreatedAt, updated_at AS UpdatedAt
             FROM publish_jobs
             WHERE id = @Id;";
@@ -1155,6 +1158,7 @@ public class CurationService : ICurationService
         const string sql = @"
             SELECT id, action, status, total_count AS TotalCount, processed_count AS ProcessedCount, 
                    failed_count AS FailedCount, error_details::text AS ErrorDetails, 
+                   success_details::text AS SuccessDetails, product_ids::text AS ProductIds,
                    requested_by AS RequestedBy, created_at AS CreatedAt, updated_at AS UpdatedAt
             FROM publish_jobs
             ORDER BY created_at DESC

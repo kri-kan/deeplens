@@ -397,6 +397,7 @@ export default function StorePublishScreen() {
       onDismissFailures={handleDismissFailures}
       onRefreshJobs={() => loadData(true)}
       onNavigateToStoreInventory={() => router.push('/store/inventory' as any)}
+      onNavigateToBatches={() => router.push('/store/batches' as any)}
       onOpenPdp={(id) => router.push(`/product/${id}` as any)}
     />
   );

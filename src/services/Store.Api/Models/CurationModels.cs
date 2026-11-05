@@ -137,10 +137,12 @@ public record PublishJobDto(
     [property: JsonPropertyName("totalCount")] int TotalCount,
     [property: JsonPropertyName("processedCount")] int ProcessedCount,
     [property: JsonPropertyName("failedCount")] int FailedCount,
-    [property: JsonPropertyName("errorDetails")] string? ErrorDetails,
-    [property: JsonPropertyName("requestedBy")] string? RequestedBy,
-    [property: JsonPropertyName("createdAt")] DateTime CreatedAt,
-    [property: JsonPropertyName("updatedAt")] DateTime UpdatedAt
+    [property: JsonPropertyName("errorDetails")] string? ErrorDetails = null,
+    [property: JsonPropertyName("successDetails")] string? SuccessDetails = null,
+    [property: JsonPropertyName("productIds")] string? ProductIds = null,
+    [property: JsonPropertyName("requestedBy")] string? RequestedBy = null,
+    [property: JsonPropertyName("createdAt")] DateTime CreatedAt = default,
+    [property: JsonPropertyName("updatedAt")] DateTime UpdatedAt = default
 );
 
 public record PublishFailureDto(
