@@ -1,14 +1,13 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Pressable,
   StyleSheet,
-  ScrollView,
   ActivityIndicator,
   FlatList,
   RefreshControl,
-  TouchableOpacity,
   Alert,
+  BackHandler,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -35,35 +34,86 @@ export interface AdminStorePublishBatchesPageProps {
   refreshing?: boolean;
   onRefresh?: () => void;
   onBack?: () => void;
+  onSelectBatch?: (job: PublishJobStatusResponse) => void;
   onOpenPdp?: (productId: string) => void;
   disableSafeArea?: boolean;
 }
 
-export function AdminStorePublishBatchesPage({
-  jobs = [],
+export interface AdminStorePublishBatchDetailPageProps {
+  batch: PublishJobStatusResponse | null;
+  loading?: boolean;
+  refreshing?: boolean;
+  onRefresh?: () => void;
+  onBack?: () => void;
+  onOpenPdp?: (productId: string) => void;
+  disableSafeArea?: boolean;
+}
+
+export function formatBatchTime(dateStr: string) {
+  try {
+    const d = new Date(dateStr);
+    return `${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · ${d.toLocaleDateString([], {
+      month: 'short',
+      day: 'numeric',
+    })}`;
+  } catch {
+    return dateStr;
+  }
+}
+
+export function getBatchStatusBadge(status: string) {
+  switch (status.toLowerCase()) {
+    case 'completed':
+      return { label: 'Completed', bg: '#DCFCE7', text: '#15803D', border: '#86EFAC' };
+    case 'in_progress':
+    case 'running':
+      return { label: 'Running', bg: '#FEF3C7', text: '#B45309', border: '#FCD34D' };
+    case 'partial':
+      return { label: 'Partial', bg: '#FEF9C3', text: '#A16207', border: '#FDE047' };
+    case 'failed':
+      return { label: 'Failed', bg: '#FEE2E2', text: '#B91C1C', border: '#FCA5A5' };
+    case 'queued':
+    default:
+      return { label: 'Queued', bg: '#F3F4F6', text: '#4B5563', border: '#E5E7EB' };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DEDICATED BATCH DETAIL VIEW (3-COLUMN PRODUCT TILES)
+// ═══════════════════════════════════════════════════════════════════
+export function AdminStorePublishBatchDetailPage({
+  batch,
   loading = false,
   refreshing = false,
   onRefresh,
   onBack,
   onOpenPdp,
   disableSafeArea = false,
-}: AdminStorePublishBatchesPageProps) {
+}: AdminStorePublishBatchDetailPageProps) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const topInset = disableSafeArea ? 0 : insets.top;
   const bottomInset = disableSafeArea ? 0 : insets.bottom;
 
-  // Selected batch for product tiles drill-down view
-  const [selectedBatch, setSelectedBatch] = useState<PublishJobStatusResponse | null>(null);
-
   // Filter inside the product tiles view: 'all' | 'completed' | 'failed'
   const [tileFilter, setTileFilter] = useState<'all' | 'completed' | 'failed'>('all');
 
-  // Products extracted from selected batch
+  // Intercept Android hardware back button
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (onBack) {
+        onBack();
+        return true;
+      }
+      return false;
+    });
+    return () => sub.remove();
+  }, [onBack]);
+
   const batchProducts: BatchProductTileItem[] = useMemo(() => {
-    if (!selectedBatch) return [];
-    return extractBatchProducts(selectedBatch);
-  }, [selectedBatch]);
+    if (!batch) return [];
+    return extractBatchProducts(batch);
+  }, [batch]);
 
   const filteredBatchProducts = useMemo(() => {
     if (tileFilter === 'all') return batchProducts;
@@ -79,42 +129,63 @@ export function AdminStorePublishBatchesPage({
     [batchProducts]
   );
 
-  const formatBatchTime = (dateStr: string) => {
-    try {
-      const d = new Date(dateStr);
-      return `${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · ${d.toLocaleDateString([], {
-        month: 'short',
-        day: 'numeric',
-      })}`;
-    } catch {
-      return dateStr;
-    }
-  };
+  if (!batch) {
+    return (
+      <YStack flex={1} backgroundColor={tokens.background} paddingTop={topInset} paddingBottom={bottomInset}>
+        <XStack
+          alignItems="center"
+          paddingHorizontal={12}
+          paddingVertical={10}
+          backgroundColor={tokens.surface}
+          borderBottomWidth={1}
+          borderBottomColor={tokens.border}
+        >
+          {onBack && (
+            <Pressable
+              onPress={onBack}
+              hitSlop={8}
+              style={({ pressed }) => [
+                styles.iconBtn,
+                { backgroundColor: pressed ? 'rgba(0,0,0,0.06)' : 'transparent' },
+              ]}
+            >
+              <LuArrowLeft size={20} color={tokens.text} />
+            </Pressable>
+          )}
+          <Text fontSize={15} fontWeight="800" color={tokens.text} marginLeft={8}>
+            Batch Details
+          </Text>
+        </XStack>
+        <YStack alignItems="center" justifyContent="center" flex={1} gap={10}>
+          {loading ? (
+            <>
+              <ActivityIndicator size="large" color={tokens.accent} />
+              <Text fontSize={13} color={tokens.textMuted} fontWeight="600">
+                Loading Batch...
+              </Text>
+            </>
+          ) : (
+            <>
+              <LuLayers size={40} color={tokens.textMuted} />
+              <Text fontSize={14} fontWeight="800" color={tokens.text}>
+                Batch Not Found
+              </Text>
+            </>
+          )}
+        </YStack>
+      </YStack>
+    );
+  }
 
-  const getStatusBadge = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'completed':
-        return { label: 'Completed', bg: '#DCFCE7', text: '#15803D', border: '#86EFAC' };
-      case 'in_progress':
-      case 'running':
-        return { label: 'Running', bg: '#FEF3C7', text: '#B45309', border: '#FCD34D' };
-      case 'partial':
-        return { label: 'Partial', bg: '#FEF9C3', text: '#A16207', border: '#FDE047' };
-      case 'failed':
-        return { label: 'Failed', bg: '#FEE2E2', text: '#B91C1C', border: '#FCA5A5' };
-      case 'queued':
-      default:
-        return { label: 'Queued', bg: '#F3F4F6', text: '#4B5563', border: '#E5E7EB' };
-    }
-  };
+  const shortId = batch.id.replace(/-/g, '').substring(0, 8);
+  const statusCfg = getBatchStatusBadge(batch.status);
 
-  // ── RENDER INDIVIDUAL PRODUCT TILE (3-COLUMN GRID) ──
   const renderProductTile = ({ item }: { item: BatchProductTileItem }) => {
     const isSuccess = item.status === 'completed';
 
     return (
       <Pressable
-        key={item.productId}
+        key={`${item.productId}-${item.status}`}
         onPress={() => {
           if (isSuccess && onOpenPdp) {
             onOpenPdp(item.productId);
@@ -191,9 +262,224 @@ export function AdminStorePublishBatchesPage({
     );
   };
 
+  return (
+    <YStack flex={1} backgroundColor={tokens.background} paddingTop={topInset} paddingBottom={bottomInset}>
+      {/* Top Header */}
+      <XStack
+        alignItems="center"
+        justifyContent="space-between"
+        paddingHorizontal={12}
+        paddingVertical={10}
+        backgroundColor={tokens.surface}
+        borderBottomWidth={1}
+        borderBottomColor={tokens.border}
+      >
+        <XStack alignItems="center" gap={8} flex={1}>
+          {onBack && (
+            <Pressable
+              onPress={onBack}
+              hitSlop={8}
+              style={({ pressed }) => [
+                styles.iconBtn,
+                { backgroundColor: pressed ? 'rgba(0,0,0,0.06)' : 'transparent' },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Back to Batches List"
+            >
+              <LuArrowLeft size={20} color={tokens.text} />
+            </Pressable>
+          )}
+
+          <YStack flex={1}>
+            <XStack alignItems="center" gap={6}>
+              <Text fontSize={15} fontWeight="800" color={tokens.text}>
+                Batch #{shortId}
+              </Text>
+              <View
+                style={[
+                  styles.batchStatusPill,
+                  { backgroundColor: statusCfg.bg, borderColor: statusCfg.border },
+                ]}
+              >
+                <Text fontSize={9} fontWeight="800" color={statusCfg.text}>
+                  {statusCfg.label}
+                </Text>
+              </View>
+            </XStack>
+            <Text fontSize={10} color={tokens.textMuted}>
+              {formatBatchTime(batch.createdAt)} · {batch.totalCount} Products
+            </Text>
+          </YStack>
+        </XStack>
+
+        {onRefresh && (
+          <Pressable
+            onPress={onRefresh}
+            hitSlop={8}
+            style={({ pressed }) => [
+              styles.iconBtn,
+              { backgroundColor: pressed ? 'rgba(0,0,0,0.06)' : 'transparent' },
+            ]}
+          >
+            <LuRefreshCw size={16} color={tokens.text} />
+          </Pressable>
+        )}
+      </XStack>
+
+      {/* Filter Tabs: All, Successful, Failed */}
+      <XStack
+        backgroundColor={tokens.surface}
+        borderBottomWidth={1}
+        borderBottomColor={tokens.border}
+        paddingHorizontal={12}
+        paddingVertical={6}
+        gap={6}
+      >
+        <Pressable
+          onPress={() => setTileFilter('all')}
+          style={[
+            styles.filterTab,
+            {
+              backgroundColor: tileFilter === 'all' ? tokens.accent : 'rgba(0,0,0,0.03)',
+            },
+          ]}
+        >
+          <Text
+            fontSize={11}
+            fontWeight="700"
+            color={tileFilter === 'all' ? tokens.accentForeground : tokens.text}
+          >
+            All ({batchProducts.length > 0 ? batchProducts.length : batch.totalCount})
+          </Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => setTileFilter('completed')}
+          style={[
+            styles.filterTab,
+            {
+              backgroundColor: tileFilter === 'completed' ? '#DCFCE7' : 'rgba(0,0,0,0.03)',
+              borderColor: tileFilter === 'completed' ? '#86EFAC' : 'transparent',
+              borderWidth: tileFilter === 'completed' ? 1 : 0,
+            },
+          ]}
+        >
+          <Text
+            fontSize={11}
+            fontWeight="700"
+            color={tileFilter === 'completed' ? '#15803D' : tokens.text}
+          >
+            ✓ Success ({completedCount > 0 ? completedCount : batch.processedCount})
+          </Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => setTileFilter('failed')}
+          style={[
+            styles.filterTab,
+            {
+              backgroundColor: tileFilter === 'failed' ? '#FEE2E2' : 'rgba(0,0,0,0.03)',
+              borderColor: tileFilter === 'failed' ? '#FCA5A5' : 'transparent',
+              borderWidth: tileFilter === 'failed' ? 1 : 0,
+            },
+          ]}
+        >
+          <Text
+            fontSize={11}
+            fontWeight="700"
+            color={tileFilter === 'failed' ? '#B91C1C' : tokens.text}
+          >
+            ⚠️ Failed ({failedCount > 0 ? failedCount : batch.failedCount})
+          </Text>
+        </Pressable>
+      </XStack>
+
+      {/* Product Tiles Grid */}
+      {batchProducts.length === 0 ? (
+        <YStack alignItems="center" justifyContent="center" flex={1} gap={10} paddingHorizontal={20}>
+          <LuLayers size={40} color={tokens.textMuted} />
+          <Text fontSize={14} fontWeight="800" color={tokens.text}>
+            {batch.status === 'in_progress' ? 'Processing Batch...' : 'Batch Completed'}
+          </Text>
+          <Text fontSize={12} color={tokens.textMuted} textAlign="center" maxWidth={280}>
+            {batch.processedCount} products published successfully.
+            {batch.failedCount > 0 ? ` ${batch.failedCount} failed.` : ''}
+          </Text>
+        </YStack>
+      ) : filteredBatchProducts.length === 0 ? (
+        <YStack alignItems="center" justifyContent="center" flex={1} gap={8} paddingHorizontal={20}>
+          <Text fontSize={13} fontWeight="700" color={tokens.text}>
+            No {tileFilter === 'completed' ? 'successful' : 'failed'} products in this batch.
+          </Text>
+          <Pressable onPress={() => setTileFilter('all')} style={styles.resetPillBtn}>
+            <Text fontSize={11} fontWeight="800" color={tokens.accent}>
+              View All Products
+            </Text>
+          </Pressable>
+        </YStack>
+      ) : (
+        <FlatList
+          data={filteredBatchProducts}
+          keyExtractor={(item) => `${item.productId}-${item.status}`}
+          numColumns={3}
+          renderItem={renderProductTile}
+          columnWrapperStyle={styles.columnWrapper}
+          contentContainerStyle={{ padding: 6, paddingBottom: 60 }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            onRefresh ? (
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={tokens.accent}
+                colors={[tokens.accent]}
+              />
+            ) : undefined
+          }
+        />
+      )}
+    </YStack>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// BATCHES SUMMARY LIST PAGE
+// ═══════════════════════════════════════════════════════════════════
+export function AdminStorePublishBatchesPage({
+  jobs = [],
+  loading = false,
+  refreshing = false,
+  onRefresh,
+  onBack,
+  onSelectBatch,
+  onOpenPdp,
+  disableSafeArea = false,
+}: AdminStorePublishBatchesPageProps) {
+  const { tokens } = useTheme();
+  const insets = useSafeAreaInsets();
+  const topInset = disableSafeArea ? 0 : insets.top;
+  const bottomInset = disableSafeArea ? 0 : insets.bottom;
+
+  // Fallback internal state if onSelectBatch navigation is not provided
+  const [internalSelectedBatch, setInternalSelectedBatch] = useState<PublishJobStatusResponse | null>(null);
+
+  if (internalSelectedBatch) {
+    return (
+      <AdminStorePublishBatchDetailPage
+        batch={internalSelectedBatch}
+        loading={loading}
+        refreshing={refreshing}
+        onRefresh={onRefresh}
+        onBack={() => setInternalSelectedBatch(null)}
+        onOpenPdp={onOpenPdp}
+        disableSafeArea={disableSafeArea}
+      />
+    );
+  }
+
   // ── RENDER LEAN BATCH SUMMARY CARD ──
   const renderBatchCard = ({ item: job }: { item: PublishJobStatusResponse }) => {
-    const statusCfg = getStatusBadge(job.status);
+    const statusCfg = getBatchStatusBadge(job.status);
     const shortId = job.id.replace(/-/g, '').substring(0, 8);
     const isRunning = job.status === 'in_progress' || job.status === 'queued';
 
@@ -201,8 +487,11 @@ export function AdminStorePublishBatchesPage({
       <Pressable
         key={job.id}
         onPress={() => {
-          setSelectedBatch(job);
-          setTileFilter('all');
+          if (onSelectBatch) {
+            onSelectBatch(job);
+          } else {
+            setInternalSelectedBatch(job);
+          }
         }}
         style={({ pressed }) => [
           styles.batchCard,
@@ -291,184 +580,6 @@ export function AdminStorePublishBatchesPage({
     );
   };
 
-  // ═══════════════════════════════════════════════════════════════════
-  // VIEW 2: PRODUCT TILES DRILL-DOWN VIEW (WHEN A BATCH IS SELECTED)
-  // ═══════════════════════════════════════════════════════════════════
-  if (selectedBatch) {
-    const shortId = selectedBatch.id.replace(/-/g, '').substring(0, 8);
-    const statusCfg = getStatusBadge(selectedBatch.status);
-
-    return (
-      <YStack flex={1} backgroundColor={tokens.background} paddingTop={topInset} paddingBottom={bottomInset}>
-        {/* Top Header */}
-        <XStack
-          alignItems="center"
-          justifyContent="space-between"
-          paddingHorizontal={12}
-          paddingVertical={10}
-          backgroundColor={tokens.surface}
-          borderBottomWidth={1}
-          borderBottomColor={tokens.border}
-        >
-          <XStack alignItems="center" gap={8} flex={1}>
-            <Pressable
-              onPress={() => setSelectedBatch(null)}
-              hitSlop={8}
-              style={({ pressed }) => [
-                styles.iconBtn,
-                { backgroundColor: pressed ? 'rgba(0,0,0,0.06)' : 'transparent' },
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Back to Batches List"
-            >
-              <LuArrowLeft size={20} color={tokens.text} />
-            </Pressable>
-
-            <YStack flex={1}>
-              <XStack alignItems="center" gap={6}>
-                <Text fontSize={15} fontWeight="800" color={tokens.text}>
-                  Batch #{shortId}
-                </Text>
-                <View
-                  style={[
-                    styles.batchStatusPill,
-                    { backgroundColor: statusCfg.bg, borderColor: statusCfg.border },
-                  ]}
-                >
-                  <Text fontSize={9} fontWeight="800" color={statusCfg.text}>
-                    {statusCfg.label}
-                  </Text>
-                </View>
-              </XStack>
-              <Text fontSize={10} color={tokens.textMuted}>
-                {formatBatchTime(selectedBatch.createdAt)} · {selectedBatch.totalCount} Products
-              </Text>
-            </YStack>
-          </XStack>
-
-          {onRefresh && (
-            <Pressable
-              onPress={onRefresh}
-              hitSlop={8}
-              style={({ pressed }) => [
-                styles.iconBtn,
-                { backgroundColor: pressed ? 'rgba(0,0,0,0.06)' : 'transparent' },
-              ]}
-            >
-              <LuRefreshCw size={16} color={tokens.text} />
-            </Pressable>
-          )}
-        </XStack>
-
-        {/* Filter Tabs: All, Successful, Failed */}
-        <XStack
-          backgroundColor={tokens.surface}
-          borderBottomWidth={1}
-          borderBottomColor={tokens.border}
-          paddingHorizontal={12}
-          paddingVertical={6}
-          gap={6}
-        >
-          <Pressable
-            onPress={() => setTileFilter('all')}
-            style={[
-              styles.filterTab,
-              {
-                backgroundColor: tileFilter === 'all' ? tokens.accent : 'rgba(0,0,0,0.03)',
-              },
-            ]}
-          >
-            <Text
-              fontSize={11}
-              fontWeight="700"
-              color={tileFilter === 'all' ? tokens.accentForeground : tokens.text}
-            >
-              All ({batchProducts.length > 0 ? batchProducts.length : selectedBatch.totalCount})
-            </Text>
-          </Pressable>
-
-          <Pressable
-            onPress={() => setTileFilter('completed')}
-            style={[
-              styles.filterTab,
-              {
-                backgroundColor: tileFilter === 'completed' ? '#DCFCE7' : 'rgba(0,0,0,0.03)',
-                borderColor: tileFilter === 'completed' ? '#86EFAC' : 'transparent',
-                borderWidth: tileFilter === 'completed' ? 1 : 0,
-              },
-            ]}
-          >
-            <Text
-              fontSize={11}
-              fontWeight="700"
-              color={tileFilter === 'completed' ? '#15803D' : tokens.text}
-            >
-              ✓ Success ({completedCount > 0 ? completedCount : selectedBatch.processedCount})
-            </Text>
-          </Pressable>
-
-          <Pressable
-            onPress={() => setTileFilter('failed')}
-            style={[
-              styles.filterTab,
-              {
-                backgroundColor: tileFilter === 'failed' ? '#FEE2E2' : 'rgba(0,0,0,0.03)',
-                borderColor: tileFilter === 'failed' ? '#FCA5A5' : 'transparent',
-                borderWidth: tileFilter === 'failed' ? 1 : 0,
-              },
-            ]}
-          >
-            <Text
-              fontSize={11}
-              fontWeight="700"
-              color={tileFilter === 'failed' ? '#B91C1C' : tokens.text}
-            >
-              ⚠️ Failed ({failedCount > 0 ? failedCount : selectedBatch.failedCount})
-            </Text>
-          </Pressable>
-        </XStack>
-
-        {/* Product Tiles Grid */}
-        {batchProducts.length === 0 ? (
-          <YStack alignItems="center" justifyContent="center" flex={1} gap={10} paddingHorizontal={20}>
-            <LuLayers size={40} color={tokens.textMuted} />
-            <Text fontSize={14} fontWeight="800" color={tokens.text}>
-              {selectedBatch.status === 'in_progress' ? 'Processing Batch...' : 'Batch Completed'}
-            </Text>
-            <Text fontSize={12} color={tokens.textMuted} textAlign="center" maxWidth={280}>
-              {selectedBatch.processedCount} products published successfully.
-              {selectedBatch.failedCount > 0 ? ` ${selectedBatch.failedCount} failed.` : ''}
-            </Text>
-          </YStack>
-        ) : filteredBatchProducts.length === 0 ? (
-          <YStack alignItems="center" justifyContent="center" flex={1} gap={8} paddingHorizontal={20}>
-            <Text fontSize={13} fontWeight="700" color={tokens.text}>
-              No {tileFilter === 'completed' ? 'successful' : 'failed'} products in this batch.
-            </Text>
-            <Pressable onPress={() => setTileFilter('all')} style={styles.resetPillBtn}>
-              <Text fontSize={11} fontWeight="800" color={tokens.accent}>
-                View All Products
-              </Text>
-            </Pressable>
-          </YStack>
-        ) : (
-          <FlatList
-            data={filteredBatchProducts}
-            keyExtractor={(item) => `${item.productId}-${item.status}`}
-            numColumns={3}
-            renderItem={renderProductTile}
-            columnWrapperStyle={styles.columnWrapper}
-            contentContainerStyle={{ padding: 6, paddingBottom: 60 }}
-            showsVerticalScrollIndicator={false}
-          />
-        )}
-      </YStack>
-    );
-  }
-
-  // ═══════════════════════════════════════════════════════════════════
-  // VIEW 1: BATCHES SUMMARY LIST VIEW
-  // ═══════════════════════════════════════════════════════════════════
   return (
     <YStack flex={1} backgroundColor={tokens.background} paddingTop={topInset} paddingBottom={bottomInset}>
       {/* Top Header */}

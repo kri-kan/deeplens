@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { AdminStorePublishBatchesPage } from '@/components/tamagui-ui/pages/AdminStorePublishBatchesPage';
 import { storeAdminService, PublishJobStatusResponse } from '@/services/storeAdminService';
 
-export default function StorePublishBatchesScreen() {
+export default function StorePublishBatchesListScreen() {
   const router = useRouter();
   const [jobs, setJobs] = useState<PublishJobStatusResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,6 +54,7 @@ export default function StorePublishBatchesScreen() {
       refreshing={refreshing}
       onRefresh={() => fetchJobs(true)}
       onBack={() => router.back()}
+      onSelectBatch={(job) => router.push(`/store/batches/${job.id}` as any)}
       onOpenPdp={(id) => router.push(`/product/${id}` as any)}
     />
   );
