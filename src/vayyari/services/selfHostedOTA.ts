@@ -7,9 +7,15 @@ import {
   OTAStage,
   OTAProgressInfo,
   OTAListener,
+  OTAStatusRecord,
   buildCandidateHosts,
   calculateDownloadProgress,
   isUpdateNewer,
+  isNativeOTAEligible,
+  validateBundleIntegrity,
+  createPendingStatusRecord,
+  markStatusRecordHealthy,
+  shouldPurgeAndRevert,
   defaultOTAStateManager,
 } from '../utils/otaUtils';
 
@@ -19,15 +25,20 @@ export {
   OTAStage,
   OTAProgressInfo,
   OTAListener,
+  OTAStatusRecord,
   buildCandidateHosts,
   calculateDownloadProgress,
   isUpdateNewer,
+  isNativeOTAEligible,
+  validateBundleIntegrity,
 };
 
-const OTA_DIR = `${FileSystem.documentDirectory}ota/`;
-const ACTIVE_DIR = `${OTA_DIR}active/`;
-const STAGING_DIR = `${OTA_DIR}staging/`;
-const VERSION_FILE = `${OTA_DIR}version.json`;
+const getOtaDir = () => `${FileSystem.documentDirectory || ''}ota/`;
+const getActiveDir = () => `${getOtaDir()}active/`;
+const getStagingDir = () => `${getOtaDir()}staging/`;
+const getBackupDir = () => `${getOtaDir()}backup/`;
+const getVersionFile = () => `${getOtaDir()}version.json`;
+const getStatusFile = () => `${getOtaDir()}status.json`;
 
 // Native binary version of this APK (increments only when native code/modules change)
 const CURRENT_NATIVE_VERSION = 1;
@@ -54,10 +65,19 @@ export function getCandidateHosts(): string[] {
  * Falls back to base 1.0.0.0 if running the bundled APK asset.
  */
 export async function getLocalOTAVersion(): Promise<LocalOTAVersion> {
+  if (!isNativeOTAEligible(Platform.OS)) {
+    return {
+      version: 'web',
+      baseVersion: 'web',
+      subversion: 0,
+      installedAt: '',
+    };
+  }
+
   try {
-    const fileInfo = await FileSystem.getInfoAsync(VERSION_FILE);
+    const fileInfo = await FileSystem.getInfoAsync(getVersionFile());
     if (fileInfo.exists) {
-      const content = await FileSystem.readAsStringAsync(VERSION_FILE);
+      const content = await FileSystem.readAsStringAsync(getVersionFile());
       const parsed = JSON.parse(content) as LocalOTAVersion;
       if (parsed?.version && defaultOTAStateManager.getState().currentVersion === '1.0.0.0') {
         defaultOTAStateManager.update({ currentVersion: parsed.version });
@@ -196,18 +216,19 @@ export async function checkAndApplyOTAUpdate(options?: {
     });
 
     // Prepare staging directory
-    const stagingInfo = await FileSystem.getInfoAsync(STAGING_DIR);
+    const stagingDir = getStagingDir();
+    const stagingInfo = await FileSystem.getInfoAsync(stagingDir);
     if (stagingInfo.exists) {
-      await FileSystem.deleteAsync(STAGING_DIR, { idempotent: true });
+      await FileSystem.deleteAsync(stagingDir, { idempotent: true });
     }
-    await FileSystem.makeDirectoryAsync(STAGING_DIR, { intermediates: true });
+    await FileSystem.makeDirectoryAsync(stagingDir, { intermediates: true });
 
     // Download bundle into staging
     const downloadUrl = manifest.bundlePath
       ? `http://${workingHost}/admin-updates/${manifest.bundlePath}`
       : manifest.bundleUrl;
 
-    const stagedBundlePath = `${STAGING_DIR}bundle.js`;
+    const stagedBundlePath = `${stagingDir}bundle.js`;
     console.log(`[SelfHostedOTA] Downloading bundle from ${downloadUrl}...`);
 
     let downloadSucceeded = false;
@@ -252,25 +273,54 @@ export async function checkAndApplyOTAUpdate(options?: {
 
     // Verify downloaded bundle integrity
     const downloadedInfo = await FileSystem.getInfoAsync(stagedBundlePath, { md5: true });
-    if (!downloadedInfo.exists || downloadedInfo.size === 0) {
-      throw new Error('Downloaded bundle is empty or corrupted');
+    const integrity = validateBundleIntegrity(downloadedInfo, manifest);
+    if (!integrity.valid) {
+      throw new Error(`Bundle validation failed: ${integrity.reason}`);
     }
 
-    if (manifest.bundleMd5 && downloadedInfo.md5 && downloadedInfo.md5 !== manifest.bundleMd5) {
-      throw new Error(
-        `Bundle MD5 mismatch: expected ${manifest.bundleMd5}, got ${downloadedInfo.md5}`
-      );
+    // Atomically promote staging to active with safety backup
+    const activeDir = getActiveDir();
+    const backupDir = getBackupDir();
+
+    // 1. If old backup exists, clear it
+    const backupInfo = await FileSystem.getInfoAsync(backupDir);
+    if (backupInfo.exists) {
+      await FileSystem.deleteAsync(backupDir, { idempotent: true });
     }
 
-    // Atomically promote staging to active
-    const activeInfo = await FileSystem.getInfoAsync(ACTIVE_DIR);
+    // 2. Move existing active to backup (protecting current working code)
+    const activeInfo = await FileSystem.getInfoAsync(activeDir);
     if (activeInfo.exists) {
-      await FileSystem.deleteAsync(ACTIVE_DIR, { idempotent: true });
+      await FileSystem.moveAsync({
+        from: activeDir,
+        to: backupDir,
+      });
     }
-    await FileSystem.moveAsync({
-      from: STAGING_DIR,
-      to: ACTIVE_DIR,
-    });
+
+    try {
+      // 3. Move newly staged bundle to active
+      await FileSystem.moveAsync({
+        from: stagingDir,
+        to: activeDir,
+      });
+
+      // 4. Mark status.json with pending_validation
+      const pendingStatus = createPendingStatusRecord(manifest.version);
+      await FileSystem.writeAsStringAsync(getStatusFile(), JSON.stringify(pendingStatus, null, 2));
+
+      // 5. Successful promotion - safely remove backup
+      const postBackupInfo = await FileSystem.getInfoAsync(backupDir);
+      if (postBackupInfo.exists) {
+        await FileSystem.deleteAsync(backupDir, { idempotent: true });
+      }
+    } catch (moveErr) {
+      console.error('[SelfHostedOTA] Promotion error, attempting restore from backup:', moveErr);
+      const postBackupInfo = await FileSystem.getInfoAsync(backupDir);
+      if (postBackupInfo.exists) {
+        await FileSystem.moveAsync({ from: backupDir, to: activeDir });
+      }
+      throw moveErr;
+    }
 
     // Write new local version file
     const newVersionData: LocalOTAVersion = {
@@ -280,7 +330,7 @@ export async function checkAndApplyOTAUpdate(options?: {
       commitSha: manifest.commitSha,
       installedAt: new Date().toISOString(),
     };
-    await FileSystem.writeAsStringAsync(VERSION_FILE, JSON.stringify(newVersionData, null, 2));
+    await FileSystem.writeAsStringAsync(getVersionFile(), JSON.stringify(newVersionData, null, 2));
 
     console.log(
       `[SelfHostedOTA] ✅ Successfully applied OTA update ${manifest.version}. It will be loaded on next restart.`
@@ -320,3 +370,45 @@ export async function checkAndApplyOTAUpdate(options?: {
     isCheckingOrDownloading = false;
   }
 }
+
+/**
+ * Confirms that the newly loaded OTA bundle booted stably without crashing.
+ * Marks the status record as 'stable' and resets boot attempts to 0.
+ */
+export async function markOTABundleHealthy(): Promise<void> {
+  if (!isNativeOTAEligible(Platform.OS)) return;
+  try {
+    const statusFile = getStatusFile();
+    const info = await FileSystem.getInfoAsync(statusFile);
+    if (info.exists) {
+      const content = await FileSystem.readAsStringAsync(statusFile);
+      const parsed = JSON.parse(content) as OTAStatusRecord;
+      if (parsed && parsed.status === 'pending_validation') {
+        const healthy = markStatusRecordHealthy(parsed);
+        await FileSystem.writeAsStringAsync(statusFile, JSON.stringify(healthy, null, 2));
+        console.log(`[SelfHostedOTA] 🛡️ Marked OTA bundle v${healthy.version} as STABLE and HEALTHY.`);
+      }
+    }
+  } catch (err) {
+    console.warn('[SelfHostedOTA] Failed to mark OTA bundle healthy:', err);
+  }
+}
+
+/**
+ * Retrieves the current boot/rollout health status of the active bundle.
+ */
+export async function getOTABundleStatus(): Promise<OTAStatusRecord | null> {
+  if (!isNativeOTAEligible(Platform.OS)) return null;
+  try {
+    const statusFile = getStatusFile();
+    const info = await FileSystem.getInfoAsync(statusFile);
+    if (info.exists) {
+      const content = await FileSystem.readAsStringAsync(statusFile);
+      return JSON.parse(content) as OTAStatusRecord;
+    }
+  } catch (err) {
+    console.warn('[SelfHostedOTA] Failed to read OTA bundle status:', err);
+  }
+  return null;
+}
+

@@ -6,6 +6,9 @@ import {
   isUpdateNewer,
   isNativeOTAEligible,
   validateBundleIntegrity,
+  createPendingStatusRecord,
+  markStatusRecordHealthy,
+  shouldPurgeAndRevert,
   OTAStateManager,
   OTAProgressInfo,
 } from '../utils/otaUtils';
@@ -132,5 +135,39 @@ describe('Self-Hosted OTA Utility & State Manager Tests', () => {
       true
     );
   });
+
+  test('OTA status state machine handles pending, healthy, and crash-loop detection correctly', () => {
+    // 1. New pending record
+    const pending = createPendingStatusRecord('1.0.0.210');
+    assert.equal(pending.version, '1.0.0.210');
+    assert.equal(pending.status, 'pending_validation');
+    assert.equal(pending.bootAttempts, 0);
+    assert.ok(pending.updatedAt);
+
+    // Initial pending should not trigger purge
+    assert.equal(shouldPurgeAndRevert(pending), false);
+
+    // 2. Healthy transition
+    const healthy = markStatusRecordHealthy(pending);
+    assert.equal(healthy.version, '1.0.0.210');
+    assert.equal(healthy.status, 'stable');
+    assert.equal(healthy.bootAttempts, 0);
+    assert.equal(shouldPurgeAndRevert(healthy), false);
+
+    // 3. Crash loop threshold: bootAttempts >= 2
+    const crashedOnce = { ...pending, bootAttempts: 1 };
+    assert.equal(shouldPurgeAndRevert(crashedOnce), false);
+
+    const crashedTwice = { ...pending, bootAttempts: 2 };
+    assert.equal(shouldPurgeAndRevert(crashedTwice), true);
+
+    const explicitlyFailed = { ...pending, status: 'failed' as const };
+    assert.equal(shouldPurgeAndRevert(explicitlyFailed), true);
+
+    // Safe fallbacks for missing/null records
+    assert.equal(shouldPurgeAndRevert(null), false);
+    assert.equal(shouldPurgeAndRevert(undefined), false);
+  });
 });
+
 

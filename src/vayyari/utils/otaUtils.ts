@@ -37,6 +37,8 @@ export interface OTAProgressInfo {
   workingHost?: string;
 }
 
+export type OTAListener = (info: OTAProgressInfo) => void;
+
 export type OTABootStatus = 'pending_validation' | 'stable' | 'failed' | 'crashed_reverted';
 
 export interface OTAStatusRecord {
@@ -75,6 +77,38 @@ export function validateBundleIntegrity(
     };
   }
   return { valid: true };
+}
+
+/**
+ * Creates a new pending validation status record for a freshly staged bundle.
+ */
+export function createPendingStatusRecord(version: string): OTAStatusRecord {
+  return {
+    version,
+    status: 'pending_validation',
+    bootAttempts: 0,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Transitions a status record to stable, resetting boot attempts.
+ */
+export function markStatusRecordHealthy(current: OTAStatusRecord): OTAStatusRecord {
+  return {
+    ...current,
+    status: 'stable',
+    bootAttempts: 0,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Determines whether the bundle has repeatedly crashed or failed, requiring rollback.
+ */
+export function shouldPurgeAndRevert(record?: OTAStatusRecord | null): boolean {
+  if (!record) return false;
+  return record.status === 'failed' || (record.bootAttempts ?? 0) >= 2;
 }
 
 /**
