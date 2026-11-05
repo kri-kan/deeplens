@@ -4,6 +4,8 @@ import {
   buildCandidateHosts,
   calculateDownloadProgress,
   isUpdateNewer,
+  isNativeOTAEligible,
+  validateBundleIntegrity,
   OTAStateManager,
   OTAProgressInfo,
 } from '../utils/otaUtils';
@@ -98,4 +100,37 @@ describe('Self-Hosted OTA Utility & State Manager Tests', () => {
       true
     );
   });
+
+  test('isNativeOTAEligible strictly allows android and ios while rejecting web and unknown platforms', () => {
+    assert.equal(isNativeOTAEligible('android'), true);
+    assert.equal(isNativeOTAEligible('ios'), true);
+    assert.equal(isNativeOTAEligible('web'), false);
+    assert.equal(isNativeOTAEligible('windows'), false);
+    assert.equal(isNativeOTAEligible('macos'), false);
+    assert.equal(isNativeOTAEligible(''), false);
+    assert.equal(isNativeOTAEligible(undefined as any), false);
+  });
+
+  test('validateBundleIntegrity catches missing files, empty size, and MD5 mismatches', () => {
+    // Non-existent file
+    assert.equal(validateBundleIntegrity({ exists: false }, { bundleMd5: 'abc' }).valid, false);
+    // Zero size
+    assert.equal(validateBundleIntegrity({ exists: true, size: 0 }, {}).valid, false);
+    // MD5 mismatch
+    assert.equal(validateBundleIntegrity({ exists: true, size: 100, md5: 'xyz' }, { bundleMd5: 'abc' }).valid, false);
+    // Valid match
+    assert.equal(
+      validateBundleIntegrity(
+        { exists: true, size: 100, md5: 'abc' },
+        { bundleMd5: 'abc', bundleSize: 100 }
+      ).valid,
+      true
+    );
+    // Valid without MD5 specified in manifest
+    assert.equal(
+      validateBundleIntegrity({ exists: true, size: 100 }, {}).valid,
+      true
+    );
+  });
 });
+

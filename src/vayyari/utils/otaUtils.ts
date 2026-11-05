@@ -37,7 +37,45 @@ export interface OTAProgressInfo {
   workingHost?: string;
 }
 
-export type OTAListener = (info: OTAProgressInfo) => void;
+export type OTABootStatus = 'pending_validation' | 'stable' | 'failed' | 'crashed_reverted';
+
+export interface OTAStatusRecord {
+  version: string;
+  status: OTABootStatus;
+  bootAttempts: number;
+  updatedAt: string;
+  error?: string;
+}
+
+/**
+ * Strictly limits OTA operations to native Android and iOS environments.
+ * Web, PWAs, desktop environments return false.
+ */
+export function isNativeOTAEligible(platform?: string): boolean {
+  return platform === 'android' || platform === 'ios';
+}
+
+/**
+ * Validates integrity of a downloaded bundle prior to promoting it to active.
+ */
+export function validateBundleIntegrity(
+  fileInfo: { exists: boolean; size?: number; md5?: string },
+  manifest: { bundleSize?: number; bundleMd5?: string }
+): { valid: boolean; reason?: string } {
+  if (!fileInfo.exists) {
+    return { valid: false, reason: 'Downloaded bundle file does not exist on disk' };
+  }
+  if (!fileInfo.size || fileInfo.size === 0) {
+    return { valid: false, reason: 'Downloaded bundle is 0 bytes / empty' };
+  }
+  if (manifest.bundleMd5 && fileInfo.md5 && fileInfo.md5.toLowerCase() !== manifest.bundleMd5.toLowerCase()) {
+    return {
+      valid: false,
+      reason: `MD5 mismatch: expected ${manifest.bundleMd5}, got ${fileInfo.md5}`,
+    };
+  }
+  return { valid: true };
+}
 
 /**
  * Builds candidate hosts for checking OTA updates across LAN, Tailscale, and public DNS.
