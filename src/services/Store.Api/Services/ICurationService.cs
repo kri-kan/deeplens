@@ -18,7 +18,9 @@ public interface ICurationService
     Task<bool> DismissReviewAsync(Guid id);
     Task<PublishJobDto> CreatePublishJobAsync(SubmitPublishJobRequest request, string authorEmail, CancellationToken ct = default);
     Task<PublishJobDto?> GetPublishJobAsync(Guid jobId, CancellationToken ct = default);
+    Task<List<PublishJobDto>> GetRecentPublishJobsAsync(int limit = 20, CancellationToken ct = default);
     Task<List<PublishFailureDto>> GetPublishFailuresAsync(CancellationToken ct = default);
     Task<PublishJobDto> RetryPublishFailuresAsync(RetryPublishBatchRequest request, string authorEmail, CancellationToken ct = default);
+    Task<int> DismissPublishFailuresAsync(List<Guid> productIds, CancellationToken ct = default);
 }
 

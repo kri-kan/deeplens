@@ -134,4 +134,61 @@ describe('WhatsApp Review Inbox: Data Structures & Filtering', () => {
     assert.ok(deepLinkPath.includes('highlightGroupId=grp-zoning-001'));
     assert.ok(deepLinkPath.includes('initialZoningMode=true'));
   });
+
+  test('Review card prints actual chat message timestamp (lastMessageAt) in IST', () => {
+    const { formatISTTimestamp } = require('../utils/date-format');
+    const itemWithMsgTime: ReviewInboxItem = {
+      groupId: 'product_120363218752966769_1730790000',
+      jid: '120363218752966769@g.us',
+      chatName: 'Harley Reseller Group',
+      vendorName: 'Harley Exports',
+      status: 'needs_review',
+      reviewStage: 'qualification',
+      errorDetail: 'Missing price tag',
+      mediaCount: 5,
+      textCount: 1,
+      lastMessageAt: '2026-11-05T07:30:00.000Z',
+      updatedAt: '2026-11-05T08:15:00.000Z',
+      createdAt: '2026-11-05T08:00:00.000Z',
+      description: '',
+      sampleMediaUrls: [],
+    };
+
+    const formatted = formatISTTimestamp(
+      itemWithMsgTime.lastMessageAt || itemWithMsgTime.updatedAt || itemWithMsgTime.createdAt,
+      itemWithMsgTime.groupId
+    );
+
+    // 07:30 UTC is 13:00 IST (1:00 PM)
+    assert.ok(formatted.includes('1:00 PM'), `Expected formatted timestamp to reflect 1:00 PM IST, got: ${formatted}`);
+  });
+
+  test('Review card falls back to updatedAt or createdAt when lastMessageAt is undefined/null', () => {
+    const { formatISTTimestamp } = require('../utils/date-format');
+    const itemWithoutMsgTime: ReviewInboxItem = {
+      groupId: 'product_120363218752966769_1730790000',
+      jid: '120363218752966769@g.us',
+      chatName: 'Harley Reseller Group',
+      vendorName: 'Harley Exports',
+      status: 'needs_review',
+      reviewStage: 'qualification',
+      errorDetail: 'Missing price tag',
+      mediaCount: 5,
+      textCount: 1,
+      lastMessageAt: null,
+      updatedAt: '2026-11-05T05:00:00.000Z',
+      createdAt: '2026-11-05T04:30:00.000Z',
+      description: '',
+      sampleMediaUrls: [],
+    };
+
+    const formatted = formatISTTimestamp(
+      itemWithoutMsgTime.lastMessageAt || itemWithoutMsgTime.updatedAt || itemWithoutMsgTime.createdAt,
+      itemWithoutMsgTime.groupId
+    );
+
+    // 05:00 UTC is 10:30 AM IST
+    assert.ok(formatted.includes('10:30 AM'), `Expected fallback timestamp to reflect 10:30 AM IST, got: ${formatted}`);
+  });
 });
+

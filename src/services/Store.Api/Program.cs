@@ -761,6 +761,15 @@ app.MapGet("/api/v1/admin/products/publish-jobs/{id}", async (Guid id, ICuration
 .WithName("AdminGetPublishJob")
 .WithOpenApi();
 
+// 1b-list. List Recent Publish Jobs
+app.MapGet("/api/v1/admin/products/publish-jobs", async ([FromQuery] int? limit, ICurationService curationService) =>
+{
+    var jobs = await curationService.GetRecentPublishJobsAsync(limit ?? 20);
+    return Results.Ok(jobs);
+})
+.WithName("AdminGetRecentPublishJobs")
+.WithOpenApi();
+
 // 1c. Get Failed Publishings Queue
 app.MapGet("/api/v1/admin/products/publish-failures", async (ICurationService curationService) =>
 {
@@ -778,6 +787,15 @@ app.MapPost("/api/v1/admin/products/publish-failures/retry", async ([FromBody] R
     return Results.Accepted($"/api/v1/admin/products/publish-jobs/{job.Id}", job);
 })
 .WithName("AdminRetryPublishFailures")
+.WithOpenApi();
+
+// 1e. Dismiss / Ignore Failed Product Publishings
+app.MapPost("/api/v1/admin/products/publish-failures/dismiss", async ([FromBody] DismissPublishFailuresRequest request, ICurationService curationService) =>
+{
+    var count = await curationService.DismissPublishFailuresAsync(request.ProductIds);
+    return Results.Ok(new { dismissedCount = count });
+})
+.WithName("AdminDismissPublishFailures")
 .WithOpenApi();
 
 

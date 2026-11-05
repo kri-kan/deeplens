@@ -27,8 +27,11 @@ import {
   LuChevronDown,
   LuChevronUp,
   LuX,
+  LuActivity,
+  LuClock,
 } from '../icons/lu';
 import { useTheme } from '@/theme';
+import { PublishJobStatusResponse } from '@/services/storeAdminService';
 
 import {
   hasPendingStoreUpdates,
@@ -72,6 +75,8 @@ export type PriceRangeOption = 'all' | 'under_5k' | '5k_10k' | '10k_20k' | 'abov
 export interface AdminVayyariStorePublishPageProps {
   products?: VayyariStarredProductItem[];
   failedProducts?: VayyariStarredProductItem[];
+  jobs?: PublishJobStatusResponse[];
+  activeJob?: PublishJobStatusResponse | null;
   publishedCount?: number;
   loading?: boolean;
   refreshing?: boolean;
@@ -82,6 +87,8 @@ export interface AdminVayyariStorePublishPageProps {
   onBack?: () => void;
   onPublishBatch?: (selectedIds: string[]) => void;
   onRetryPublishBatch?: (selectedIds: string[]) => void;
+  onDismissFailures?: (selectedIds: string[]) => void;
+  onRefreshJobs?: () => void;
   onNavigateToStoreInventory?: () => void;
   onOpenPdp?: (productId: string) => void;
   disableSafeArea?: boolean;
@@ -107,6 +114,8 @@ export const SORT_OPTIONS: { id: StoreSortOption; label: string }[] = [
 export function AdminVayyariStorePublishPage({
   products = [],
   failedProducts = [],
+  jobs = [],
+  activeJob = null,
   publishedCount = 0,
   loading = false,
   refreshing = false,
@@ -117,6 +126,8 @@ export function AdminVayyariStorePublishPage({
   onBack,
   onPublishBatch,
   onRetryPublishBatch,
+  onDismissFailures,
+  onRefreshJobs,
   onNavigateToStoreInventory,
   onOpenPdp,
   disableSafeArea = false,
@@ -134,8 +145,15 @@ export function AdminVayyariStorePublishPage({
   const [selectedPriceRange, setSelectedPriceRange] = useState<PriceRangeOption>('all');
   const [selectedSort, setSelectedSort] = useState<StoreSortOption>('newest');
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
+  const [isJobsModalOpen, setIsJobsModalOpen] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishSuccessToast, setPublishSuccessToast] = useState<string | null>(null);
+
+  const hasActiveJob = useMemo(() => {
+    return Boolean(
+      activeJob && (activeJob.status === 'in_progress' || activeJob.status === 'queued')
+    );
+  }, [activeJob]);
 
   const publishUpdatesCount = useMemo(() => filterPublishUpdatesQueue(products).length, [products]);
   const allStarredCount = useMemo(
@@ -320,9 +338,23 @@ export function AdminVayyariStorePublishPage({
               zIndex: 10,
             }}
           >
-            <Text fontSize={8} fontWeight="700" color="#fff" numberOfLines={2}>
-              ⚠️ {product.errorMessage}
-            </Text>
+            <XStack alignItems="center" justifyContent="space-between">
+              <Text fontSize={8} fontWeight="700" color="#fff" numberOfLines={2} flex={1}>
+                ⚠️ {product.errorMessage}
+              </Text>
+              {onDismissFailures && (
+                <Pressable
+                  hitSlop={8}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    onDismissFailures([product.id]);
+                  }}
+                  style={{ padding: 2, marginLeft: 2 }}
+                >
+                  <LuX size={10} color="#fff" />
+                </Pressable>
+              )}
+            </XStack>
           </View>
         )}
 
@@ -401,22 +433,94 @@ export function AdminVayyariStorePublishPage({
           </YStack>
         </XStack>
 
-        {onNavigateToStoreInventory && (
+        <XStack alignItems="center" gap={6}>
+          {/* Jobs / Activity History Button */}
           <Pressable
-            onPress={onNavigateToStoreInventory}
+            onPress={() => setIsJobsModalOpen(true)}
             style={({ pressed }) => [
               styles.navInventoryBtn,
-              { backgroundColor: pressed ? 'rgba(0,0,0,0.08)' : 'rgba(0,0,0,0.04)' },
+              {
+                backgroundColor: pressed
+                  ? 'rgba(0,0,0,0.08)'
+                  : hasActiveJob
+                  ? '#FEF3C7'
+                  : 'rgba(0,0,0,0.04)',
+                borderColor: hasActiveJob ? '#F59E0B' : 'transparent',
+                borderWidth: hasActiveJob ? 1 : 0,
+              },
             ]}
           >
             <XStack alignItems="center" gap={4}>
-              <Text fontSize={11} fontWeight="800" color={tokens.accent}>
-                🏪 In Store ({publishedCount}) ➔
+              <LuActivity size={13} color={hasActiveJob ? '#D97706' : tokens.text} />
+              <Text fontSize={11} fontWeight="800" color={hasActiveJob ? '#D97706' : tokens.text}>
+                {hasActiveJob ? 'Running...' : 'Jobs'}
               </Text>
             </XStack>
           </Pressable>
-        )}
+
+          {onNavigateToStoreInventory && (
+            <Pressable
+              onPress={onNavigateToStoreInventory}
+              style={({ pressed }) => [
+                styles.navInventoryBtn,
+                { backgroundColor: pressed ? 'rgba(0,0,0,0.08)' : 'rgba(0,0,0,0.04)' },
+              ]}
+            >
+              <XStack alignItems="center" gap={4}>
+                <Text fontSize={11} fontWeight="800" color={tokens.accent}>
+                  🏪 In Store ({publishedCount}) ➔
+                </Text>
+              </XStack>
+            </Pressable>
+          )}
+        </XStack>
       </XStack>
+
+      {/* ── ACTIVE JOB PROGRESS BANNER ── */}
+      {hasActiveJob && activeJob && (
+        <Pressable onPress={() => setIsJobsModalOpen(true)}>
+          <XStack
+            backgroundColor="#FEF3C7"
+            borderBottomWidth={1}
+            borderBottomColor="#F59E0B"
+            paddingHorizontal={12}
+            paddingVertical={8}
+            alignItems="center"
+            justifyContent="space-between"
+          >
+            <YStack flex={1} marginRight={10}>
+              <XStack alignItems="center" justifyContent="space-between" marginBottom={4}>
+                <XStack alignItems="center" gap={6}>
+                  <ActivityIndicator size="small" color="#D97706" />
+                  <Text fontSize={11} fontWeight="800" color="#92400E">
+                    Publishing Batch #{activeJob.id.substring(0, 8)}...
+                  </Text>
+                </XStack>
+                <Text fontSize={10} fontWeight="800" color="#B45309">
+                  {activeJob.processedCount} / {activeJob.totalCount} ({Math.round((activeJob.processedCount / (activeJob.totalCount || 1)) * 100)}%)
+                </Text>
+              </XStack>
+              <View
+                style={{
+                  height: 4,
+                  backgroundColor: '#FDE68A',
+                  borderRadius: 2,
+                  overflow: 'hidden',
+                }}
+              >
+                <View
+                  style={{
+                    height: 4,
+                    backgroundColor: '#D97706',
+                    width: `${Math.min(100, Math.round((activeJob.processedCount / (activeJob.totalCount || 1)) * 100))}%`,
+                  }}
+                />
+              </View>
+            </YStack>
+            <LuChevronDown size={14} color="#92400E" />
+          </XStack>
+        </Pressable>
+      )}
 
       {/* ── QUEUE SELECTOR TABS ── */}
       <XStack
@@ -774,42 +878,85 @@ export function AdminVayyariStorePublishPage({
           paddingTop={10}
           paddingBottom={bottomInset + 12}
         >
-          <Pressable
-            onPress={handleTriggerPublish}
-            disabled={isPublishing}
-            style={({ pressed }) => [
-              styles.publishBtn,
-              {
-                backgroundColor: activeQueue === 'failed' ? '#DC2626' : tokens.accent,
-                opacity: pressed || isPublishing ? 0.9 : 1,
-              },
-            ]}
-          >
-            <XStack alignItems="center" justifyContent="center" gap={8}>
-              {activeQueue === 'failed' ? (
-                <LuRotateCcw size={16} color="#fff" />
-              ) : (
-                <LuSparkles size={16} color={tokens.accentForeground} />
+          {activeQueue === 'failed' ? (
+            <XStack gap={8} width="100%">
+              {onDismissFailures && (
+                <Pressable
+                  onPress={() => {
+                    const idsToDismiss = [...selectedIds];
+                    setSelectedIds([]);
+                    onDismissFailures(idsToDismiss);
+                    setPublishSuccessToast(`Dismissed ${idsToDismiss.length} product${idsToDismiss.length === 1 ? '' : 's'} from failed queue.`);
+                    setTimeout(() => setPublishSuccessToast(null), 3500);
+                  }}
+                  style={({ pressed }) => [
+                    styles.publishBtn,
+                    {
+                      flex: 1,
+                      backgroundColor: pressed ? 'rgba(0,0,0,0.08)' : 'rgba(0,0,0,0.05)',
+                      borderWidth: 1,
+                      borderColor: tokens.border,
+                    },
+                  ]}
+                >
+                  <XStack alignItems="center" justifyContent="center" gap={6}>
+                    <LuX size={15} color={tokens.textMuted} />
+                    <Text fontSize={13} fontWeight="700" color={tokens.textMuted}>
+                      Dismiss ({selectedIds.length})
+                    </Text>
+                  </XStack>
+                </Pressable>
               )}
-              <Text
-                fontSize={14}
-                fontWeight="800"
-                color={activeQueue === 'failed' ? '#fff' : tokens.accentForeground}
+              <Pressable
+                onPress={handleTriggerPublish}
+                disabled={isPublishing}
+                style={({ pressed }) => [
+                  styles.publishBtn,
+                  {
+                    flex: onDismissFailures ? 1.4 : 1,
+                    backgroundColor: '#DC2626',
+                    opacity: pressed || isPublishing ? 0.9 : 1,
+                  },
+                ]}
               >
-                {isPublishing
-                  ? (activeQueue === 'failed'
-                      ? 'Retrying Publish...'
-                      : activeQueue === 'publish_updates'
-                      ? 'Syncing Updates...'
-                      : 'Publishing to Store...')
-                  : (activeQueue === 'failed'
-                      ? `Retry Publish for ${selectedIds.length} Product${selectedIds.length === 1 ? '' : 's'}`
-                      : activeQueue === 'publish_updates'
-                      ? `Publish Updates for ${selectedIds.length} Product${selectedIds.length === 1 ? '' : 's'}`
-                      : `Publish ${selectedIds.length} Product${selectedIds.length === 1 ? '' : 's'} to Store`)}
-              </Text>
+                <XStack alignItems="center" justifyContent="center" gap={6}>
+                  <LuRotateCcw size={15} color="#fff" />
+                  <Text fontSize={13} fontWeight="800" color="#fff">
+                    {isPublishing ? 'Retrying...' : `Retry (${selectedIds.length})`}
+                  </Text>
+                </XStack>
+              </Pressable>
             </XStack>
-          </Pressable>
+          ) : (
+            <Pressable
+              onPress={handleTriggerPublish}
+              disabled={isPublishing}
+              style={({ pressed }) => [
+                styles.publishBtn,
+                {
+                  backgroundColor: tokens.accent,
+                  opacity: pressed || isPublishing ? 0.9 : 1,
+                },
+              ]}
+            >
+              <XStack alignItems="center" justifyContent="center" gap={8}>
+                <LuSparkles size={16} color={tokens.accentForeground} />
+                <Text
+                  fontSize={14}
+                  fontWeight="800"
+                  color={tokens.accentForeground}
+                >
+                  {isPublishing
+                    ? (activeQueue === 'publish_updates'
+                        ? 'Syncing Updates...'
+                        : 'Publishing to Store...')
+                    : (activeQueue === 'publish_updates'
+                        ? `Publish Updates for ${selectedIds.length} Product${selectedIds.length === 1 ? '' : 's'}`
+                        : `Publish ${selectedIds.length} Product${selectedIds.length === 1 ? '' : 's'} to Store`)}
+                </Text>
+              </XStack>
+            </Pressable>
+          )}
         </YStack>
       )}
 
@@ -844,6 +991,215 @@ export function AdminVayyariStorePublishPage({
             <LuX size={16} color="#fff" />
           </TouchableOpacity>
         </XStack>
+      )}
+
+      {/* ── PUBLISH ACTIVITY & JOBS MODAL ── */}
+      {isJobsModalOpen && (
+        <View style={[StyleSheet.absoluteFill, { zIndex: 1000 }]}>
+          <Pressable
+            style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.5)' }]}
+            onPress={() => setIsJobsModalOpen(false)}
+          />
+          <YStack
+            position="absolute"
+            bottom={0}
+            left={0}
+            right={0}
+            maxHeight="84%"
+            backgroundColor={tokens.surface}
+            borderTopLeftRadius={20}
+            borderTopRightRadius={20}
+            paddingTop={16}
+            paddingBottom={bottomInset + 16}
+            paddingHorizontal={16}
+            shadowColor="#000"
+            shadowOffset={{ width: 0, height: -4 }}
+            shadowOpacity={0.15}
+            shadowRadius={12}
+            elevation={10}
+          >
+            {/* Modal Header */}
+            <XStack
+              alignItems="center"
+              justifyContent="space-between"
+              paddingBottom={12}
+              borderBottomWidth={1}
+              borderBottomColor={tokens.border}
+            >
+              <XStack alignItems="center" gap={8}>
+                <LuActivity size={18} color={tokens.accent} />
+                <Text fontSize={15} fontWeight="800" color={tokens.text}>
+                  Publish Activity & Jobs ({jobs.length})
+                </Text>
+              </XStack>
+              <XStack alignItems="center" gap={8}>
+                {onRefreshJobs && (
+                  <Pressable
+                    onPress={onRefreshJobs}
+                    hitSlop={8}
+                    style={({ pressed }) => [
+                      styles.iconBtn,
+                      { backgroundColor: pressed ? 'rgba(0,0,0,0.06)' : 'transparent' },
+                    ]}
+                  >
+                    <LuRotateCcw size={16} color={tokens.textMuted} />
+                  </Pressable>
+                )}
+                <Pressable
+                  onPress={() => setIsJobsModalOpen(false)}
+                  hitSlop={8}
+                  style={({ pressed }) => [
+                    styles.iconBtn,
+                    { backgroundColor: pressed ? 'rgba(0,0,0,0.06)' : 'transparent' },
+                  ]}
+                >
+                  <LuX size={20} color={tokens.text} />
+                </Pressable>
+              </XStack>
+            </XStack>
+
+            {/* Jobs List */}
+            <ScrollView showsVerticalScrollIndicator={false} style={{ marginTop: 12 }}>
+              {jobs.length === 0 ? (
+                <YStack alignItems="center" justifyContent="center" paddingVertical={40} gap={8}>
+                  <LuClock size={32} color={tokens.textMuted} />
+                  <Text fontSize={13} fontWeight="700" color={tokens.text}>
+                    No publish jobs recorded yet
+                  </Text>
+                  <Text fontSize={11} color={tokens.textMuted} textAlign="center" maxWidth={260}>
+                    When you publish products to the store, batch progress and results will show here in real time.
+                  </Text>
+                </YStack>
+              ) : (
+                <YStack gap={10} paddingBottom={20}>
+                  {jobs.map((job) => {
+                    const total = job.totalCount || 1;
+                    const percent = Math.min(100, Math.round((job.processedCount / total) * 100));
+                    const isRunning = job.status === 'in_progress' || job.status === 'queued';
+                    const isSuccess = job.status === 'completed';
+                    const isFailed = job.status === 'failed';
+
+                    const statusBg = isRunning ? '#FEF3C7' : isSuccess ? '#D1FAE5' : isFailed ? '#FEE2E2' : '#F3E8FF';
+                    const statusText = isRunning ? '#B45309' : isSuccess ? '#065F46' : isFailed ? '#991B1B' : '#6B21A8';
+                    const statusLabel = job.status === 'in_progress' ? 'Running' : job.status === 'queued' ? 'Queued' : job.status === 'completed' ? 'Completed' : job.status === 'failed' ? 'Failed' : 'Partial';
+
+                    let errorSnippet: string | null = null;
+                    if (job.errorDetails && job.errorDetails !== '[]') {
+                      try {
+                        const parsed = JSON.parse(job.errorDetails);
+                        if (Array.isArray(parsed) && parsed.length > 0) {
+                          errorSnippet = parsed[0]?.error || null;
+                        }
+                      } catch {
+                        errorSnippet = job.errorDetails;
+                      }
+                    }
+
+                    return (
+                      <YStack
+                        key={job.id}
+                        backgroundColor={tokens.background}
+                        borderWidth={1}
+                        borderColor={isRunning ? '#F59E0B' : tokens.border}
+                        borderRadius={10}
+                        padding={12}
+                        gap={8}
+                      >
+                        <XStack alignItems="center" justifyContent="space-between">
+                          <XStack alignItems="center" gap={6}>
+                            <Text fontSize={12} fontWeight="800" color={tokens.text}>
+                              Batch #{job.id.substring(0, 8)}
+                            </Text>
+                            <View
+                              style={{
+                                paddingHorizontal: 6,
+                                paddingVertical: 2,
+                                borderRadius: 4,
+                                backgroundColor: statusBg,
+                              }}
+                            >
+                              <Text fontSize={10} fontWeight="800" color={statusText}>
+                                {statusLabel}
+                              </Text>
+                            </View>
+                          </XStack>
+                          <Text fontSize={10} color={tokens.textMuted}>
+                            {job.action === 'sync_updates' ? 'Sync Updates' : 'Initial Publish'}
+                          </Text>
+                        </XStack>
+
+                        {/* Progress Bar */}
+                        <YStack gap={4}>
+                          <XStack alignItems="center" justifyContent="space-between">
+                            <Text fontSize={11} fontWeight="700" color={tokens.text}>
+                              {job.processedCount} of {job.totalCount} products processed
+                            </Text>
+                            <Text fontSize={11} fontWeight="800" color={isRunning ? '#D97706' : tokens.text}>
+                              {percent}%
+                            </Text>
+                          </XStack>
+                          <View
+                            style={{
+                              height: 6,
+                              backgroundColor: 'rgba(0,0,0,0.06)',
+                              borderRadius: 3,
+                              overflow: 'hidden',
+                            }}
+                          >
+                            <View
+                              style={{
+                                height: 6,
+                                width: `${percent}%`,
+                                backgroundColor: isFailed ? '#DC2626' : isRunning ? '#F59E0B' : '#10B981',
+                              }}
+                            />
+                          </View>
+                        </YStack>
+
+                        {/* Error Snippet if failed */}
+                        {errorSnippet && (
+                          <View
+                            style={{
+                              backgroundColor: 'rgba(220, 38, 38, 0.08)',
+                              borderRadius: 6,
+                              padding: 6,
+                            }}
+                          >
+                            <Text fontSize={10} fontWeight="600" color="#DC2626" numberOfLines={2}>
+                              ⚠️ {errorSnippet}
+                            </Text>
+                          </View>
+                        )}
+
+                        {/* Counters & Timestamps */}
+                        <XStack alignItems="center" justifyContent="space-between" paddingTop={2}>
+                          <XStack alignItems="center" gap={10}>
+                            {job.failedCount > 0 && (
+                              <Text fontSize={10} fontWeight="700" color="#DC2626">
+                                ⚠️ {job.failedCount} Failed
+                              </Text>
+                            )}
+                            <Text fontSize={10} color={tokens.textMuted}>
+                              {new Date(job.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · {new Date(job.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                            </Text>
+                          </XStack>
+                          {isRunning && (
+                            <XStack alignItems="center" gap={4}>
+                              <ActivityIndicator size="small" color="#D97706" />
+                              <Text fontSize={10} fontWeight="700" color="#D97706">
+                                In Progress...
+                              </Text>
+                            </XStack>
+                          )}
+                        </XStack>
+                      </YStack>
+                    );
+                  })}
+                </YStack>
+              )}
+            </ScrollView>
+          </YStack>
+        </View>
       )}
     </YStack>
   );

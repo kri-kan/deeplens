@@ -6,7 +6,7 @@ import {
   VayyariStarredProductItem,
 } from '@/components/tamagui-ui/pages/AdminVayyariStorePublishPage';
 import { productService } from '@/services/productService';
-import { storeAdminService, PublishProductItem, PublishMediaItem, StoreProduct } from '@/services/storeAdminService';
+import { storeAdminService, PublishProductItem, PublishMediaItem, StoreProduct, PublishJobStatusResponse } from '@/services/storeAdminService';
 
 const PAGE_SIZE = 60;
 
@@ -14,6 +14,8 @@ export default function StorePublishScreen() {
   const router = useRouter();
   const [starredProducts, setStarredProducts] = useState<VayyariStarredProductItem[]>([]);
   const [failedProducts, setFailedProducts] = useState<VayyariStarredProductItem[]>([]);
+  const [jobs, setJobs] = useState<PublishJobStatusResponse[]>([]);
+  const [activeJob, setActiveJob] = useState<PublishJobStatusResponse | null>(null);
   const [publishedCount, setPublishedCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -138,8 +140,8 @@ export default function StorePublishScreen() {
 
       const inStoreMap = await fetchInStoreMetadata();
 
-      // Concurrently fetch published catalog items, starred catalog items, and failed publishings
-      const [publishedRes, starredRes, failuresRes] = await Promise.allSettled([
+      // Concurrently fetch published catalog items, starred catalog items, failed publishings, and recent publish jobs
+      const [publishedRes, starredRes, failuresRes, jobsRes] = await Promise.allSettled([
         productService.getCatalog({
           isPublished: true,
           skip: 0,
@@ -151,6 +153,7 @@ export default function StorePublishScreen() {
           take: PAGE_SIZE,
         }),
         storeAdminService.getPublishFailures(),
+        storeAdminService.getRecentPublishJobs(20),
       ]);
 
       const productMap = new Map<string, any>();
@@ -191,6 +194,15 @@ export default function StorePublishScreen() {
           canRetry: f.canRetry,
         }));
         setFailedProducts(mappedFailures);
+      }
+
+      // Map recent jobs & detect active in-progress job
+      if (jobsRes.status === 'fulfilled' && jobsRes.value) {
+        setJobs(jobsRes.value);
+        const running = jobsRes.value.find(
+          (j) => j.status === 'in_progress' || j.status === 'queued'
+        );
+        setActiveJob(running || null);
       }
 
 
@@ -261,6 +273,30 @@ export default function StorePublishScreen() {
     loadData();
   }, [loadData]);
 
+  // Poll active job while in_progress or queued
+  useEffect(() => {
+    if (!activeJob || (activeJob.status !== 'in_progress' && activeJob.status !== 'queued')) {
+      return;
+    }
+
+    const interval = setInterval(async () => {
+      try {
+        const latest = await storeAdminService.getPublishJobStatus(activeJob.id);
+        setActiveJob(latest);
+        setJobs((prev) => prev.map((j) => (j.id === latest.id ? latest : j)));
+
+        if (latest.status !== 'in_progress' && latest.status !== 'queued') {
+          clearInterval(interval);
+          loadData(true);
+        }
+      } catch (err) {
+        console.warn('Failed to poll publish job status:', err);
+      }
+    }, 1500);
+
+    return () => clearInterval(interval);
+  }, [activeJob?.id, activeJob?.status, loadData]);
+
   const handlePublishBatch = async (selectedIds: string[]) => {
     if (selectedIds.length === 0) return;
 
@@ -272,6 +308,8 @@ export default function StorePublishScreen() {
       // 1. Submit asynchronous event-driven publish job to Kafka
       const job = await storeAdminService.submitPublishJob(action, selectedIds);
       console.log('Dispatched asynchronous publish job:', job);
+      setActiveJob(job as any);
+      setJobs((prev) => [job as any, ...prev]);
 
       // 2. Immediately reflect state in local UI
       setStarredProducts((prev) =>
@@ -304,7 +342,6 @@ export default function StorePublishScreen() {
   };
 
   const handleRetryBatch = async (selectedIds: string[]) => {
-
     if (selectedIds.length === 0) return;
 
     try {
@@ -313,6 +350,8 @@ export default function StorePublishScreen() {
       const action = isUpdating ? 'sync_updates' : 'initial_publish';
       const job = await storeAdminService.retryPublishFailures(selectedIds, action);
       console.log('Dispatched retry publish job:', job);
+      setActiveJob(job as any);
+      setJobs((prev) => [job as any, ...prev]);
 
       // 2. Remove retried items from local failedProducts list
       setFailedProducts((prev) => prev.filter((p) => !selectedIds.includes(p.id)));
@@ -328,10 +367,23 @@ export default function StorePublishScreen() {
     }
   };
 
+  const handleDismissFailures = async (productIds: string[]) => {
+    if (productIds.length === 0) return;
+    try {
+      await storeAdminService.dismissPublishFailures(productIds);
+      setFailedProducts((prev) => prev.filter((p) => !productIds.includes(p.id)));
+    } catch (err) {
+      console.error('Failed to dismiss publish failures:', err);
+      Alert.alert('Error', 'Failed to dismiss publish failures.');
+    }
+  };
+
   return (
     <AdminVayyariStorePublishPage
       products={starredProducts}
       failedProducts={failedProducts}
+      jobs={jobs}
+      activeJob={activeJob}
       publishedCount={publishedCount}
       loading={loading}
       refreshing={refreshing}
@@ -342,6 +394,8 @@ export default function StorePublishScreen() {
       onBack={() => router.back()}
       onPublishBatch={handlePublishBatch}
       onRetryPublishBatch={handleRetryBatch}
+      onDismissFailures={handleDismissFailures}
+      onRefreshJobs={() => loadData(true)}
       onNavigateToStoreInventory={() => router.push('/store/inventory' as any)}
       onOpenPdp={(id) => router.push(`/product/${id}` as any)}
     />

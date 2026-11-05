@@ -164,3 +164,7 @@ public record RetryPublishBatchRequest(
     [property: JsonPropertyName("action")] string? Action = null
 );
 
+public record DismissPublishFailuresRequest(
+    [property: JsonPropertyName("productIds")] List<Guid> ProductIds
+);
+

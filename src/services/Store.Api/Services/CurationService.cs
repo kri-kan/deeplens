@@ -1133,6 +1133,23 @@ public class CurationService : ICurationService
         return await conn.QuerySingleOrDefaultAsync<PublishJobDto>(sql, new { Id = jobId });
     }
 
+    public async Task<List<PublishJobDto>> GetRecentPublishJobsAsync(int limit = 20, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        const string sql = @"
+            SELECT id, action, status, total_count AS TotalCount, processed_count AS ProcessedCount, 
+                   failed_count AS FailedCount, error_details::text AS ErrorDetails, 
+                   requested_by AS RequestedBy, created_at AS CreatedAt, updated_at AS UpdatedAt
+            FROM publish_jobs
+            ORDER BY created_at DESC
+            LIMIT @Limit;";
+
+        var rows = await conn.QueryAsync<PublishJobDto>(sql, new { Limit = Math.Clamp(limit, 1, 100) });
+        return rows.ToList();
+    }
+
     public async Task<List<PublishFailureDto>> GetPublishFailuresAsync(CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
@@ -1174,9 +1191,12 @@ public class CurationService : ICurationService
                     // If product was subsequently published successfully, ignore failure
                     if (publishedIds.Contains(productId)) continue;
 
-                    // Check if already marked as retried
+                    // Check if already marked as retried or dismissed
                     var isRetried = el.TryGetProperty("retried", out var rProp) && rProp.GetBoolean();
                     if (isRetried) continue;
+
+                    var isDismissed = el.TryGetProperty("dismissed", out var dProp) && dProp.GetBoolean();
+                    if (isDismissed) continue;
 
                     // Only take the latest failure for this product
                     if (failuresByProduct.ContainsKey(productId)) continue;
@@ -1299,6 +1319,69 @@ public class CurationService : ICurationService
         }
 
         return newJob;
+    }
+
+    public async Task<int> DismissPublishFailuresAsync(List<Guid> productIds, CancellationToken ct = default)
+    {
+        if (productIds == null || productIds.Count == 0) return 0;
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        const string failedJobsSql = @"
+            SELECT id, error_details::text AS ErrorDetailsJson
+            FROM publish_jobs
+            WHERE failed_count > 0
+            ORDER BY updated_at DESC
+            LIMIT 50;";
+
+        var rows = await conn.QueryAsync(failedJobsSql);
+        var dismissSet = productIds.ToHashSet();
+        var dismissedCount = 0;
+
+        foreach (var row in rows)
+        {
+            string? json = row.errordetailsjson;
+            if (string.IsNullOrWhiteSpace(json) || json == "[]") continue;
+
+            var modified = false;
+            var updatedElements = new List<Dictionary<string, object?>>();
+
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array) continue;
+
+            foreach (var el in doc.RootElement.EnumerateArray())
+            {
+                var dict = JsonSerializer.Deserialize<Dictionary<string, object?>>(el.GetRawText());
+                if (dict != null && dict.TryGetValue("productId", out var pVal) && pVal != null)
+                {
+                    if (Guid.TryParse(pVal.ToString(), out var pGuid) && dismissSet.Contains(pGuid))
+                    {
+                        dict["dismissed"] = true;
+                        dict["dismissedAt"] = DateTime.UtcNow;
+                        modified = true;
+                        dismissedCount++;
+                    }
+                }
+                if (dict != null) updatedElements.Add(dict);
+            }
+
+            if (modified)
+            {
+                const string updateJobErrSql = @"
+                    UPDATE publish_jobs 
+                    SET error_details = @NewJson::jsonb, updated_at = NOW() 
+                    WHERE id = @JobId;";
+                await conn.ExecuteAsync(updateJobErrSql, new 
+                { 
+                    JobId = (Guid)row.id, 
+                    NewJson = JsonSerializer.Serialize(updatedElements) 
+                });
+            }
+        }
+
+        _logger.LogInformation("Dismissed {Count} publish failures across publish_jobs", dismissedCount);
+        return dismissedCount;
     }
 
 

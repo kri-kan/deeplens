@@ -296,6 +296,36 @@ class StoreAdminService {
     return res.json();
   }
 
+  async dismissPublishFailures(productIds: string[]): Promise<{ dismissedCount: number }> {
+    const headers = await this.getAuthHeaders();
+    const baseUrl = getStoreApiUrl();
+    const res = await fetch(`${baseUrl}/api/v1/admin/products/publish-failures/dismiss`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ productIds }),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to dismiss publish failures: ${res.status} ${res.statusText}`);
+    }
+
+    return res.json();
+  }
+
+  async getRecentPublishJobs(limit = 20): Promise<PublishJobStatusResponse[]> {
+    const headers = await this.getAuthHeaders();
+    const baseUrl = getStoreApiUrl();
+    const res = await fetch(`${baseUrl}/api/v1/admin/products/publish-jobs?limit=${limit}`, {
+      headers,
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to get recent publish jobs: ${res.status} ${res.statusText}`);
+    }
+
+    return res.json();
+  }
+
 
   async getInStoreProducts(params?: {
     category?: string;
