@@ -115,7 +115,8 @@ export interface AdminStoreProductCurationPageProps {
   initialColorGroups?: StoreColorGroup[];
   initialColorPickerGroupId?: string | null;
   onBack?: () => void;
-  onSave?: (curatedPayload: any) => void;
+  onSave?: (curatedPayload: any) => Promise<void> | void;
+  isSaving?: boolean;
   disableSafeArea?: boolean;
   isAlreadyInStore?: boolean;
   initialSkus?: StoreSkuItem[];
@@ -147,6 +148,7 @@ export function AdminStoreProductCurationPage({
   initialColorPickerGroupId = null,
   onBack,
   onSave,
+  isSaving = false,
   disableSafeArea = false,
   isAlreadyInStore = true,
   initialSkus,
@@ -998,9 +1000,12 @@ export function AdminStoreProductCurationPage({
       skus: skuList,
       tags: skuList.map((s) => s.customMessage).filter(Boolean) as string[],
     };
-    onSave?.(payload);
-    setSaveToast(true);
-    setTimeout(() => setSaveToast(false), 2400);
+    if (onSave) {
+      onSave(payload);
+    } else {
+      setSaveToast(true);
+      setTimeout(() => setSaveToast(false), 2400);
+    }
   };
 
   const handleSaveSkus = handleSaveCuration;
@@ -1221,11 +1226,19 @@ export function AdminStoreProductCurationPage({
 
           <Pressable
             onPress={handleSaveCuration}
+            disabled={isSaving}
             hitSlop={6}
-            style={[styles.topIconBtn, { backgroundColor: tokens.accent }]}
+            style={[
+              styles.topIconBtn,
+              { backgroundColor: tokens.accent, opacity: isSaving ? 0.7 : 1 },
+            ]}
             accessibilityLabel="Save Curation"
           >
-            <LuSave size={18} color={tokens.accentForeground} />
+            {isSaving ? (
+              <ActivityIndicator size="small" color={tokens.accentForeground} />
+            ) : (
+              <LuSave size={18} color={tokens.accentForeground} />
+            )}
           </Pressable>
         </XStack>
       </XStack>
@@ -4004,16 +4017,28 @@ export function AdminStoreProductCurationPage({
             ) : (
               <Pressable
                 onPress={handleSaveCuration}
+                disabled={isSaving}
                 hitSlop={12}
                 style={({ pressed }) => [
                   styles.bottomNavTextLink,
-                  { opacity: pressed ? 0.6 : 1 },
+                  { opacity: pressed || isSaving ? 0.6 : 1 },
                 ]}
               >
-                <Text fontSize={15} fontWeight="800" color="#15803D">
-                  Save
-                </Text>
-                <LuCheck size={20} color="#15803D" strokeWidth={3} />
+                {isSaving ? (
+                  <>
+                    <Text fontSize={15} fontWeight="800" color="#15803D">
+                      Saving...
+                    </Text>
+                    <ActivityIndicator size="small" color="#15803D" />
+                  </>
+                ) : (
+                  <>
+                    <Text fontSize={15} fontWeight="800" color="#15803D">
+                      Save
+                    </Text>
+                    <LuCheck size={20} color="#15803D" strokeWidth={3} />
+                  </>
+                )}
               </Pressable>
             )}
           </XStack>
@@ -4049,16 +4074,28 @@ export function AdminStoreProductCurationPage({
 
             <Pressable
               onPress={handleSaveCuration}
+              disabled={isSaving}
               hitSlop={12}
               style={({ pressed }) => [
                 styles.bottomNavTextLink,
-                { opacity: pressed ? 0.6 : 1 },
+                { opacity: pressed || isSaving ? 0.6 : 1 },
               ]}
             >
-              <Text fontSize={15} fontWeight="800" color="#15803D">
-                Save Metadata
-              </Text>
-              <LuCheck size={20} color="#15803D" strokeWidth={3} />
+              {isSaving ? (
+                <>
+                  <Text fontSize={15} fontWeight="800" color="#15803D">
+                    Saving...
+                  </Text>
+                  <ActivityIndicator size="small" color="#15803D" />
+                </>
+              ) : (
+                <>
+                  <Text fontSize={15} fontWeight="800" color="#15803D">
+                    Save Metadata
+                  </Text>
+                  <LuCheck size={20} color="#15803D" strokeWidth={3} />
+                </>
+              )}
             </Pressable>
           </XStack>
         </View>
@@ -4093,16 +4130,28 @@ export function AdminStoreProductCurationPage({
 
             <Pressable
               onPress={handleSaveSkus}
+              disabled={isSaving}
               hitSlop={12}
               style={({ pressed }) => [
                 styles.bottomNavTextLink,
-                { opacity: pressed ? 0.6 : 1 },
+                { opacity: pressed || isSaving ? 0.6 : 1 },
               ]}
             >
-              <Text fontSize={15} fontWeight="800" color="#15803D">
-                Save SKUs
-              </Text>
-              <LuCheck size={20} color="#15803D" strokeWidth={3} />
+              {isSaving ? (
+                <>
+                  <Text fontSize={15} fontWeight="800" color="#15803D">
+                    Saving...
+                  </Text>
+                  <ActivityIndicator size="small" color="#15803D" />
+                </>
+              ) : (
+                <>
+                  <Text fontSize={15} fontWeight="800" color="#15803D">
+                    Save SKUs
+                  </Text>
+                  <LuCheck size={20} color="#15803D" strokeWidth={3} />
+                </>
+              )}
             </Pressable>
           </XStack>
         </View>

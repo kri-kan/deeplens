@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Alert, ActivityIndicator, Pressable } from 'react-native';
+import { ActivityIndicator, Pressable } from 'react-native';
 import { YStack, Text } from 'tamagui';
 import {
   AdminStoreProductCurationPage,
 } from '@/components/tamagui-ui/pages/AdminStoreProductCurationPage';
+import { PromptDialog } from '@/components/tamagui-ui/atoms/PromptDialog';
 import {
   StoreCurationMediaItem,
   StoreColorGroup,
@@ -19,6 +20,17 @@ export default function StoreCurationScreen() {
 
   const [curationData, setCurationData] = useState<StoreProductCuration | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [feedbackDialog, setFeedbackDialog] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    intent: 'success' | 'failure';
+    confirmLabel?: string;
+    cancelLabel?: string;
+    singleButton?: boolean;
+    onConfirm?: () => void;
+  } | null>(null);
 
   const fetchCuration = useCallback(async () => {
     if (!id) return;
@@ -38,8 +50,9 @@ export default function StoreCurationScreen() {
   }, [fetchCuration]);
 
   const handleSave = async (payload: any) => {
-    if (!id) return;
+    if (!id || isSaving) return;
     try {
+      setIsSaving(true);
       const mediaOrderPayload: StoreMediaItem[] = (payload.mediaList || []).map(
         (m: StoreCurationMediaItem, idx: number) => ({
           id: m.id,
@@ -78,10 +91,32 @@ export default function StoreCurationScreen() {
       });
 
       await fetchCuration();
-      Alert.alert('Saved', 'Curated swatches, SKUs, and groups saved successfully.');
-    } catch (err) {
+      setFeedbackDialog({
+        visible: true,
+        title: 'Curation Saved',
+        message: 'Curated swatches, SKUs, and groups saved successfully.',
+        intent: 'success',
+        confirmLabel: 'Done',
+        singleButton: true,
+      });
+    } catch (err: any) {
       console.error('Failed to save curation to Store.Api:', err);
-      Alert.alert('Error', 'Failed to save changes to Store.Api.');
+      const errorMsg = err?.message || 'Failed to save changes to Store.Api.';
+      setFeedbackDialog({
+        visible: true,
+        title: 'Save Failed',
+        message: `${errorMsg} Would you like to retry?`,
+        intent: 'failure',
+        confirmLabel: 'Retry',
+        cancelLabel: 'Dismiss',
+        singleButton: false,
+        onConfirm: () => {
+          setFeedbackDialog(null);
+          handleSave(payload);
+        },
+      });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -237,24 +272,47 @@ export default function StoreCurationScreen() {
   const parentProductId = product.parentCatalogId || product.id;
 
   return (
-    <AdminStoreProductCurationPage
-      key={parentProductId}
-      productId={parentProductId}
-      productCode={parentProductCode}
-      title={product.title}
-      fabric={product.fabric || product.categoryName || 'Handloom'}
-      baseCostPrice={product.baseCost || 0}
-      initialMrp={product.mrp || (product.baseCost ? Math.round(product.baseCost * 1.6) : 9999)}
-      initialSalePrice={product.salePrice || (product.baseCost ? Math.round(product.baseCost * 1.3) : 7999)}
-      initialLifecycleState={(product.lifecycleStatus as any) || 'available'}
-      initialDescription={defaultDescription}
-      initialScreen="hub"
-      initialMedia={mediaList}
-      initialColorGroups={dynamicColorGroups}
-      isAlreadyInStore={true}
-      initialSkus={dynamicSkus}
-      onBack={() => router.back()}
-      onSave={handleSave}
-    />
+    <>
+      <AdminStoreProductCurationPage
+        key={parentProductId}
+        productId={parentProductId}
+        productCode={parentProductCode}
+        title={product.title}
+        fabric={product.fabric || product.categoryName || 'Handloom'}
+        baseCostPrice={product.baseCost || 0}
+        initialMrp={product.mrp || (product.baseCost ? Math.round(product.baseCost * 1.6) : 9999)}
+        initialSalePrice={product.salePrice || (product.baseCost ? Math.round(product.baseCost * 1.3) : 7999)}
+        initialLifecycleState={(product.lifecycleStatus as any) || 'available'}
+        initialDescription={defaultDescription}
+        initialScreen="hub"
+        initialMedia={mediaList}
+        initialColorGroups={dynamicColorGroups}
+        isAlreadyInStore={true}
+        initialSkus={dynamicSkus}
+        isSaving={isSaving}
+        onBack={() => router.back()}
+        onSave={handleSave}
+      />
+
+      {feedbackDialog && (
+        <PromptDialog
+          visible={feedbackDialog.visible}
+          title={feedbackDialog.title}
+          message={feedbackDialog.message}
+          intent={feedbackDialog.intent}
+          confirmLabel={feedbackDialog.confirmLabel}
+          cancelLabel={feedbackDialog.cancelLabel}
+          singleButton={feedbackDialog.singleButton}
+          onConfirm={() => {
+            if (feedbackDialog.onConfirm) {
+              feedbackDialog.onConfirm();
+            } else {
+              setFeedbackDialog(null);
+            }
+          }}
+          onCancel={() => setFeedbackDialog(null)}
+        />
+      )}
+    </>
   );
 }

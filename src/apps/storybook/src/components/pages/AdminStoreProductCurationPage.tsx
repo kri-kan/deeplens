@@ -151,7 +151,8 @@ export interface AdminStoreProductCurationPageProps {
   unified_attributes?: any;
   initialSpecs?: ProductCurationSpecs;
   onBack?: () => void;
-  onSave?: (curatedPayload: any) => void;
+  onSave?: (curatedPayload: any) => Promise<void> | void;
+  isSaving?: boolean;
   disableSafeArea?: boolean;
   isAlreadyInStore?: boolean;
   initialSkus?: StoreSkuItem[];
@@ -186,6 +187,7 @@ export function AdminStoreProductCurationPage({
   initialSpecs,
   onBack,
   onSave,
+  isSaving = false,
   disableSafeArea = false,
   isAlreadyInStore = true,
   initialSkus,
@@ -782,9 +784,12 @@ export function AdminStoreProductCurationPage({
       skus: skuList,
       tags: skuList.map((s) => s.customMessage).filter(Boolean) as string[],
     };
-    onSave?.(payload);
-    setSaveToast(true);
-    setTimeout(() => setSaveToast(false), 2400);
+    if (onSave) {
+      onSave(payload);
+    } else {
+      setSaveToast(true);
+      setTimeout(() => setSaveToast(false), 2400);
+    }
   };
 
   const handleSaveSkus = handleSaveCuration;
