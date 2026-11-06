@@ -99,7 +99,7 @@ export const DismissibleLoginModal: React.FC<DismissibleLoginModalProps> = ({
       if (res.success) {
         let savedUser: any = null;
         let savedToken: string | null = null;
-        if (typeof window !== 'undefined') {
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
           savedToken = localStorage.getItem('vayyari_auth_token');
           try {
             savedUser = JSON.parse(localStorage.getItem('vayyari_auth_user') || 'null');
@@ -129,7 +129,7 @@ export const DismissibleLoginModal: React.FC<DismissibleLoginModalProps> = ({
       if (success) {
         let savedUser: any = null;
         let savedToken: string | null = null;
-        if (typeof window !== 'undefined') {
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
           savedToken = localStorage.getItem('vayyari_auth_token');
           try {
             savedUser = JSON.parse(localStorage.getItem('vayyari_auth_user') || 'null');

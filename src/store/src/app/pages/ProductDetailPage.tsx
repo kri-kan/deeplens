@@ -141,14 +141,14 @@ export const ProductDetailPage: React.FC = () => {
     let effectiveToken = authOverride?.token || token;
     let effectiveUser = authOverride?.user || user;
 
-    if (!effectiveToken && typeof window !== 'undefined') {
+    if (!effectiveToken && Platform.OS === 'web' && typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
       const storedToken = localStorage.getItem('vayyari_auth_token');
       if (storedToken && storedToken !== 'guest-token') {
         effectiveToken = storedToken;
       }
     }
 
-    if (!effectiveUser && typeof window !== 'undefined') {
+    if (!effectiveUser && Platform.OS === 'web' && typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
       try {
         const storedUser = JSON.parse(localStorage.getItem('vayyari_auth_user') || 'null');
         if (storedUser && !storedUser.isGuest) {
@@ -252,7 +252,7 @@ export const ProductDetailPage: React.FC = () => {
   const handleShare = async () => {
     if (!product) return;
     const shareUrl =
-      typeof window !== 'undefined'
+      Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.href
         ? window.location.href
         : `https://store.vayyarifashions.com/product/${product.code}`;
     try {
@@ -388,7 +388,7 @@ export const ProductDetailPage: React.FC = () => {
         visible={loginModalVisible}
         onClose={() => setLoginModalVisible(false)}
         returnUrl={
-          typeof window !== 'undefined'
+          Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.pathname
             ? window.location.pathname
             : `/product/${product.code}`
         }

@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import posthog from 'posthog-js';
+import posthog from './PostHogClient';
 import { getOrCreatePersistentDeviceId, DeviceMetadata } from './DeviceFingerprint';
 
 declare const process: any;
@@ -79,7 +79,7 @@ class UserJourneyTelemetryManager {
       fingerprintHash: this.deviceMetadata.fingerprintHash,
     });
 
-    if (typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       (window as any).__VAYYARI_JOURNEY__ = {
         getDeviceId: () => this.deviceId,
         getDeviceMetadata: () => this.deviceMetadata,
@@ -279,7 +279,7 @@ class UserJourneyTelemetryManager {
   }
 
   private rehydrateFailedSignals() {
-    if (typeof window === 'undefined' || !window.localStorage) return;
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.localStorage) return;
     try {
       const stored = window.localStorage.getItem('vy_store_telemetry_retry_queue');
       if (stored) {
@@ -293,7 +293,7 @@ class UserJourneyTelemetryManager {
   }
 
   private persistFailedSignals(signals: any[]) {
-    if (typeof window === 'undefined' || !window.localStorage || !signals || signals.length === 0) return;
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.localStorage || !signals || signals.length === 0) return;
     try {
       const existing = window.localStorage.getItem('vy_store_telemetry_retry_queue');
       let combined = signals;
