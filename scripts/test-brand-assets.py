@@ -77,6 +77,20 @@ def test_generated_assets(base_dir):
         f"android-icon-background.png color {pixel} != (250, 247, 242, 255) [Warm Ivory #FAF7F2]"
     )
 
+    # Verify colors.xml iconBackground consistency in Store and Admin if repo root available
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for rel_path in [
+        "src/store/android/app/src/main/res/values/colors.xml",
+        "src/vayyari/android/app/src/main/res/values/colors.xml",
+    ]:
+        full_path = os.path.join(repo_root, rel_path)
+        if os.path.exists(full_path):
+            with open(full_path, "r") as f:
+                content = f.read()
+            assert '<color name="iconBackground">#FAF7F2</color>' in content, (
+                f"Missing or mismatched iconBackground #FAF7F2 in {rel_path}"
+            )
+
     print("All asset tests passed!")
 
 if __name__ == "__main__":
