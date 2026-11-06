@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import { XStack, YStack, Text } from 'tamagui';
 import {
@@ -89,15 +89,17 @@ export function FeedbackToast({
   onDismiss,
 }: FeedbackToastProps) {
   const { tokens } = useTheme();
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
 
   useEffect(() => {
-    if (!visible || durationMs <= 0) return;
+    if (!visible || !message || durationMs <= 0) return;
     const timer = setTimeout(() => {
-      onDismiss();
+      onDismissRef.current();
     }, durationMs);
 
     return () => clearTimeout(timer);
-  }, [visible, durationMs, onDismiss]);
+  }, [visible, Boolean(message), durationMs]);
 
   if (!visible || !message) return null;
 

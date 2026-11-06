@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import { XStack, YStack, Text } from 'tamagui';
 import {
@@ -9,8 +9,19 @@ import {
   LuX,
 } from '../../icons/lu';
 import { useTheme } from '@/theme';
+import {
+  FeedbackToastIntent,
+  getFeedbackToastIntentConfig,
+  DEFAULT_TOAST_DURATION_MS,
+  FeedbackIntentConfig,
+} from '@/utils/feedbackRules';
 
-export type FeedbackToastIntent = 'success' | 'failure' | 'warning' | 'info';
+export {
+  FeedbackToastIntent,
+  getFeedbackToastIntentConfig,
+  DEFAULT_TOAST_DURATION_MS,
+  FeedbackIntentConfig,
+};
 
 export interface FeedbackToastProps {
   /** Visibility flag */
@@ -37,44 +48,6 @@ export interface FeedbackToastProps {
   onDismiss: () => void;
 }
 
-export const DEFAULT_TOAST_DURATION_MS = 2800;
-
-export interface IntentConfig {
-  iconColor: string;
-  badgeBg: string;
-  borderColor: string;
-}
-
-export function getFeedbackToastIntentConfig(intent?: FeedbackToastIntent): IntentConfig {
-  switch (intent) {
-    case 'success':
-      return {
-        iconColor: '#10B981',
-        badgeBg: 'rgba(16, 185, 129, 0.15)',
-        borderColor: 'rgba(16, 185, 129, 0.35)',
-      };
-    case 'failure':
-      return {
-        iconColor: '#EF4444',
-        badgeBg: 'rgba(239, 68, 68, 0.15)',
-        borderColor: 'rgba(239, 68, 68, 0.35)',
-      };
-    case 'warning':
-      return {
-        iconColor: '#F59E0B',
-        badgeBg: 'rgba(245, 158, 11, 0.15)',
-        borderColor: 'rgba(245, 158, 11, 0.35)',
-      };
-    case 'info':
-    default:
-      return {
-        iconColor: '#3B82F6',
-        badgeBg: 'rgba(59, 130, 246, 0.15)',
-        borderColor: 'rgba(59, 130, 246, 0.35)',
-      };
-  }
-}
-
 export function FeedbackToast({
   visible,
   message,
@@ -89,15 +62,17 @@ export function FeedbackToast({
   onDismiss,
 }: FeedbackToastProps) {
   const { tokens } = useTheme();
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
 
   useEffect(() => {
-    if (!visible || durationMs <= 0) return;
+    if (!visible || !message || durationMs <= 0) return;
     const timer = setTimeout(() => {
-      onDismiss();
+      onDismissRef.current();
     }, durationMs);
 
     return () => clearTimeout(timer);
-  }, [visible, durationMs, onDismiss]);
+  }, [visible, Boolean(message), durationMs]);
 
   if (!visible || !message) return null;
 

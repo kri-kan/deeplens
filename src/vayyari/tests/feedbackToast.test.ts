@@ -65,10 +65,21 @@ describe('FeedbackToast Atom Logic & Contract', () => {
     // Verification of contract
     assert.ok(sbContent.includes('export function FeedbackToast'), 'Must export FeedbackToast in Storybook');
     assert.ok(vayyariContent.includes('export function FeedbackToast'), 'Must export FeedbackToast in Vayyari');
+    assert.ok(vayyariContent.includes("from '@/utils/feedbackRules'"), 'FeedbackToast must import from feedbackRules');
+    assert.ok(vayyariContent.includes('onDismissRef'), 'FeedbackToast must use onDismissRef to prevent timer resets on parent re-renders');
     assert.ok(vayyariContent.includes('role="status"'), 'Must have role="status" for accessibility');
     assert.ok(vayyariContent.includes('aria-live="polite"'), 'Must have aria-live="polite"');
     assert.ok(vayyariContent.includes('setTimeout'), 'Must have auto-dismiss timer via setTimeout');
     assert.ok(vayyariContent.includes('clearTimeout'), 'Must clean up timer via clearTimeout');
     assert.ok(vayyariContent.includes('LuX'), 'Must have dismiss button with LuX icon');
+  });
+
+  test('Storybook AdminStoreProductCurationPage wires isSaving to buttons in parity with mobile', () => {
+    const sbPagePath = path.join(
+      rootDir,
+      'src/apps/storybook/src/components/pages/AdminStoreProductCurationPage.tsx'
+    );
+    const content = fs.readFileSync(sbPagePath, 'utf8');
+    assert.ok(content.includes('disabled={isSaving}'), 'Storybook AdminStoreProductCurationPage must wire disabled={isSaving}');
   });
 });

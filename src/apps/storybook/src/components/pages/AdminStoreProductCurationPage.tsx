@@ -1719,17 +1719,22 @@ export function AdminStoreProductCurationPage({
 
           <Pressable
             onPress={handleSaveCuration}
+            disabled={isSaving}
             hitSlop={6}
             style={[
               isMobile ? styles.topIconBtn : styles.topActionBtn,
-              { backgroundColor: tokens.accent, borderColor: tokens.accent },
+              { backgroundColor: tokens.accent, borderColor: tokens.accent, opacity: isSaving ? 0.7 : 1 },
             ]}
             accessibilityLabel="Save Curation"
           >
-            <LuSave size={16} color={tokens.accentForeground} />
+            {isSaving ? (
+              <ActivityIndicator size="small" color={tokens.accentForeground} />
+            ) : (
+              <LuSave size={16} color={tokens.accentForeground} />
+            )}
             {!isMobile && (
               <Text fontSize={12} fontWeight="800" color={tokens.accentForeground}>
-                Save Curation
+                {isSaving ? 'Saving...' : 'Save Curation'}
               </Text>
             )}
           </Pressable>
@@ -4336,16 +4341,28 @@ export function AdminStoreProductCurationPage({
             ) : (
               <Pressable
                 onPress={handleSaveCuration}
+                disabled={isSaving}
                 hitSlop={12}
                 style={({ pressed }) => [
                   styles.bottomNavTextLink,
-                  { opacity: pressed ? 0.6 : 1 },
+                  { opacity: pressed || isSaving ? 0.6 : 1 },
                 ]}
               >
-                <Text fontSize={15} fontWeight="800" color="#15803D">
-                  Save
-                </Text>
-                <LuCheck size={20} color="#15803D" strokeWidth={3} />
+                {isSaving ? (
+                  <>
+                    <Text fontSize={15} fontWeight="800" color="#15803D">
+                      Saving...
+                    </Text>
+                    <ActivityIndicator size="small" color="#15803D" />
+                  </>
+                ) : (
+                  <>
+                    <Text fontSize={15} fontWeight="800" color="#15803D">
+                      Save
+                    </Text>
+                    <LuCheck size={20} color="#15803D" strokeWidth={3} />
+                  </>
+                )}
               </Pressable>
             )}
           </XStack>
@@ -4382,16 +4399,28 @@ export function AdminStoreProductCurationPage({
 
             <Pressable
               onPress={handleSaveCuration}
+              disabled={isSaving}
               hitSlop={12}
               style={({ pressed }) => [
                 styles.bottomNavTextLink,
-                { opacity: pressed ? 0.6 : 1 },
+                { opacity: pressed || isSaving ? 0.6 : 1 },
               ]}
             >
-              <Text fontSize={15} fontWeight="800" color="#15803D">
-                Save Metadata
-              </Text>
-              <LuCheck size={20} color="#15803D" strokeWidth={3} />
+              {isSaving ? (
+                <>
+                  <Text fontSize={15} fontWeight="800" color="#15803D">
+                    Saving...
+                  </Text>
+                  <ActivityIndicator size="small" color="#15803D" />
+                </>
+              ) : (
+                <>
+                  <Text fontSize={15} fontWeight="800" color="#15803D">
+                    Save Metadata
+                  </Text>
+                  <LuCheck size={20} color="#15803D" strokeWidth={3} />
+                </>
+              )}
             </Pressable>
           </XStack>
         </View>
@@ -4427,16 +4456,28 @@ export function AdminStoreProductCurationPage({
 
             <Pressable
               onPress={handleSaveSkus}
+              disabled={isSaving}
               hitSlop={12}
               style={({ pressed }) => [
                 styles.bottomNavTextLink,
-                { opacity: pressed ? 0.6 : 1 },
+                { opacity: pressed || isSaving ? 0.6 : 1 },
               ]}
             >
-              <Text fontSize={15} fontWeight="800" color="#15803D">
-                Save SKUs
-              </Text>
-              <LuCheck size={20} color="#15803D" strokeWidth={3} />
+              {isSaving ? (
+                <>
+                  <Text fontSize={15} fontWeight="800" color="#15803D">
+                    Saving...
+                  </Text>
+                  <ActivityIndicator size="small" color="#15803D" />
+                </>
+              ) : (
+                <>
+                  <Text fontSize={15} fontWeight="800" color="#15803D">
+                    Save SKUs
+                  </Text>
+                  <LuCheck size={20} color="#15803D" strokeWidth={3} />
+                </>
+              )}
             </Pressable>
           </XStack>
         </View>
