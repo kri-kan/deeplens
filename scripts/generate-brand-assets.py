@@ -15,11 +15,41 @@ import subprocess
 from PIL import Image
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SVG_ICON = os.path.join(REPO_ROOT, "packages", "brand-assets", "svg", "vayyari-logo-gold-icon.svg")
+SVG_ICON = os.path.join(REPO_ROOT, "packages", "brand-assets", "svg", "vayyari-logo-bronze-gold-icon.svg")
 SVG_SMALL = os.path.join(REPO_ROOT, "packages", "brand-assets", "svg", "vayyari-logo-gold-small.svg")
 OUTPUT_BASE = os.path.join(REPO_ROOT, "packages", "brand-assets", "generated")
 
 CHROME_BIN = "/usr/bin/google-chrome"
+WARM_IVORY_SOLID = (250, 247, 242, 255)  # #FAF7F2
+METALLIC_RIM_COLOR = (180, 130, 30, 82)   # rgba(180, 130, 30, 0.32)
+
+
+def create_editorial_ivory_surface(size):
+    """
+    Generates an Editorial Warm Ivory silk surface:
+    Subtle 145-deg linear gradient matching Storybook editorial-ivory preset:
+    #FFFFFF (0%) -> #FAF7F2 (45%) -> #EFE8DA (100%).
+    """
+    w, h = size
+    im = Image.new("RGBA", (w, h))
+    pixels = im.load()
+    max_d = float(max(1, (w - 1) + (h - 1)))
+    for y in range(h):
+        for x in range(w):
+            t = (x + y) / max_d
+            if t <= 0.45:
+                sub_t = t / 0.45
+                r = int(255 + (250 - 255) * sub_t)
+                g = int(255 + (247 - 255) * sub_t)
+                b = int(255 + (242 - 255) * sub_t)
+            else:
+                sub_t = (t - 0.45) / 0.55
+                r = int(250 + (239 - 250) * sub_t)
+                g = int(247 + (232 - 247) * sub_t)
+                b = int(242 + (218 - 242) * sub_t)
+            pixels[x, y] = (r, g, b, 255)
+    return im
+
 
 
 def render_svg_with_chrome(svg_path, render_dim=2048):
@@ -161,25 +191,38 @@ def main():
     print(f"Emblem extracted with bounding box: {bbox} (width: {emblem_crop.width}, height: {emblem_crop.height})")
 
     # 1. Root standard assets
-    root_targets = [
-        ("icon.png", (1024, 1024), 0.85, "PNG"),
+    # For icon.png, favicon.png, and vayyari-logo.png, render with warm ivory editorial surface
+    for filename, (w, h), ratio, fmt in [
         ("splash-icon.png", (1024, 1024), 0.80, "PNG"),
         ("android-icon-foreground.png", (512, 512), 0.62, "PNG"),
-        ("favicon.png", (48, 48), 0.90, "PNG"),
-        ("vayyari-logo.png", (1024, 1024), 0.85, "PNG"),
-    ]
-
-    for filename, (w, h), ratio, fmt in root_targets:
+    ]:
         out_path = os.path.join(OUTPUT_BASE, filename)
         img = create_centered_asset(emblem_crop, (w, h), scale_ratio=ratio)
         img.save(out_path, format=fmt)
-        print(f"Generated root asset: {filename} ({w}x{h})")
+        print(f"Generated root transparent asset: {filename} ({w}x{h})")
 
-    # android-icon-background.png (512x512)
+    # App icon and logo with warm ivory surface and metallic rim
+    for filename, (w, h), ratio in [
+        ("icon.png", (1024, 1024), 0.72),
+        ("favicon.png", (48, 48), 0.78),
+        ("vayyari-logo.png", (1024, 1024), 0.72),
+    ]:
+        out_path = os.path.join(OUTPUT_BASE, filename)
+        icon_surface = create_editorial_ivory_surface((w, h))
+        emblem_im = create_centered_asset(emblem_crop, (w, h), scale_ratio=ratio)
+        icon_surface.alpha_composite(emblem_im)
+        from PIL import ImageDraw
+        draw = ImageDraw.Draw(icon_surface)
+        rim_w = max(1, int(round(w * 0.02)))
+        draw.rectangle([(0, 0), (w - 1, h - 1)], outline=METALLIC_RIM_COLOR, width=rim_w)
+        icon_surface.save(out_path, format="PNG")
+        print(f"Generated root ivory asset: {filename} ({w}x{h})")
+
+    # android-icon-background.png (512x512, solid #FAF7F2)
     bg_path = os.path.join(OUTPUT_BASE, "android-icon-background.png")
-    bg_img = Image.new("RGBA", (512, 512), (12, 14, 20, 255))
+    bg_img = Image.new("RGBA", (512, 512), WARM_IVORY_SOLID)
     bg_img.save(bg_path, format="PNG")
-    print("Generated root asset: android-icon-background.png (512x512)")
+    print("Generated root asset: android-icon-background.png (512x512) [#FAF7F2]")
 
     # 2. Android monochrome icon
     mono_path = os.path.join(OUTPUT_BASE, "android-icon-monochrome.png")
@@ -203,8 +246,8 @@ def main():
         icon_size = sizes["icon"]
         fg_size = sizes["foreground"]
 
-        # ic_launcher_background.webp (solid brand dark #0C0E14)
-        bg_mipmap = Image.new("RGBA", fg_size, (12, 14, 20, 255))
+        # ic_launcher_background.webp (solid warm ivory #FAF7F2)
+        bg_mipmap = Image.new("RGBA", fg_size, WARM_IVORY_SOLID)
         bg_mipmap_path = os.path.join(res_dir, "ic_launcher_background.webp")
         bg_mipmap.save(bg_mipmap_path, format="WEBP", lossless=True)
 
@@ -218,34 +261,46 @@ def main():
         mono_mipmap_path = os.path.join(res_dir, "ic_launcher_monochrome.webp")
         mono_mipmap.save(mono_mipmap_path, format="WEBP", lossless=True)
 
-        # ic_launcher.webp (standard icon with rounded-corner luxury dark background)
-        base_icon = Image.new("RGBA", icon_size, (12, 14, 20, 255))
-        # Draw rounded corners
+        # ic_launcher.webp (standard icon with rounded-corner editorial warm ivory background + rim)
+        base_icon = create_editorial_ivory_surface(icon_size)
         corner_r = max(int(icon_size[0] * 0.22), 4)
-        mask = Image.new("L", icon_size, 0)
+        emblem_on_icon = create_centered_asset(emblem_crop, icon_size, scale_ratio=0.72)
+        base_icon.alpha_composite(emblem_on_icon)
+
+        # Metallic rim
         from PIL import ImageDraw
+        base_draw = ImageDraw.Draw(base_icon)
+        rim_w = max(1, int(round(icon_size[0] * 0.02)))
+        base_draw.rounded_rectangle([(0, 0), (icon_size[0] - 1, icon_size[1] - 1)], radius=corner_r, outline=METALLIC_RIM_COLOR, width=rim_w)
+
+        mask = Image.new("L", icon_size, 0)
         draw = ImageDraw.Draw(mask)
         draw.rounded_rectangle([(0, 0), (icon_size[0] - 1, icon_size[1] - 1)], radius=corner_r, fill=255)
-        emblem_on_icon = create_centered_asset(emblem_crop, icon_size, scale_ratio=0.75)
-        base_icon.alpha_composite(emblem_on_icon)
+
         final_icon = Image.new("RGBA", icon_size, (0, 0, 0, 0))
         final_icon.paste(base_icon, (0, 0), mask)
         icon_path = os.path.join(res_dir, "ic_launcher.webp")
         final_icon.save(icon_path, format="WEBP", lossless=True)
 
-        # ic_launcher_round.webp (circular icon)
+        # ic_launcher_round.webp (circular icon with editorial warm ivory background + rim)
+        round_base = create_editorial_ivory_surface(icon_size)
+        round_emblem = create_centered_asset(emblem_crop, icon_size, scale_ratio=0.68)
+        round_base.alpha_composite(round_emblem)
+
+        # Circular metallic rim
+        round_base_draw = ImageDraw.Draw(round_base)
+        round_base_draw.ellipse([(0, 0), (icon_size[0] - 1, icon_size[1] - 1)], outline=METALLIC_RIM_COLOR, width=rim_w)
+
         round_mask = Image.new("L", icon_size, 0)
         round_draw = ImageDraw.Draw(round_mask)
         round_draw.ellipse([(0, 0), (icon_size[0] - 1, icon_size[1] - 1)], fill=255)
-        round_base = Image.new("RGBA", icon_size, (12, 14, 20, 255))
-        round_emblem = create_centered_asset(emblem_crop, icon_size, scale_ratio=0.70)
-        round_base.alpha_composite(round_emblem)
+
         final_round = Image.new("RGBA", icon_size, (0, 0, 0, 0))
         final_round.paste(round_base, (0, 0), round_mask)
         round_path = os.path.join(res_dir, "ic_launcher_round.webp")
         final_round.save(round_path, format="WEBP", lossless=True)
 
-        print(f"Generated Android mipmap-{density}: all 5 webp assets (bg, fg, mono, launcher, round)")
+        print(f"Generated Android mipmap-{density}: all 5 webp assets (bg, fg, mono, launcher, round) [Warm Ivory]")
 
     # 4. Android splash drawables
     # Densities and sizes:

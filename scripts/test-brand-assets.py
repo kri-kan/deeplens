@@ -68,7 +68,17 @@ def test_generated_assets(base_dir):
                 f"android-icon-monochrome.png contains contaminated RGB {(r, g, b)} != (255, 255, 255)"
             )
 
+    # Verify android-icon-background.png has warm ivory #FAF7F2 color (250, 247, 242, 255)
+    bg_path = os.path.join(base_dir, "android-icon-background.png")
+    assert os.path.exists(bg_path), f"Missing {bg_path}"
+    bg_im = Image.open(bg_path)
+    pixel = bg_im.getpixel((0, 0))
+    assert pixel == (250, 247, 242, 255), (
+        f"android-icon-background.png color {pixel} != (250, 247, 242, 255) [Warm Ivory #FAF7F2]"
+    )
+
     print("All asset tests passed!")
 
 if __name__ == "__main__":
     test_generated_assets(sys.argv[1])
+
