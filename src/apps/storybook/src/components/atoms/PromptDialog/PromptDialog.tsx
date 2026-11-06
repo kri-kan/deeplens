@@ -2,7 +2,7 @@ import React from 'react';
 import { Pressable, Modal, ActivityIndicator } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import {
-  LuCheckCircle2,
+  LuCircleCheck,
   LuCircleAlert,
   LuTriangleAlert,
   LuInfo,
@@ -100,7 +100,7 @@ export function PromptDialog({
     if (icon) return icon;
     switch (intent) {
       case 'success':
-        return <LuCheckCircle2 size={20} color={intentColor.text} />;
+        return <LuCircleCheck size={20} color={intentColor.text} />;
       case 'critical':
         return <LuTrash2 size={20} color={intentColor.text} />;
       case 'failure':

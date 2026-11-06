@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import { XStack, YStack, Text } from 'tamagui';
 import {
-  LuCheckCircle2,
+  LuCircleCheck,
   LuCircleAlert,
   LuTriangleAlert,
   LuInfo,
@@ -107,7 +107,7 @@ export function FeedbackToast({
   const renderIcon = () => {
     switch (intent) {
       case 'success':
-        return <LuCheckCircle2 size={18} color={config.iconColor} />;
+        return <LuCircleCheck size={18} color={config.iconColor} />;
       case 'failure':
         return <LuCircleAlert size={18} color={config.iconColor} />;
       case 'warning':
