@@ -200,7 +200,8 @@ class ProductService {
   getMediaUrlByPath(path: string): string {
     const baseUrl = getSearchApiUrl();
     if (!baseUrl) return `https://via.placeholder.com/150`;
-    return `${baseUrl}/api/v1/catalog/media/serve?path=${encodeURIComponent(path)}`;
+    const cleanPath = path.replace(/^\/+/, '');
+    return `${baseUrl}${API_ROUTES.ATTACHMENTS.DOWNLOAD(cleanPath)}`;
   }
 
   getRawMediaUrl(mediaId: string): string {

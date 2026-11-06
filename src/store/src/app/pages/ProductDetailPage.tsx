@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { YStack, XStack, Text } from 'tamagui';
-import { Platform, Share, Pressable } from 'react-native';
-import { LuEye } from 'react-icons/lu';
+import { Platform, Share } from 'react-native';
 import { useNavigation } from '../NavigationContext';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
-import { usePermissions } from '../../context/PermissionsContext';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -15,39 +13,17 @@ import {
 } from '../../services/mock/mockCatalogService';
 import { FullscreenMediaViewer, FullscreenMediaItem } from '../../components/media';
 import { DismissibleLoginModal } from '../../components/DismissibleLoginModal';
-
-// Design System Components shared directly with Storybook
-import { ProductDetailTemplate } from '../../components/templates/ProductDetailTemplate';
-import { ProductGallery, SwatchItem, GalleryImage } from '../../components/organisms/ProductGallery/ProductGallery';
-import { ColourSelector, ColourOption } from '../../components/organisms/ColourSelector/ColourSelector';
-import { SizeSelector } from '../../components/organisms/SizeSelector/SizeSelector';
-import { FrequentlyBoughtTogether } from '../../components/organisms/FrequentlyBoughtTogether/FrequentlyBoughtTogether';
-import { SpecificationsPanel } from '../../components/organisms/SpecificationsPanel/SpecificationsPanel';
-import { RatingsPanel } from '../../components/organisms/RatingsPanel/RatingsPanel';
-import { HorizontalProductStrip } from '../../components/organisms/HorizontalProductStrip/HorizontalProductStrip';
-import { StickyAddToBagBar } from '../../components/molecules/StickyAddToBagBar/StickyAddToBagBar';
-import { Breadcrumbs } from '../../components/molecules/Breadcrumbs/Breadcrumbs';
-import { PriceTag } from '../../components/atoms/PriceTag/PriceTag';
-import { RatingBadge } from '../../components/atoms/RatingBadge/RatingBadge';
-import { HeartButton } from '../../components/atoms/HeartButton/HeartButton';
-import { ShareButton } from '../../components/atoms/ShareButton/ShareButton';
-import {
-  FREE_SIZE_PRESET,
-  LETTER_SIZE_PRESET,
-  BLOUSE_NUMERIC_PRESET,
-  KIDS_SIZE_PRESET,
-} from '../../data/catalog/sizePresets';
+import { ProductDetailFragment, PdpProductData } from '../../components/organisms/ProductDetailFragment';
 import { useTheme, useResponsive } from '../../theme';
 
 export const ProductDetailPage: React.FC = () => {
-  const { params, goBack, navigate } = useNavigation();
+  const { params, navigate } = useNavigation();
   const { addItem, openDrawer } = useCart();
   const { isInWishlist, toggleWishlist } = useWishlist();
   const { showToast } = useToast();
-  const { user, token, isAuthenticated } = useAuth();
+  const { user, token } = useAuth();
   const { tokens } = useTheme();
-  const { isMobile, isTablet } = useResponsive();
-  const isCompact = isMobile || isTablet;
+  const { isMobile } = useResponsive();
 
   const [product, setProduct] = useState<StoreProduct | null>(null);
   const [relatedProducts, setRelatedProducts] = useState<StoreProduct[]>([]);
@@ -58,7 +34,6 @@ export const ProductDetailPage: React.FC = () => {
   const [isOnWaitlist, setIsOnWaitlist] = useState<boolean>(false);
   const [isWaitlistLoading, setIsWaitlistLoading] = useState<boolean>(false);
   const [loginModalVisible, setLoginModalVisible] = useState<boolean>(false);
-  const [descriptionExpanded, setDescriptionExpanded] = useState<boolean>(false);
   const [addedToBag, setAddedToBag] = useState(false);
 
   const targetCode = params.code || params.id || 'vf2b58';
@@ -100,181 +75,59 @@ export const ProductDetailPage: React.FC = () => {
     });
   }, [targetCode]);
 
-  // Build Colour Options and Swatches Map from Store Product
-  const { colourOptions, swatchesMap } = useMemo(() => {
-    if (!product) return { colourOptions: [], swatchesMap: {} };
+  // Active SKU resolution based on active swatch
+  const activeSku = useMemo(() => {
+    if (!product || !product.skus || product.skus.length === 0) return null;
+    return (
+      product.skus.find(
+        (s) =>
+          s.id === selectedColor ||
+          s.colorGroupId === selectedColor ||
+          s.skuCode === selectedColor
+      ) || product.skus[0]
+    );
+  }, [product, selectedColor]);
 
-    const opts: ColourOption[] = [];
-    const map: Record<string, SwatchItem> = {};
+  // Dynamic pricing
+  const effectivePrice =
+    activeSku && !activeSku.isPriceInherited && activeSku.price != null
+      ? activeSku.price
+      : product?.price ?? 0;
 
-    if (product.colorGroups && product.colorGroups.length > 0) {
-      product.colorGroups.forEach((cg) => {
-        opts.push({
-          key: cg.id,
-          label: cg.name,
-          template: cg.template || 'solid',
-          primaryColor: cg.slotA || cg.colors?.[0] || '#D4AF37',
-          secondaryColor: cg.slotB || cg.colors?.[1],
-          tertiaryColor: cg.slotC || cg.colors?.[2],
-          quaternaryColor: cg.slotD || cg.colors?.[3],
-          colors: cg.colors,
-          colorCount: (cg.colorCount as 2 | 3 | 4) || (cg.colors?.length as any),
-        });
+  const effectiveOriginalPrice =
+    activeSku && !activeSku.isPriceInherited && activeSku.mrp != null
+      ? activeSku.mrp
+      : product?.originalPrice ?? Math.round(effectivePrice * 1.5);
 
-        // Filter media items for this color group: variant-specific first, then shared photos
-        const variantSpecific = (product.mediaOrder || [])
-          .filter((m) => m.colorGroupId === cg.id && !m.isCommon)
-          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const effectiveDiscount =
+    effectiveOriginalPrice > effectivePrice && effectiveOriginalPrice > 0
+      ? Math.round(((effectiveOriginalPrice - effectivePrice) / effectiveOriginalPrice) * 100)
+      : product?.discountPercentage ?? 0;
 
-        const sharedPhotos = (product.mediaOrder || [])
-          .filter((m) => m.isCommon || (!m.colorGroupId && m.colorGroupId !== cg.id))
-          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const effectiveStock = activeSku ? activeSku.stockQuantity : (product?.stockQuantity ?? 1);
+  const activeSkuCustomMessage = activeSku?.customMessage;
 
-        const matchingMedia = [...variantSpecific, ...sharedPhotos];
+  const isOutOfStock =
+    product?.lifecycleStatus === 'out_of_stock' ||
+    effectiveStock <= 0 ||
+    product?.inStock === false;
 
-        const images: GalleryImage[] = (matchingMedia.length > 0
-          ? matchingMedia
-          : (product.images || []).map((url, i) => ({
-              id: `${cg.id}-${i}`,
-              url,
-              title: `${cg.name} Drape ${i + 1}`,
-            }))
-        ).map((m: any, idx: number) => ({
-          id: m.id || `${cg.id}-${idx}`,
-          label: m.title || `${cg.name} - View ${idx + 1}`,
-          url: m.url,
-          gradient: [cg.slotA || '#1a2a4e', cg.slotB || '#d81b60'],
-          sourcePlatform: m.sourcePlatform,
-          sourceUrl: m.sourceUrl,
-          sourcePostId: m.sourcePostId,
-        }));
-
-        map[cg.id] = {
-          label: cg.name,
-          template: cg.template || 'solid',
-          primaryColor: cg.slotA || '#D4AF37',
-          secondaryColor: cg.slotB,
-          tertiaryColor: cg.slotC,
-          quaternaryColor: cg.slotD,
-          colors: cg.colors,
-          colorCount: (cg.colorCount as 2 | 3 | 4) || (cg.colors?.length as any),
-          gradient: [cg.slotA || '#1a2a4e', cg.slotB || '#d81b60'],
-          images: images.length > 0 ? images : [
-            {
-              id: '1',
-              label: `${cg.name} - Front Drape`,
-              gradient: [cg.slotA || '#1a2a4e', cg.slotB || '#d81b60'],
-            },
-          ],
-        };
-      });
-    } else if (product.swatches && product.swatches.length > 0) {
-      product.swatches.forEach((sw) => {
-        opts.push({
-          key: sw.id,
-          label: sw.name,
-          template: sw.type as any,
-          primaryColor: sw.primaryHex,
-          secondaryColor: sw.secondaryHex,
-          tertiaryColor: sw.accentHex,
-        });
-
-        const images: GalleryImage[] = (product.images || []).map((url, idx) => ({
-          id: `${sw.id}-${idx}`,
-          label: `${sw.name} - View ${idx + 1}`,
-          url,
-          gradient: [sw.primaryHex || '#1a2a4e', sw.secondaryHex || '#d81b60'],
-        }));
-
-        map[sw.id] = {
-          label: sw.name,
-          template: sw.type as any,
-          primaryColor: sw.primaryHex,
-          secondaryColor: sw.secondaryHex,
-          tertiaryColor: sw.accentHex,
-          gradient: [sw.primaryHex || '#1a2a4e', sw.secondaryHex || '#d81b60'],
-          images: images.length > 0 ? images : [
-            {
-              id: '1',
-              label: `${sw.name} - Front Drape`,
-              gradient: [sw.primaryHex || '#1a2a4e', sw.secondaryHex || '#d81b60'],
-            },
-          ],
-        };
-      });
-    } else {
-      const defaultKey = 'default';
-      opts.push({
-        key: defaultKey,
-        label: product.colorwayName || 'Original Artisan Weave',
-        template: product.swatchTemplate || 'solid',
-        primaryColor: product.colorHex || '#D4AF37',
-      });
-
-      const variantSpecific = (product.mediaOrder || [])
-        .filter((m) => !m.isCommon)
-        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-      const sharedPhotos = (product.mediaOrder || [])
-        .filter((m) => m.isCommon)
-        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-      const ordered = [...variantSpecific, ...sharedPhotos];
-
-      const images: GalleryImage[] = (ordered.length > 0
-        ? ordered.map((m, idx) => ({
-            id: m.id || `img-${idx}`,
-            label: m.title || `${product.title} - View ${idx + 1}`,
-            url: m.url,
-            gradient: [product.colorHex || '#1a2a4e', '#d81b60'],
-            sourcePlatform: m.sourcePlatform as any,
-            sourceUrl: m.sourceUrl,
-            sourcePostId: m.sourcePostId,
-          }))
-        : (product.images || []).map((url, idx) => ({
-            id: `img-${idx}`,
-            label: `${product.title} - View ${idx + 1}`,
-            url,
-            gradient: [product.colorHex || '#1a2a4e', '#d81b60'],
-          }))
-      );
-
-      map[defaultKey] = {
-        label: product.colorwayName || 'Original Artisan Weave',
-        template: product.swatchTemplate || 'solid',
-        primaryColor: product.colorHex || '#D4AF37',
-        gradient: ['#1a2a4e', '#d81b60'],
-        images: images.length > 0 ? images : [
-          {
-            id: '1',
-            label: `${product.title} - Front Drape`,
-            gradient: ['#1a2a4e', '#d81b60'],
-          },
-        ],
-      };
-    }
-
-    return { colourOptions: opts, swatchesMap: map };
-  }, [product]);
-
-  // Ensure active color matches available options
-  const activeColorKey = useMemo(() => {
-    if (selectedColor && swatchesMap[selectedColor]) {
-      return selectedColor;
-    }
-    const firstKey = Object.keys(swatchesMap)[0];
-    return firstKey || 'default';
-  }, [selectedColor, swatchesMap]);
+  const wishlisted = product ? isInWishlist(product.id) : false;
 
   // Prepare full-screen media viewer items
   const fullscreenMedia = useMemo<FullscreenMediaItem[]>(() => {
     if (!product) return [];
-    const activeSwatch = swatchesMap[activeColorKey];
-    if (activeSwatch?.images && activeSwatch.images.length > 0) {
-      return activeSwatch.images
+    const media = product.mediaOrder || [];
+    const activeMedia = media.filter(
+      (m) => m.colorGroupId === selectedColor || m.isCommon
+    );
+    if (activeMedia.length > 0) {
+      return activeMedia
         .filter((img) => Boolean(img.url))
         .map((img) => ({
           id: img.id,
           url: img.url!,
-          title: img.label,
+          title: img.title || product.title,
         }));
     }
     return (product.images || []).map((url, idx) => ({
@@ -282,120 +135,7 @@ export const ProductDetailPage: React.FC = () => {
       url,
       title: `${product.title} - View ${idx + 1}`,
     }));
-  }, [product, swatchesMap, activeColorKey]);
-
-  // Dynamic Size Configuration based on category & title heuristics
-  const { sizeVariant, sizeOptions } = useMemo(() => {
-    const cat = (product?.category || '').toLowerCase();
-    const title = (product?.title || '').toLowerCase();
-
-    if (cat.includes('kid') || title.match(/\b(kid|boy|girl|baby|toddler)\b/)) {
-      return {
-        sizeVariant: 'kids' as const,
-        sizeOptions: KIDS_SIZE_PRESET,
-      };
-    }
-    if (cat.includes('blouse') || title.match(/\b(blouse|choli)\b/)) {
-      return {
-        sizeVariant: 'numeric' as const,
-        sizeOptions: BLOUSE_NUMERIC_PRESET,
-      };
-    }
-    if (
-      cat.includes('dress') ||
-      cat.includes('kurta') ||
-      cat.includes('suit') ||
-      title.match(/\b(dress|kurti|kurta|suit|anarkali|gown)\b/)
-    ) {
-      return {
-        sizeVariant: 'letter' as const,
-        sizeOptions: LETTER_SIZE_PRESET,
-      };
-    }
-    return {
-      sizeVariant: 'free-size' as const,
-      sizeOptions: FREE_SIZE_PRESET,
-    };
-  }, [product]);
-
-  if (loading) {
-    return (
-      <YStack flex={1} backgroundColor={tokens.background} alignItems="center" justifyContent="center" gap={12}>
-        <Text fontSize={16} fontWeight="700" color={tokens.text}>
-          Loading Handloom Details...
-        </Text>
-        <Text fontSize={13} color={tokens.textSecondary}>
-          Fetching authenticated GI weave records
-        </Text>
-      </YStack>
-    );
-  }
-
-  if (!product) {
-    return (
-      <YStack flex={1} backgroundColor={tokens.background} alignItems="center" justifyContent="center" padding={24} gap={16}>
-        <Text fontSize={22} fontWeight="900" color={tokens.text}>
-          Product Not Found
-        </Text>
-        <Text fontSize={14} color={tokens.textSecondary} textAlign="center" maxWidth={420}>
-          Product with code '{targetCode}' was not found in the live published catalog.
-        </Text>
-        <XStack
-          backgroundColor={tokens.accent}
-          paddingHorizontal={20}
-          paddingVertical={12}
-          borderRadius={12}
-          cursor="pointer"
-          onPress={() => navigate('catalog')}
-          hoverStyle={{ opacity: 0.92 }}
-        >
-          <Text color={tokens.accentForeground} fontWeight="800" fontSize={14}>
-            ← Return to Catalog
-          </Text>
-        </XStack>
-      </YStack>
-    );
-  }
-
-  const wishlisted = isInWishlist(product.id);
-
-  // Active SKU resolution based on active swatch
-  const activeSku = useMemo(() => {
-    if (!product || !product.skus || product.skus.length === 0) return null;
-    return (
-      product.skus.find(
-        (s) =>
-          s.id === activeColorKey ||
-          s.colorGroupId === activeColorKey ||
-          s.skuCode === activeColorKey
-      ) || product.skus[0]
-    );
-  }, [product, activeColorKey]);
-
-  // Dynamic pricing (inherits product price unless overridden at item level)
-  const effectivePrice =
-    activeSku && !activeSku.isPriceInherited && activeSku.price != null
-      ? activeSku.price
-      : product.price;
-
-  const effectiveOriginalPrice =
-    activeSku && !activeSku.isPriceInherited && activeSku.mrp != null
-      ? activeSku.mrp
-      : product.originalPrice;
-
-  const effectiveDiscount =
-    effectiveOriginalPrice > effectivePrice && effectiveOriginalPrice > 0
-      ? Math.round(((effectiveOriginalPrice - effectivePrice) / effectiveOriginalPrice) * 100)
-      : product.discountPercentage;
-
-  const effectiveStock = activeSku ? activeSku.stockQuantity : (product.stockQuantity ?? 1);
-  const allowWaitlist = activeSku ? activeSku.allowWaitlist : true;
-  const activeSkuCustomMessage = activeSku?.customMessage;
-
-  const isOutOfStock =
-    product.lifecycleStatus === 'out_of_stock' ||
-    effectiveStock <= 0 ||
-    product.inStock === false;
+  }, [product, selectedColor]);
 
   const handleJoinWaitlist = async (authOverride?: { token?: string; user?: any }) => {
     let effectiveToken = authOverride?.token || token;
@@ -428,6 +168,8 @@ export const ProductDetailPage: React.FC = () => {
       setLoginModalVisible(true);
       return;
     }
+
+    if (!product) return;
 
     setIsWaitlistLoading(true);
     try {
@@ -466,20 +208,21 @@ export const ProductDetailPage: React.FC = () => {
   };
 
   const handleAddToBag = () => {
+    if (!product) return;
     if (addedToBag) {
       openDrawer();
       return;
     }
-    const activeOption = colourOptions.find((o) => o.key === activeColorKey);
-    const activeSwatch = swatchesMap[activeColorKey];
+
+    const cg = (product.colorGroups || []).find((c) => c.id === selectedColor);
     const swatch: EthnicSwatch = {
-      id: activeColorKey,
-      name: activeOption?.label || product.colorwayName || 'Original',
-      type: activeOption?.template || 'solid',
-      primaryHex: activeOption?.primaryColor || product.colorHex || '#D4AF37',
-      secondaryHex: activeOption?.secondaryColor,
-      accentHex: activeOption?.tertiaryColor,
-      imageUrl: activeSwatch?.images?.[0]?.url,
+      id: selectedColor || 'default',
+      name: cg?.name || product.colorwayName || 'Original Artisan Drape',
+      type: (cg?.template as any) || 'solid',
+      primaryHex: cg?.slotA || product.colorHex || '#D4AF37',
+      secondaryHex: cg?.slotB,
+      accentHex: cg?.slotC,
+      imageUrl: product.images?.[0],
     };
 
     const effectiveProduct = {
@@ -497,6 +240,7 @@ export const ProductDetailPage: React.FC = () => {
   };
 
   const handleToggleWishlist = () => {
+    if (!product) return;
     toggleWishlist(product.id);
     const added = !wishlisted;
     showToast({
@@ -506,6 +250,7 @@ export const ProductDetailPage: React.FC = () => {
   };
 
   const handleShare = async () => {
+    if (!product) return;
     const shareUrl =
       typeof window !== 'undefined'
         ? window.location.href
@@ -527,494 +272,115 @@ export const ProductDetailPage: React.FC = () => {
         });
       }
     } catch {
-      // User cancelled or clipboard fallback
+      // Handled silently
     }
   };
 
-  const formattedPrice = `₹${effectivePrice.toLocaleString('en-IN')}`;
-  const formattedOrigPrice = `₹${effectiveOriginalPrice.toLocaleString('en-IN')}`;
-  const activeColorLabel =
-    colourOptions.find((o) => o.key === activeColorKey)?.label || product.colorwayName || 'Silk Drape';
+  const mappedProductData: PdpProductData | null = useMemo(() => {
+    if (!product) return null;
+    return {
+      id: product.id,
+      code: product.code,
+      sku: product.code,
+      title: product.title,
+      brand: product.brand || 'VAANYA LUXE',
+      category: product.category,
+      fabric: product.fabric,
+      weaveOrigin: product.weaveOrigin,
+      description: product.description,
+      price: effectivePrice,
+      originalPrice: effectiveOriginalPrice,
+      discountPercent: effectiveDiscount,
+      rating: product.rating,
+      reviewCount: product.reviewCount,
+      inStock: !isOutOfStock,
+      stockQuantity: effectiveStock,
+      colorGroups: product.colorGroups as any,
+      mediaList: product.mediaOrder as any,
+      images: product.images,
+      specifications: [
+        { label: 'Fabric Composition', value: product.fabric || '100% Pure Mulberry Silk' },
+        { label: 'Weave Origin / Craft', value: product.weaveOrigin || 'Handloom Traditional Weave' },
+        { label: 'Product Code / SKU', value: product.code || '-' },
+        { label: 'Silk Mark Certification', value: 'Certified SM/IND/2026/9102' },
+        { label: 'Wash Care Instructions', value: 'Dry Clean Only, Store in Muslin Bag' },
+        {
+          label: 'Dispatch Timeline',
+          value: product.inStock
+            ? 'Guaranteed Dispatch within 24 Hours'
+            : 'Made to Order (Ships in 4-6 Days)',
+        },
+      ],
+      customSkuMessage: activeSkuCustomMessage,
+    };
+  }, [product, effectivePrice, effectiveOriginalPrice, effectiveDiscount, isOutOfStock, effectiveStock, activeSkuCustomMessage]);
+
+  if (loading) {
+    return (
+      <YStack flex={1} backgroundColor={tokens.background} alignItems="center" justifyContent="center" gap={12}>
+        <Text fontSize={16} fontWeight="700" color={tokens.text}>
+          Loading Handloom Details...
+        </Text>
+        <Text fontSize={13} color={tokens.textSecondary}>
+          Fetching authenticated GI weave records
+        </Text>
+      </YStack>
+    );
+  }
+
+  if (!product || !mappedProductData) {
+    return (
+      <YStack flex={1} backgroundColor={tokens.background} alignItems="center" justifyContent="center" padding={24} gap={16}>
+        <Text fontSize={22} fontWeight="900" color={tokens.text}>
+          Product Not Found
+        </Text>
+        <Text fontSize={14} color={tokens.textSecondary} textAlign="center" maxWidth={420}>
+          Product with code '{targetCode}' was not found in the live published catalog.
+        </Text>
+        <XStack
+          backgroundColor={tokens.accent}
+          paddingHorizontal={20}
+          paddingVertical={12}
+          borderRadius={12}
+          cursor="pointer"
+          onPress={() => navigate('catalog')}
+          hoverStyle={{ opacity: 0.92 }}
+        >
+          <Text color={tokens.accentForeground} fontWeight="800" fontSize={14}>
+            ← Return to Catalog
+          </Text>
+        </XStack>
+      </YStack>
+    );
+  }
 
   return (
     <>
-      <ProductDetailTemplate
+      <ProductDetailFragment
+        product={mappedProductData}
+        mode="live"
         borderless={isMobile}
-        breadcrumbs={
-          <Breadcrumbs
-            items={[
-              { label: 'Home', onPress: () => navigate('home') },
-              {
-                label: product.category
-                  ? product.category.charAt(0).toUpperCase() + product.category.slice(1)
-                  : 'Catalog',
-                onPress: () => navigate('catalog'),
-              },
-              {
-                label: product.weaveOrigin ? `${product.weaveOrigin} Weaves` : 'Handloom Sarees',
-                onPress: () => navigate('catalog'),
-              },
-              { label: product.title },
-            ]}
-          />
-        }
-        gallery={
-          <ProductGallery
-            borderless={isMobile}
-            swatches={swatchesMap}
-            selectedColor={activeColorKey}
-            onSelectColor={setSelectedColor}
-          >
-            {/* Mobile & Tablet: ColourSelector embedded directly in gallery's compact card */}
-            {isCompact && colourOptions.length > 0 ? (
-              <ColourSelector
-                options={colourOptions}
-                selected={activeColorKey}
-                onSelect={setSelectedColor}
-                format="dots"
-                swatchesAlign="right"
-              />
-            ) : null}
-          </ProductGallery>
-        }
-        purchasePanel={
-          <YStack
-            backgroundColor={isMobile ? 'transparent' : tokens.surface}
-            borderColor={isMobile ? 'transparent' : tokens.border}
-            borderWidth={isMobile ? 0 : 1}
-            borderRadius={isMobile ? 0 : 20}
-            padding={isMobile ? 6 : 24}
-            gap={isMobile ? 12 : 18}
-            width="100%"
-          >
-            {/* Brand Header & Rating Badge */}
-            <YStack gap={6}>
-              <XStack justifyContent="space-between" alignItems="center">
-                <Text
-                  fontSize={12}
-                  fontWeight="800"
-                  color={tokens.accent}
-                  letterSpacing={1.2}
-                  textTransform="uppercase"
-                >
-                  {product.brand || 'VAANYA LUXE HERITAGE'}
-                </Text>
-                <XStack alignItems="center" gap={8}>
-                  <XStack
-                    backgroundColor="#FEF3C7"
-                    borderColor="#FDE68A"
-                    borderWidth={1}
-                    paddingHorizontal={8}
-                    paddingVertical={3}
-                    borderRadius={12}
-                    alignItems="center"
-                    gap={4}
-                  >
-                    <LuEye size={12} color="#B45309" />
-                    <Text fontSize={11} fontWeight="800" color="#B45309">
-                      1.4k viewing
-                    </Text>
-                  </XStack>
-                  <RatingBadge rating={product.rating || 4.8} count={product.reviewCount || 248} />
-                </XStack>
-              </XStack>
-
-              <Text
-                fontSize={isMobile ? 20 : 24}
-                fontWeight="900"
-                color={tokens.text}
-                letterSpacing={-0.5}
-                lineHeight={isMobile ? 26 : 30}
-              >
-                {product.title}
-              </Text>
-
-              {/* Highlighted Tag for Custom SKU Message */}
-              {activeSkuCustomMessage ? (
-                <XStack
-                  alignSelf="flex-start"
-                  backgroundColor="#FEF3C7"
-                  borderColor="#F59E0B"
-                  borderWidth={1}
-                  paddingHorizontal={10}
-                  paddingVertical={5}
-                  borderRadius={8}
-                  alignItems="center"
-                  gap={6}
-                  marginTop={2}
-                >
-                  <Text fontSize={12}>✨</Text>
-                  <Text fontSize={12} fontWeight="800" color="#92400E">
-                    {activeSkuCustomMessage}
-                  </Text>
-                </XStack>
-              ) : null}
-
-              <YStack gap={4}>
-                <Text
-                  fontSize={13}
-                  color={tokens.textSecondary}
-                  lineHeight={20}
-                  numberOfLines={descriptionExpanded ? undefined : 2}
-                >
-                  {product.description ||
-                    `Handcrafted authentic ${product.weaveOrigin || 'Chanderi'} weave with certified natural silk mark guarantee.`}
-                </Text>
-                <Pressable
-                  onPress={() => setDescriptionExpanded((prev) => !prev)}
-                  style={{ alignSelf: 'flex-start', marginTop: 2, cursor: 'pointer' } as any}
-                >
-                  <Text fontSize={12} fontWeight="700" color={tokens.accent}>
-                    {descriptionExpanded ? 'Show Less ↑' : 'Read More... ↓'}
-                  </Text>
-                </Pressable>
-              </YStack>
-            </YStack>
-
-            {/* Pricing Section */}
-            <YStack paddingVertical={4}>
-              <XStack alignItems="center" gap={8}>
-                <PriceTag
-                  price={effectivePrice}
-                  originalPrice={effectiveOriginalPrice > effectivePrice ? effectiveOriginalPrice : undefined}
-                  offPercent={effectiveDiscount > 0 ? effectiveDiscount : undefined}
-                  size={isMobile ? 'md' : 'lg'}
-                />
-                {activeSku && !activeSku.isPriceInherited && (
-                  <XStack
-                    backgroundColor="#DBEAFE"
-                    paddingHorizontal={6}
-                    paddingVertical={2}
-                    borderRadius={4}
-                  >
-                    <Text fontSize={9} fontWeight="800" color="#1E40AF">
-                      Item Price
-                    </Text>
-                  </XStack>
-                )}
-              </XStack>
-              <Text fontSize={11} color={tokens.textMuted} marginTop={4}>
-                Inclusive of all taxes. Free express delivery applied at checkout.
-              </Text>
-            </YStack>
-
-            {/* Sibling Color Variant Swatches (Direct PDP Navigation) */}
-            {product.siblingSwatches && product.siblingSwatches.length > 0 ? (
-              <YStack gap={8} paddingVertical={4}>
-                <XStack justifyContent="space-between" alignItems="center">
-                  <Text fontSize={12} fontWeight="800" color={tokens.text}>
-                    COLORWAYS ({product.siblingSwatches.length})
-                  </Text>
-                  <Text fontSize={11} color={tokens.textSecondary} fontWeight="600">
-                    {product.colorwayName || 'Current Drape'}
-                  </Text>
-                </XStack>
-                <XStack gap={10} flexWrap="wrap" alignItems="center">
-                  {product.siblingSwatches.map((sw, idx) => {
-                    const isSelected = sw.productCode === product.code;
-                    return (
-                      <XStack
-                        key={`${sw.productCode}-${idx}`}
-                        cursor="pointer"
-                        padding={3}
-                        borderRadius={16}
-                        borderWidth={2}
-                        borderColor={isSelected ? tokens.accent : '#CBD5E1'}
-                        hoverStyle={{ scale: 1.08 }}
-                        pressStyle={{ scale: 0.95 }}
-                        onPress={() => {
-                          if (sw.productCode !== product.code) {
-                            navigate('pdp', { code: sw.productCode, id: sw.productCode });
-                          }
-                        }}
-                      >
-                        <XStack
-                          width={26}
-                          height={26}
-                          borderRadius={13}
-                          backgroundColor={sw.colorHex || '#D4AF37'}
-                          borderWidth={1}
-                          borderColor="#CBD5E0"
-                          alignItems="center"
-                          justifyContent="center"
-                        >
-                          {isSelected ? (
-                            <Text fontSize={11} color="#FFFFFF" fontWeight="900">
-                              ✓
-                            </Text>
-                          ) : null}
-                        </XStack>
-                      </XStack>
-                    );
-                  })}
-                </XStack>
-              </YStack>
-            ) : null}
-
-            {/* Desktop only: ColourSelector format="cards" */}
-            {!isCompact && colourOptions.length > 0 ? (
-              <ColourSelector
-                options={colourOptions}
-                selected={activeColorKey}
-                onSelect={setSelectedColor}
-                format="cards"
-              />
-            ) : null}
-
-            {/* Size Selector */}
-            <SizeSelector
-              sizes={sizeOptions}
-              selected={selectedSize}
-              onSelect={setSelectedSize}
-              variant={sizeVariant}
-              category={product.category}
-            />
-
-            {/* Call to Actions: Waitlist vs Sold Out vs Add to Bag */}
-            <XStack gap={10} marginTop={6} alignItems="center">
-              {isOutOfStock ? (
-                allowWaitlist ? (
-                  <XStack
-                    flex={1}
-                    height={46}
-                    backgroundColor={isOnWaitlist ? '#059669' : '#B45309'}
-                    borderRadius={12}
-                    alignItems="center"
-                    justifyContent="center"
-                    cursor={isOnWaitlist ? 'default' : 'pointer'}
-                    onPress={isOnWaitlist ? undefined : () => handleJoinWaitlist()}
-                    hoverStyle={isOnWaitlist ? undefined : { opacity: 0.92, scale: 1.02 }}
-                    pressStyle={isOnWaitlist ? undefined : { scale: 0.96 }}
-                  >
-                    <Text color="#FFFFFF" fontWeight="800" fontSize={14}>
-                      {isWaitlistLoading
-                        ? 'Joining...'
-                        : isOnWaitlist
-                        ? 'On Waitlist ✓'
-                        : '🔔 Join Waitlist'}
-                    </Text>
-                  </XStack>
-                ) : (
-                  <XStack
-                    flex={1}
-                    height={46}
-                    backgroundColor="#94A3B8"
-                    borderRadius={12}
-                    alignItems="center"
-                    justifyContent="center"
-                    cursor="default"
-                  >
-                    <Text color="#FFFFFF" fontWeight="800" fontSize={14}>
-                      Sold Out (No Restock)
-                    </Text>
-                  </XStack>
-                )
-              ) : (
-                <XStack
-                  flex={1}
-                  height={46}
-                  backgroundColor={addedToBag ? '#16A34A' : tokens.accent}
-                  borderRadius={12}
-                  alignItems="center"
-                  justifyContent="center"
-                  cursor="pointer"
-                  onPress={addedToBag ? openDrawer : handleAddToBag}
-                  hoverStyle={{ opacity: 0.92, scale: 1.02 }}
-                  pressStyle={{ scale: 0.96 }}
-                >
-                  <Text color={tokens.accentForeground} fontWeight="800" fontSize={14}>
-                    {addedToBag ? '🛍 Go to Bag →' : '🛍 Add to Bag'}
-                  </Text>
-                </XStack>
-              )}
-
-              <HeartButton
-                size={46}
-                active={wishlisted}
-                onPress={handleToggleWishlist}
-              />
-              <ShareButton size={46} onPress={handleShare} />
-            </XStack>
-
-            {/* In-Stock & Dispatch Assurance */}
-            <XStack
-              backgroundColor={tokens.surfaceRaised}
-              borderRadius={12}
-              padding={isMobile ? 12 : 14}
-              alignItems="center"
-              gap={10}
-            >
-              <Text fontSize={18}>{isOutOfStock ? '⏳' : product.inStock ? '⚡' : '📦'}</Text>
-              <YStack flex={1}>
-                <Text fontSize={12} fontWeight="800" color={tokens.text}>
-                  {isOutOfStock
-                    ? 'Currently Out of Stock – Join Waitlist for Priority Batch Allocation'
-                    : product.inStock
-                    ? 'Guaranteed Dispatch within 24 Hours'
-                    : 'Crafted on Demand (Ships in 4-6 business days)'}
-                </Text>
-                <Text fontSize={11} color={tokens.textSecondary}>
-                  {isOutOfStock
-                    ? 'Master weavers begin next production run when restock demand is confirmed'
-                    : 'Delivered with tamper-proof silk bag & silk mark certificate'}
-                </Text>
-              </YStack>
-            </XStack>
-          </YStack>
-        }
-        crossSells={
-          <FrequentlyBoughtTogether
-            borderless={isMobile}
-            items={[
-              {
-                id: product.id,
-                brand: product.brand || 'VAANYA LUXE',
-                name: product.title,
-                price: formattedPrice,
-                originalPrice: formattedOrigPrice,
-                offLabel: product.discountPercentage > 0 ? `${product.discountPercentage}% OFF` : undefined,
-                gradient: ['#f3e6d8', '#d3aa75'],
-                checked: true,
-              },
-              {
-                id: 'cross-blouse-1',
-                brand: 'VAANYA HERITAGE',
-                name: 'Silk Brocade Stitched Blouse Piece',
-                price: '₹1,299',
-                originalPrice: '₹1,999',
-                offLabel: '35% OFF',
-                gradient: ['#f0d5d1', '#bf7b71'],
-                checked: true,
-              },
-            ]}
-            totalPrice={`₹${(product.price + 1299).toLocaleString('en-IN')}`}
-            totalOriginal={`₹${(product.originalPrice + 1999).toLocaleString('en-IN')}`}
-            totalOff={`₹${(product.originalPrice + 1999 - (product.price + 1299)).toLocaleString('en-IN')} OFF`}
-            onAddAll={handleAddToBag}
-          />
-        }
-        specifications={
-          <SpecificationsPanel
-            borderless={isMobile}
-            specs={[
-              { label: 'Fabric Composition', value: product.fabric || '100% Pure Mulberry Silk' },
-              { label: 'Weave Origin / Craft', value: product.weaveOrigin || 'Handloom Traditional Weave' },
-              { label: 'Product Code / SKU', value: product.code || '-' },
-              { label: 'Silk Mark Certification', value: 'Certified SM/IND/2026/9102' },
-              { label: 'Wash Care Instructions', value: 'Dry Clean Only, Store in Muslin Bag' },
-              {
-                label: 'Dispatch Timeline',
-                value: product.inStock
-                  ? 'Guaranteed Dispatch within 24 Hours'
-                  : 'Made to Order (Ships in 4-6 Days)',
-              },
-            ]}
-            defaultCollapsed={true}
-            isCollapsible={true}
-          />
-        }
-        reviews={
-          <RatingsPanel
-            borderless={isMobile}
-            averageRating={product.rating || 4.8}
-            totalReviews={product.reviewCount || 248}
-            breakdown={[180, 45, 15, 5, 3]}
-            photoColors={['#edd9c5', '#f3d6d8', '#dfe4f2', '#dfe9d8']}
-            reviews={[
-              {
-                initials: 'AK',
-                name: 'Ananya Krishnamurthy',
-                date: '18 August 2026',
-                rating: 5,
-                text: 'The drape and texture exceeded my highest expectations. The zari has a classy, muted golden sheen rather than being overly flashy. Truly museum quality craft.',
-              },
-              {
-                initials: 'PS',
-                name: 'Priyanka Sharma',
-                date: '12 August 2026',
-                rating: 5,
-                text: 'Came in a gorgeous silk-lined gift box with authentic certification card. Loved every detail!',
-              },
-            ]}
-          />
-        }
-        recommendations={
-          relatedProducts.length > 0 ? (
-            <YStack
-              backgroundColor={isMobile ? 'transparent' : tokens.surface}
-              borderColor={isMobile ? 'transparent' : tokens.border}
-              borderWidth={isMobile ? 0 : 1}
-              borderRadius={isMobile ? 0 : 20}
-              overflow="hidden"
-            >
-              <HorizontalProductStrip
-                title="You May Also Cherish"
-                subtitle="Similar handloom sarees selected by our master curators"
-                badgeLabel="RECOMMENDED"
-                products={relatedProducts.map((p, idx) => ({
-                  id: p.id,
-                  brand: p.brand || 'VAANYA LUXE',
-                  name: p.title,
-                  price: p.price,
-                  originalPrice: p.originalPrice,
-                  offPercent: p.discountPercentage,
-                  rating: p.rating,
-                  gradient: (idx % 2 === 0
-                    ? ['#f0d5d1', '#bf7b71']
-                    : ['#dfe9d8', '#9ec38f']) as [string, string],
-                }))}
-                showAddToBag={true}
-                onProductPress={(id) => {
-                  const target = relatedProducts.find((p) => p.id === id);
-                  if (target) {
-                    navigate('pdp', { code: target.code, id: target.id });
-                  }
-                }}
-              />
-            </YStack>
-          ) : null
-        }
-        stickyBuyBar={
-          <StickyAddToBagBar
-            price={formattedPrice}
-            title={`${product.title} (${activeColorLabel})`}
-            onAddToBag={
-              isOutOfStock
-                ? allowWaitlist
-                  ? isOnWaitlist
-                    ? () => {}
-                    : handleJoinWaitlist
-                  : () => {}
-                : addedToBag
-                ? openDrawer
-                : handleAddToBag
-            }
-            buttonLabel={
-              isOutOfStock
-                ? allowWaitlist
-                  ? isWaitlistLoading
-                    ? 'Joining...'
-                    : isOnWaitlist
-                    ? 'On Waitlist ✓'
-                    : '🔔 Join Waitlist'
-                  : 'Sold Out'
-                : addedToBag
-                ? '🛍 Go to Bag →'
-                : '🛍 Add to Bag'
-            }
-            buttonBg={
-              isOutOfStock
-                ? allowWaitlist
-                  ? isOnWaitlist
-                    ? '#059669'
-                    : '#B45309'
-                  : '#94A3B8'
-                : addedToBag
-                ? '#16A34A'
-                : undefined
-            }
-          />
-        }
+        selectedColorId={selectedColor}
+        onSelectColorId={setSelectedColor}
+        selectedSize={selectedSize}
+        onSelectSize={setSelectedSize}
+        onAddToCart={handleAddToBag}
+        onToggleWishlist={handleToggleWishlist}
+        isWishlisted={wishlisted}
+        onShare={handleShare}
+        onNavigateHome={() => navigate('home')}
+        onNavigateCatalog={() => navigate('catalog')}
+        relatedProducts={relatedProducts.map((p) => ({
+          id: p.id,
+          code: p.code,
+          title: p.title,
+          brand: p.brand,
+          price: p.price,
+          originalPrice: p.originalPrice,
+          discountPercent: p.discountPercentage,
+          rating: p.rating,
+        }))}
+        onSelectRelatedProduct={(code) => navigate('pdp', { code, id: code })}
       />
 
       {/* Dismissible Login Modal for Guest Waitlist Join */}

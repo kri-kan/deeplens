@@ -143,6 +143,8 @@ function InnerRootLayout() {
                 <Stack.Screen name="store/devices/index" options={{ headerShown: false, gestureEnabled: true, animation: 'slide_from_right' }} />
                 <Stack.Screen name="store/devices/list" options={{ headerShown: false, gestureEnabled: true, animation: 'slide_from_right' }} />
                 <Stack.Screen name="store/administration" options={{ headerShown: false, gestureEnabled: true, animation: 'slide_from_right' }} />
+                <Stack.Screen name="store/inventory" options={{ headerShown: false, gestureEnabled: true, animation: 'slide_from_right' }} />
+                <Stack.Screen name="store/reviews" options={{ headerShown: false, gestureEnabled: true, animation: 'slide_from_right' }} />
               </Stack>
               <StatusBar style="auto" />
               <OTABanner />

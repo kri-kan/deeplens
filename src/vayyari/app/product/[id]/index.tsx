@@ -13,6 +13,7 @@ import { storeAdminService } from '@/services/storeAdminService';
 import { useProductDetail } from '@/hooks/useProductDetail';
 import { downloadMedia } from '@/utils/media-helpers';
 import { formatISTTimestamp } from '@/utils/date-format';
+import { resolvePdpMediaItem } from '@/utils/pdpMediaHelpers';
 
 export default function ProductDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -256,21 +257,14 @@ export default function ProductDetailScreen() {
         stitchType: product.stitchType,
         occasions: product.occasions,
         confidenceScore: product.confidenceScore,
-        media: (product.media || []).map((m) => ({
-          id: m.id,
-          url:
-            m.id && m.id !== '00000000-0000-0000-0000-000000000000'
-              ? productService.getThumbnailUrl(m.id, 'large')
-              : m.storagePath
-              ? productService.getThumbnailUrlByPath(m.storagePath, 'large')
-              : 'https://via.placeholder.com/400',
-          thumbnailUrl:
-            m.id && m.id !== '00000000-0000-0000-0000-000000000000'
-              ? productService.getThumbnailUrl(m.id, 'medium')
-              : undefined,
-          mediaType: m.mediaType === 2 ? 'video' : 'image',
-          isDefault: m.isDefault,
-        })),
+        media: (product.media || []).map((m) =>
+          resolvePdpMediaItem(m, {
+            getRawMediaUrl: (mediaId) => productService.getRawMediaUrl(mediaId),
+            getMediaUrlByPath: (path) => productService.getMediaUrlByPath(path),
+            getThumbnailUrl: (mediaId, spec) => productService.getThumbnailUrl(mediaId, spec),
+            getThumbnailUrlByPath: (path, spec) => productService.getThumbnailUrlByPath(path, spec),
+          })
+        ),
         listings: (product.listings || []).map((l) => ({
           id: l.id,
           vendorName: l.vendorName || 'Unknown Vendor',

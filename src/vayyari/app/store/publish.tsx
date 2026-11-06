@@ -17,6 +17,7 @@ export default function StorePublishScreen() {
   const [jobs, setJobs] = useState<PublishJobStatusResponse[]>([]);
   const [activeJob, setActiveJob] = useState<PublishJobStatusResponse | null>(null);
   const [publishedCount, setPublishedCount] = useState(0);
+  const [totalStarredCount, setTotalStarredCount] = useState<number | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -149,6 +150,7 @@ export default function StorePublishScreen() {
         }),
         productService.getCatalog({
           isStarred: true,
+          isPublished: false,
           skip: 0,
           take: PAGE_SIZE,
         }),
@@ -165,13 +167,18 @@ export default function StorePublishScreen() {
         });
       }
 
-      if (starredRes.status === 'fulfilled' && starredRes.value?.products) {
-        starredRes.value.products.forEach((p) => {
-          const idKey = (p.masterProductId || p.id).toLowerCase();
-          if (!productMap.has(idKey)) {
-            productMap.set(idKey, p);
-          }
-        });
+      if (starredRes.status === 'fulfilled' && starredRes.value) {
+        if (starredRes.value.totalCount !== undefined) {
+          setTotalStarredCount(starredRes.value.totalCount);
+        }
+        if (starredRes.value.products) {
+          starredRes.value.products.forEach((p) => {
+            const idKey = (p.masterProductId || p.id).toLowerCase();
+            if (!productMap.has(idKey)) {
+              productMap.set(idKey, p);
+            }
+          });
+        }
       }
 
       // Map failed publishings
@@ -223,7 +230,16 @@ export default function StorePublishScreen() {
       const fetchedProducts = Array.from(productMap.values());
       const mapped = mapProducts(fetchedProducts, inStoreMap);
       setStarredProducts(mapped);
-      setHasMore(starredRes.status === 'fulfilled' && starredRes.value?.products ? starredRes.value.products.length >= PAGE_SIZE : false);
+      const totalCount = starredRes.status === 'fulfilled' ? starredRes.value?.totalCount : undefined;
+      const initialStarredCount =
+        starredRes.status === 'fulfilled' && starredRes.value?.products
+          ? starredRes.value.products.length
+          : 0;
+      setHasMore(
+        totalCount !== undefined
+          ? initialStarredCount < totalCount
+          : initialStarredCount >= PAGE_SIZE
+      );
     } catch (err) {
       console.warn('Failed to load initial catalog products:', err);
     } finally {
@@ -237,15 +253,19 @@ export default function StorePublishScreen() {
 
     try {
       setIsLoadingMore(true);
-      const currentSkip = starredProducts.filter((p) => !p.isPublishedToStore).length;
+      const currentSkip = starredProducts.filter((p) => !p.isPublishedToStore && !p.isPublished).length;
 
       const catalogData = await productService.getCatalog({
         isStarred: true,
+        isPublished: false,
         skip: currentSkip,
         take: PAGE_SIZE,
       });
 
       if (catalogData && catalogData.products && catalogData.products.length > 0) {
+        if (catalogData.totalCount !== undefined) {
+          setTotalStarredCount(catalogData.totalCount);
+        }
         const mapped = mapProducts(catalogData.products, inStoreProductsMap);
         let newItemsCount = 0;
         setStarredProducts((prev) => {
@@ -254,7 +274,11 @@ export default function StorePublishScreen() {
           newItemsCount = newItems.length;
           return [...prev, ...newItems];
         });
-        if (newItemsCount === 0) {
+        if (
+          newItemsCount === 0 ||
+          (catalogData.totalCount !== undefined &&
+            currentSkip + catalogData.products.length >= catalogData.totalCount)
+        ) {
           setHasMore(false);
         } else {
           setHasMore(catalogData.products.length >= PAGE_SIZE);
@@ -329,6 +353,11 @@ export default function StorePublishScreen() {
         })
       );
       setPublishedCount((prev) => prev + selectedIds.length);
+      if (!isUpdating) {
+        setTotalStarredCount((prev) =>
+          prev !== undefined ? Math.max(0, prev - selectedIds.length) : undefined
+        );
+      }
 
       // 3. Reload data from backend
       setTimeout(() => {
@@ -385,6 +414,7 @@ export default function StorePublishScreen() {
       jobs={jobs}
       activeJob={activeJob}
       publishedCount={publishedCount}
+      totalStarredCount={totalStarredCount}
       loading={loading}
       refreshing={refreshing}
       isLoadingMore={isLoadingMore}

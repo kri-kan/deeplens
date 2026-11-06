@@ -19,7 +19,7 @@
     "android": {
       "package": "com.vayyari.store",
       "adaptiveIcon": {
-        "backgroundColor": "#0C0E14",
+        "backgroundColor": "#FAF7F2",
         "foregroundImage": "./assets/android-icon-foreground.png"
       },
       "permissions": [

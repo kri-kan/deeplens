@@ -304,3 +304,33 @@ export const filterStorePublishProducts = (
 
   return list;
 };
+
+export interface StorePublishHeaderSubtitleParams {
+  activeQueue: 'all' | 'publish_updates' | 'failed';
+  filteredCount: number;
+  allStarredCount: number;
+  publishUpdatesCount: number;
+  failedCount: number;
+  hasActiveFilters: boolean;
+}
+
+export function getStorePublishHeaderSubtitle({
+  activeQueue,
+  filteredCount,
+  allStarredCount,
+  publishUpdatesCount,
+  failedCount,
+  hasActiveFilters,
+}: StorePublishHeaderSubtitleParams): string {
+  if (activeQueue === 'publish_updates') {
+    return `${publishUpdatesCount} Product${publishUpdatesCount === 1 ? '' : 's'} with Updates`;
+  }
+  if (activeQueue === 'failed') {
+    return `${failedCount} Failed Product${failedCount === 1 ? '' : 's'}`;
+  }
+  if (hasActiveFilters) {
+    return `${filteredCount} of ${allStarredCount.toLocaleString()} Starred Products Available`;
+  }
+  return `${allStarredCount.toLocaleString()} Starred Products Available`;
+}
+

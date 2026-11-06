@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import {
   AdminVayyariStoreInventoryPage,
   StoreInventoryProductItem,
@@ -78,9 +78,11 @@ export default function StoreInventoryScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchProducts();
-  }, [fetchProducts]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchProducts();
+    }, [fetchProducts])
+  );
 
   const reviewCount = useMemo(() => {
     return products.filter((p) => p.isReviewPending).length;
@@ -111,6 +113,7 @@ export default function StoreInventoryScreen() {
       refreshing={refreshing}
       onRefresh={() => fetchProducts(true)}
       onBack={() => router.back()}
+      onNavigateToReviewQueue={() => router.push('/store/reviews' as any)}
       onNavigateToStorePublish={() => router.push('/store/publish' as any)}
       onNavigateToStoreCuration={(id: string) => router.push(`/store/curate/${id}` as any)}
       onOpenPdp={(id: string) => router.push(`/product/${id}` as any)}

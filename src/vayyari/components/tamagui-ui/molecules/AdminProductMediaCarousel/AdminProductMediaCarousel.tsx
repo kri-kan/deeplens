@@ -1,11 +1,153 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { FlatList, TouchableOpacity, Dimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { YStack, XStack, Text } from 'tamagui';
-import { LuImage, LuPlay, LuLayoutGrid, LuLayers } from '../../icons/lu';
+import { useVideoPlayer, VideoView } from 'expo-video';
+import { LuImage, LuPlay, LuLayoutGrid, LuLayers, LuMaximize2 } from '../../icons/lu';
 import { useTheme } from '@/theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const CarouselVideoItem = ({
+  uri,
+  posterUrl,
+  isActive,
+  onExpand,
+}: {
+  uri: string;
+  posterUrl?: string;
+  isActive: boolean;
+  onExpand: () => void;
+}) => {
+  const isImageFallback = !uri || uri.toLowerCase().endsWith('.jpg') || uri.toLowerCase().endsWith('.jpeg') || uri.toLowerCase().endsWith('.webp');
+  const [hasError, setHasError] = useState(isImageFallback);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  const player = useVideoPlayer(hasError ? '' : uri, (p) => {
+    p.loop = true;
+  });
+
+  useEffect(() => {
+    if (!isActive && isPlaying) {
+      try {
+        player?.pause();
+      } catch {}
+      setIsPlaying(false);
+    }
+  }, [isActive, isPlaying, player]);
+
+  const handlePlayToggle = () => {
+    if (!player || hasError) {
+      onExpand();
+      return;
+    }
+    try {
+      if (isPlaying) {
+        player.pause();
+        setIsPlaying(false);
+      } else {
+        player.play();
+        setIsPlaying(true);
+      }
+    } catch {
+      onExpand();
+    }
+  };
+
+  if (hasError) {
+    return (
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onPress={onExpand}
+        style={{ width: '100%', height: '100%' }}
+      >
+        <Image
+          source={{ uri: posterUrl || uri }}
+          style={{ width: '100%', height: '100%' }}
+          contentFit="cover"
+        />
+      </TouchableOpacity>
+    );
+  }
+
+  return (
+    <YStack width="100%" height="100%" position="relative" backgroundColor="#000000">
+      {isPlaying ? (
+        <VideoView
+          player={player}
+          style={{ width: '100%', height: '100%' }}
+          contentFit="contain"
+          nativeControls
+        />
+      ) : (
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={handlePlayToggle}
+          style={{ width: '100%', height: '100%' }}
+        >
+          <Image
+            source={{ uri: posterUrl || uri }}
+            style={{ width: '100%', height: '100%' }}
+            contentFit="cover"
+          />
+          <YStack
+            position="absolute"
+            top={0}
+            left={0}
+            right={0}
+            bottom={0}
+            alignItems="center"
+            justifyContent="center"
+            backgroundColor="rgba(0,0,0,0.25)"
+          >
+            <XStack
+              width={56}
+              height={56}
+              borderRadius={28}
+              backgroundColor="rgba(0,0,0,0.65)"
+              alignItems="center"
+              justifyContent="center"
+              borderWidth={1.5}
+              borderColor="rgba(255,255,255,0.7)"
+            >
+              <LuPlay size={24} color="#ffffff" style={{ marginLeft: 2 }} />
+            </XStack>
+          </YStack>
+        </TouchableOpacity>
+      )}
+
+      {/* Fullscreen Expand Chip button in bottom-right of video slide */}
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Expand to fullscreen preview"
+        activeOpacity={0.8}
+        onPress={onExpand}
+        style={{
+          position: 'absolute',
+          bottom: 12,
+          right: 12,
+          zIndex: 20,
+        }}
+      >
+        <XStack
+          backgroundColor="rgba(0,0,0,0.7)"
+          paddingHorizontal={8}
+          paddingVertical={5}
+          borderRadius={6}
+          alignItems="center"
+          gap={4}
+          borderWidth={1}
+          borderColor="rgba(255,255,255,0.3)"
+        >
+          <LuMaximize2 size={13} color="#ffffff" />
+          <Text fontSize={10} fontWeight="700" color="#ffffff">
+            Fullscreen
+          </Text>
+        </XStack>
+      </TouchableOpacity>
+    </YStack>
+  );
+};
 
 export interface MediaSlideItem {
   id: string;
@@ -200,52 +342,38 @@ export function AdminProductMediaCarousel({
           onScrollToIndexFailed={() => {}}
           style={{ width: '100%', height: '100%' }}
           renderItem={({ item: m, index: idx }) => (
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel={`Fullscreen media ${idx + 1}`}
-              activeOpacity={0.9}
-              onPress={() => onMediaPress(idx)}
-              style={{
-                width: SCREEN_WIDTH,
-                height: height,
-                position: 'relative',
-                backgroundColor: '#0a0a0a',
-              }}
+            <YStack
+              key={m.id && m.id !== '00000000-0000-0000-0000-000000000000' ? `${m.id}-${idx}` : String(idx)}
+              width={SCREEN_WIDTH}
+              height={height}
+              position="relative"
+              backgroundColor="#0a0a0a"
             >
-              <Image
-                source={{ uri: m.url || m.thumbnailUrl }}
-                style={{ width: '100%', height: '100%' }}
-                contentFit="cover"
-                transition={200}
-              />
-
-              {/* Video Play Icon Overlay */}
-              {m.mediaType === 'video' && (
-                <YStack
-                  position="absolute"
-                  top={0}
-                  left={0}
-                  right={0}
-                  bottom={0}
-                  alignItems="center"
-                  justifyContent="center"
-                  backgroundColor="rgba(0,0,0,0.25)"
+              {m.mediaType === 'video' ? (
+                <CarouselVideoItem
+                  key={`inline-video-${m.id || idx}-${m.url}`}
+                  uri={m.url}
+                  posterUrl={m.thumbnailUrl}
+                  isActive={activeMediaIndex === idx}
+                  onExpand={() => onMediaPress(idx)}
+                />
+              ) : (
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel={`Fullscreen media ${idx + 1}`}
+                  activeOpacity={0.9}
+                  onPress={() => onMediaPress(idx)}
+                  style={{ width: '100%', height: '100%' }}
                 >
-                  <XStack
-                    width={56}
-                    height={56}
-                    borderRadius={28}
-                    backgroundColor="rgba(0,0,0,0.65)"
-                    alignItems="center"
-                    justifyContent="center"
-                    borderWidth={1.5}
-                    borderColor="rgba(255,255,255,0.7)"
-                  >
-                    <LuPlay size={24} color="#ffffff" style={{ marginLeft: 2 }} />
-                  </XStack>
-                </YStack>
+                  <Image
+                    source={{ uri: m.url || m.thumbnailUrl }}
+                    style={{ width: '100%', height: '100%' }}
+                    contentFit="cover"
+                    transition={200}
+                  />
+                </TouchableOpacity>
               )}
-            </TouchableOpacity>
+            </YStack>
           )}
         />
       )}

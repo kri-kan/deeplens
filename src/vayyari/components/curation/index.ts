@@ -7,3 +7,4 @@ export * from './StoreCuration/ColorAssignmentPickerModal';
 export * from './StoreCuration/MediaDualCardStackModal';
 export * from './StoreCuration/MediaEditorModal';
 export * from './StoreCuration/StorePdpLivePreviewModal';
+export * from '../tamagui-ui/organisms/StoreCuration/ProductDetailFragment';

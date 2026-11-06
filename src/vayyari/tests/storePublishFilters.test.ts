@@ -7,6 +7,7 @@ import {
   getStorePublishFilterChips,
   removeStorePublishFilterChip,
   filterStorePublishProducts,
+  getStorePublishHeaderSubtitle,
   StorePublishFilterState,
 } from '../utils/storePublishFilterRules';
 import { VayyariStarredProductItem } from '../components/tamagui-ui/pages/AdminVayyariStorePublishPage';
@@ -213,4 +214,55 @@ describe('Store Publish Filter Rules', () => {
     assert.ok(updates.some((p) => p.productCode === 'VAY-001'));
     assert.ok(updates.some((p) => p.productCode === 'VAY-004'));
   });
+
+  describe('getStorePublishHeaderSubtitle', () => {
+    it('displays total available starred count when in all queue without active filters', () => {
+      const subtitle = getStorePublishHeaderSubtitle({
+        activeQueue: 'all',
+        filteredCount: 60,
+        allStarredCount: 2295,
+        publishUpdatesCount: 5,
+        failedCount: 2,
+        hasActiveFilters: false,
+      });
+      assert.strictEqual(subtitle, '2,295 Starred Products Available');
+    });
+
+    it('displays filtered slice count of total available when active filters exist', () => {
+      const subtitle = getStorePublishHeaderSubtitle({
+        activeQueue: 'all',
+        filteredCount: 15,
+        allStarredCount: 2295,
+        publishUpdatesCount: 5,
+        failedCount: 2,
+        hasActiveFilters: true,
+      });
+      assert.strictEqual(subtitle, '15 of 2,295 Starred Products Available');
+    });
+
+    it('displays pending updates count when in publish_updates queue', () => {
+      const subtitle = getStorePublishHeaderSubtitle({
+        activeQueue: 'publish_updates',
+        filteredCount: 3,
+        allStarredCount: 2295,
+        publishUpdatesCount: 3,
+        failedCount: 0,
+        hasActiveFilters: false,
+      });
+      assert.strictEqual(subtitle, '3 Products with Updates');
+    });
+
+    it('displays failed product count when in failed queue', () => {
+      const subtitle = getStorePublishHeaderSubtitle({
+        activeQueue: 'failed',
+        filteredCount: 1,
+        allStarredCount: 2295,
+        publishUpdatesCount: 0,
+        failedCount: 1,
+        hasActiveFilters: false,
+      });
+      assert.strictEqual(subtitle, '1 Failed Product');
+    });
+  });
 });
+

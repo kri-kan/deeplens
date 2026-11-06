@@ -52,34 +52,21 @@ export interface AdminStorePublishBatchDetailPageProps {
   disableSafeArea?: boolean;
 }
 
-export function formatBatchTime(dateStr: string) {
-  try {
-    const d = new Date(dateStr);
-    return `${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · ${d.toLocaleDateString([], {
-      month: 'short',
-      day: 'numeric',
-    })}`;
-  } catch {
-    return dateStr;
-  }
-}
+import {
+  formatBatchTimestamp,
+  formatBatchTime,
+  getBatchStatusBadge,
+  getBatchTileLayout,
+  PublishBatchTileJob,
+} from '@/utils/publishBatchTileRules';
 
-export function getBatchStatusBadge(status: string) {
-  switch (status.toLowerCase()) {
-    case 'completed':
-      return { label: 'Completed', bg: '#DCFCE7', text: '#15803D', border: '#86EFAC' };
-    case 'in_progress':
-    case 'running':
-      return { label: 'Running', bg: '#FEF3C7', text: '#B45309', border: '#FCD34D' };
-    case 'partial':
-      return { label: 'Partial', bg: '#FEF9C3', text: '#A16207', border: '#FDE047' };
-    case 'failed':
-      return { label: 'Failed', bg: '#FEE2E2', text: '#B91C1C', border: '#FCA5A5' };
-    case 'queued':
-    default:
-      return { label: 'Queued', bg: '#F3F4F6', text: '#4B5563', border: '#E5E7EB' };
-  }
-}
+export {
+  formatBatchTimestamp,
+  formatBatchTime,
+  getBatchStatusBadge,
+  getBatchTileLayout,
+  PublishBatchTileJob,
+};
 
 // ═══════════════════════════════════════════════════════════════════
 // DEDICATED BATCH DETAIL VIEW (3-COLUMN PRODUCT TILES)
@@ -483,11 +470,12 @@ export function AdminStorePublishBatchesPage({
     );
   }
 
-  // ── RENDER LEAN BATCH SUMMARY CARD ──
+  // ── RENDER 3-PER-ROW VERTICAL BATCH TILE ──
   const renderBatchCard = ({ item: job }: { item: PublishJobStatusResponse }) => {
     const statusCfg = getBatchStatusBadge(job.status);
     const shortId = job.id.replace(/-/g, '').substring(0, 8);
     const isRunning = job.status === 'in_progress' || job.status === 'queued';
+    const timestamp = formatBatchTimestamp(job.createdAt);
 
     return (
       <Pressable
@@ -499,88 +487,88 @@ export function AdminStorePublishBatchesPage({
             setInternalSelectedBatch(job);
           }
         }}
+        accessibilityRole="button"
+        accessibilityLabel={`Batch ${job.id} - ${timestamp}`}
         style={({ pressed }) => [
-          styles.batchCard,
+          styles.batchTile,
           {
             backgroundColor: tokens.surface,
-            borderColor: tokens.border,
+            borderColor: isRunning ? '#F59E0B' : job.status === 'failed' ? '#FCA5A5' : tokens.border,
             opacity: pressed ? 0.92 : 1,
-            transform: [{ scale: pressed ? 0.99 : 1 }],
+            transform: [{ scale: pressed ? 0.98 : 1 }],
           },
         ]}
       >
-        <YStack gap={8}>
-          {/* Header Row: Short Batch ID & Status Badge */}
+        <YStack flex={1} justifyContent="space-between" gap={8}>
+          {/* Top Row: Status Pill & Action */}
           <XStack alignItems="center" justifyContent="space-between">
-            <XStack alignItems="center" gap={6}>
-              <LuLayers size={14} color={tokens.accent} />
-              <Text fontSize={13} fontWeight="800" color={tokens.text} fontFamily="$mono">
-                #{shortId}
-              </Text>
-              <Text fontSize={10} color={tokens.textMuted}>
-                ({job.action === 'sync_updates' ? 'Sync Updates' : 'Publish'})
-              </Text>
-            </XStack>
-
             <View
               style={[
-                styles.batchStatusPill,
+                styles.tileStatusPill,
                 { backgroundColor: statusCfg.bg, borderColor: statusCfg.border },
               ]}
             >
-              <XStack alignItems="center" gap={4}>
+              <XStack alignItems="center" gap={3}>
                 {isRunning && (
-                  <ActivityIndicator size="small" color={statusCfg.text} style={{ transform: [{ scale: 0.6 }] }} />
+                  <ActivityIndicator size="small" color={statusCfg.text} style={{ transform: [{ scale: 0.5 }] }} />
                 )}
-                <Text fontSize={10} fontWeight="800" color={statusCfg.text}>
+                <Text fontSize={9} fontWeight="800" color={statusCfg.text} numberOfLines={1}>
                   {statusCfg.label}
                 </Text>
               </XStack>
             </View>
+
+            <Text fontSize={8} color={tokens.textMuted} fontWeight="700" textTransform="uppercase">
+              {job.action === 'sync_updates' ? 'Sync' : 'Pub'}
+            </Text>
           </XStack>
 
-          {/* Counts & Metrics Row */}
-          <XStack alignItems="center" justifyContent="space-between">
-            <XStack alignItems="center" gap={6} flexWrap="wrap">
-              <View style={[styles.metricPill, { backgroundColor: '#DCFCE7' }]}>
-                <Text fontSize={11} fontWeight="800" color="#15803D">
-                  ✓ {job.processedCount} Succeeded
+          {/* Primary / First-Class Label: Timestamp (dd mmm yy hh mm) & Secondary Label: GUID */}
+          <YStack gap={2}>
+            <Text
+              fontSize={11}
+              fontWeight="800"
+              color={tokens.text}
+              numberOfLines={2}
+              lineHeight={15}
+              accessibilityLabel={`Timestamp: ${timestamp}`}
+            >
+              {timestamp}
+            </Text>
+
+            <Text
+              fontSize={9}
+              color={tokens.textMuted}
+              fontFamily="$mono"
+              numberOfLines={1}
+              accessibilityLabel={`GUID: ${shortId}`}
+            >
+              #{shortId}
+            </Text>
+          </YStack>
+
+          {/* Bottom Row: Metrics (Succeeded / Failed / Total) */}
+          <YStack gap={3}>
+            <XStack alignItems="center" gap={4} flexWrap="wrap">
+              <View style={[styles.tileMetricPill, { backgroundColor: '#DCFCE7' }]}>
+                <Text fontSize={9} fontWeight="800" color="#15803D">
+                  ✓ {job.processedCount}
                 </Text>
               </View>
 
               {job.failedCount > 0 && (
-                <View style={[styles.metricPill, { backgroundColor: '#FEE2E2' }]}>
-                  <Text fontSize={11} fontWeight="800" color="#B91C1C">
-                    ⚠️ {job.failedCount} Failed
+                <View style={[styles.tileMetricPill, { backgroundColor: '#FEE2E2' }]}>
+                  <Text fontSize={9} fontWeight="800" color="#B91C1C">
+                    ⚠️ {job.failedCount}
                   </Text>
                 </View>
               )}
-
-              <View style={[styles.metricPill, { backgroundColor: 'rgba(0,0,0,0.04)' }]}>
-                <Text fontSize={11} fontWeight="700" color={tokens.textMuted}>
-                  {job.totalCount} Total
-                </Text>
-              </View>
             </XStack>
 
-            <LuChevronRight size={16} color={tokens.textMuted} />
-          </XStack>
-
-          {/* Footer Row: Timestamp & Requested By */}
-          <XStack alignItems="center" justifyContent="space-between" paddingTop={2}>
-            <XStack alignItems="center" gap={4}>
-              <LuClock size={11} color={tokens.textMuted} />
-              <Text fontSize={10} color={tokens.textMuted}>
-                {formatBatchTime(job.createdAt)}
-              </Text>
-            </XStack>
-
-            {job.requestedBy ? (
-              <Text fontSize={10} color={tokens.textMuted} numberOfLines={1}>
-                by {job.requestedBy.split('@')[0]}
-              </Text>
-            ) : null}
-          </XStack>
+            <Text fontSize={9} color={tokens.textMuted} fontWeight="600">
+              {job.totalCount} {job.totalCount === 1 ? 'item' : 'items'}
+            </Text>
+          </YStack>
         </YStack>
       </Pressable>
     );
@@ -665,8 +653,10 @@ export function AdminStorePublishBatchesPage({
         <FlatList
           data={jobs}
           keyExtractor={(item) => item.id}
+          numColumns={3}
           renderItem={renderBatchCard}
-          contentContainerStyle={{ padding: 12, paddingBottom: 60, gap: 10 }}
+          columnWrapperStyle={styles.columnWrapper}
+          contentContainerStyle={{ padding: 6, paddingBottom: 60 }}
           showsVerticalScrollIndicator={false}
           onEndReached={hasMore && !isLoadingMore ? onLoadMore : undefined}
           onEndReachedThreshold={0.4}
@@ -715,6 +705,27 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  batchTile: {
+    flex: 1 / 3,
+    maxWidth: '32.5%',
+    minHeight: 125,
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 8,
+    justifyContent: 'space-between',
+  },
+  tileStatusPill: {
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    maxWidth: '75%',
+  },
+  tileMetricPill: {
+    paddingHorizontal: 4,
+    paddingVertical: 1.5,
+    borderRadius: 4,
   },
   batchCard: {
     padding: 12,

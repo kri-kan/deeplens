@@ -33,6 +33,7 @@ import {
 } from '../icons/lu';
 import { useTheme } from '@/theme';
 import { PublishJobStatusResponse } from '@/services/storeAdminService';
+import { formatBatchTimestamp } from '@/utils/publishBatchTileRules';
 
 import {
   hasPendingStoreUpdates,
@@ -40,6 +41,7 @@ import {
   formatMediaDeltaBadge,
   filterPublishUpdatesQueue,
 } from '@/utils/publishDeltaRules';
+import { getStorePublishHeaderSubtitle } from '@/utils/storePublishFilterRules';
 
 import {
   StorePublishFilterDrawer,
@@ -114,6 +116,7 @@ export interface AdminVayyariStorePublishPageProps {
   jobs?: PublishJobStatusResponse[];
   activeJob?: PublishJobStatusResponse | null;
   publishedCount?: number;
+  totalStarredCount?: number;
   loading?: boolean;
   refreshing?: boolean;
   isLoadingMore?: boolean;
@@ -137,6 +140,7 @@ export function AdminVayyariStorePublishPage({
   jobs = [],
   activeJob = null,
   publishedCount = 0,
+  totalStarredCount,
   loading = false,
   refreshing = false,
   isLoadingMore = false,
@@ -183,10 +187,12 @@ export function AdminVayyariStorePublishPage({
   }, [activeJob]);
 
   const publishUpdatesCount = useMemo(() => filterPublishUpdatesQueue(products).length, [products]);
-  const allStarredCount = useMemo(
-    () => products.filter((p) => !p.isPublishedToStore && !p.isPublished).length,
-    [products]
-  );
+  const allStarredCount = useMemo(() => {
+    if (totalStarredCount !== undefined) {
+      return totalStarredCount;
+    }
+    return products.filter((p) => !p.isPublishedToStore && !p.isPublished).length;
+  }, [totalStarredCount, products]);
   const failedCount = useMemo(() => failedProducts.length, [failedProducts]);
 
   const activeFilterCount = useMemo(() => getActiveStorePublishFilterCount(filters), [filters]);
@@ -210,6 +216,26 @@ export function AdminVayyariStorePublishPage({
       failedProducts
     );
   }, [products, failedProducts, activeQueue, filters, searchQuery]);
+
+  const hasActiveFilters = activeFilterCount > 0 || searchQuery.trim().length > 0;
+
+  const headerSubtitle = useMemo(() => {
+    return getStorePublishHeaderSubtitle({
+      activeQueue,
+      filteredCount: filteredProducts.length,
+      allStarredCount,
+      publishUpdatesCount,
+      failedCount,
+      hasActiveFilters,
+    });
+  }, [
+    activeQueue,
+    filteredProducts.length,
+    allStarredCount,
+    publishUpdatesCount,
+    failedCount,
+    hasActiveFilters,
+  ]);
 
   const toggleSelectProduct = (id: string) => {
     if (selectedIds.includes(id)) {
@@ -442,7 +468,7 @@ export function AdminVayyariStorePublishPage({
               </Pressable>
             </XStack>
             <Text fontSize={11} color={tokens.textMuted}>
-              {filteredProducts.length} Starred Products Available
+              {headerSubtitle}
             </Text>
           </YStack>
         </XStack>
@@ -488,7 +514,7 @@ export function AdminVayyariStorePublishPage({
             fontWeight="700"
             color={activeQueue === 'all' ? tokens.accentForeground : tokens.text}
           >
-            All ({allStarredCount})
+            All ({allStarredCount.toLocaleString()})
           </Text>
         </Pressable>
 
@@ -993,10 +1019,15 @@ export function AdminVayyariStorePublishPage({
                         gap={8}
                       >
                         <XStack alignItems="center" justifyContent="space-between">
-                          <XStack alignItems="center" gap={6}>
-                            <Text fontSize={12} fontWeight="800" color={tokens.text}>
-                              Batch #{job.id.substring(0, 8)}
-                            </Text>
+                          <XStack alignItems="center" gap={8}>
+                            <YStack gap={2}>
+                              <Text fontSize={12} fontWeight="800" color={tokens.text}>
+                                {formatBatchTimestamp(job.createdAt)}
+                              </Text>
+                              <Text fontSize={9.5} color={tokens.textMuted} fontFamily="$mono">
+                                #{job.id.substring(0, 8)}
+                              </Text>
+                            </YStack>
                             <View
                               style={{
                                 paddingHorizontal: 6,

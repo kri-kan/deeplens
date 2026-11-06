@@ -8,11 +8,8 @@ import {
   LuRefreshCw,
   LuMonitor,
   LuSmartphone,
-  LuChevronRight,
   LuStore,
   LuSparkles,
-  LuActivity,
-  LuShieldCheck,
 } from '../icons/lu';
 import { useTheme } from '@/theme';
 import { DeviceFleetStats } from '@/services/storeAdminService';
@@ -153,200 +150,8 @@ export const AdminStoreAdministrationPage: React.FC<AdminStoreAdministrationPage
           ) : undefined
         }
       >
-        {/* ── Live Fleet Telemetry KPI Header Strip ── */}
-        <YStack
-          backgroundColor={tokens.surface}
-          borderRadius={tokens.radius.lg}
-          borderWidth={1}
-          borderColor={tokens.border}
-          padding="$4"
-          gap="$3"
-        >
-          <XStack justifyContent="space-between" alignItems="center">
-            <XStack alignItems="center" gap="$2">
-              <View style={[styles.pulseDot, { backgroundColor: '#10B981' }]} />
-              <Text fontSize={11} fontWeight="800" color={tokens.textMuted} textTransform="uppercase" letterSpacing={0.8}>
-                Hardware &amp; Telemetry Status
-              </Text>
-            </XStack>
-            <XStack
-              backgroundColor={tokens.surfaceRaised}
-              paddingHorizontal="$2"
-              paddingVertical="$1"
-              borderRadius={tokens.radius.full}
-            >
-              <Text fontSize={10} fontWeight="700" color={tokens.accent}>
-                Active Signal Sync
-              </Text>
-            </XStack>
-          </XStack>
-
-          <XStack justifyContent="space-between" alignItems="center" gap="$2">
-            <YStack flex={1}>
-              <Text fontSize={24} fontWeight="900" color={tokens.text} letterSpacing={-0.5}>
-                {loading && !stats ? '...' : totalDevices}
-              </Text>
-              <Text fontSize={11} color={tokens.textMuted}>
-                Total Registered Devices
-              </Text>
-            </YStack>
-
-            <View style={[styles.kpiDivider, { backgroundColor: tokens.border }]} />
-
-            <YStack flex={1}>
-              <Text fontSize={24} fontWeight="900" color="#10B981" letterSpacing={-0.5}>
-                {loading && !stats ? '...' : activeToday}
-              </Text>
-              <Text fontSize={11} color={tokens.textMuted}>
-                Active Today
-              </Text>
-            </YStack>
-
-            <View style={[styles.kpiDivider, { backgroundColor: tokens.border }]} />
-
-            <YStack flex={1}>
-              <Text fontSize={13} fontWeight="700" color={tokens.text}>
-                {androidCount}A • {iosCount}i • {webCount}W
-              </Text>
-              <Text fontSize={11} color={tokens.textMuted}>
-                Platform Breakdown
-              </Text>
-            </YStack>
-          </XStack>
-        </YStack>
-
-        {/* ── Section: Fleet & Devices Administration ── */}
-        <YStack gap="$3" marginTop="$2">
-          <XStack alignItems="center" gap="$2" paddingHorizontal="$1">
-            <LuMonitor size={15} color="#06B6D4" />
-            <Text fontSize={12} fontWeight="800" color={tokens.text} textTransform="uppercase" letterSpacing={0.8}>
-              Fleet &amp; Devices
-            </Text>
-          </XStack>
-
-          {/* Primary Featured Card: Fleet & Devices Intelligence */}
-          <Pressable
-            onPress={onNavigateToDevices}
-            accessibilityRole="button"
-            accessibilityLabel="Open Fleet and Devices Intelligence"
-            style={({ pressed }) => [
-              styles.navCard,
-              {
-                backgroundColor: tokens.surface,
-                borderColor: pressed ? '#06B6D4' : tokens.border,
-                transform: [{ scale: pressed ? 0.99 : 1 }],
-              },
-            ]}
-          >
-            <XStack alignItems="center" justifyContent="space-between" gap="$3">
-              <View style={[styles.iconCircle, { backgroundColor: '#06B6D420' }]}>
-                <LuMonitor size={26} color="#06B6D4" />
-              </View>
-
-              <YStack flex={1} gap="$1">
-                <XStack alignItems="center" gap="$2">
-                  <Text fontSize={15} fontWeight="800" color={tokens.text}>
-                    Fleet &amp; Devices
-                  </Text>
-                  <View style={[styles.tagBadge, { backgroundColor: '#06B6D425' }]}>
-                    <Text fontSize={9} fontWeight="800" color="#06B6D4">
-                      LIVE TELEMETRY
-                    </Text>
-                  </View>
-                </XStack>
-                <Text fontSize={12} color={tokens.textMuted} numberOfLines={2} lineHeight={16}>
-                  Real-time telemetry, 24h peak hourly distribution, device signal events and active shopper profiles.
-                </Text>
-              </YStack>
-
-              <View style={[styles.chevronCircle, { backgroundColor: tokens.surfaceRaised }]}>
-                <LuChevronRight size={18} color={tokens.textMuted} />
-              </View>
-            </XStack>
-
-            <XStack
-              marginTop="$3"
-              paddingTop="$2.5"
-              borderTopWidth={1}
-              borderTopColor={tokens.border}
-              justifyContent="space-between"
-              alignItems="center"
-            >
-              <XStack alignItems="center" gap="$1.5">
-                <LuActivity size={12} color="#10B981" />
-                <Text fontSize={11} fontWeight="600" color="#10B981">
-                  Peak analysis &amp; hourly telemetry charts
-                </Text>
-              </XStack>
-              <Text fontSize={11} fontWeight="800" color="#06B6D4">
-                Open Dashboard ➔
-              </Text>
-            </XStack>
-          </Pressable>
-
-          {/* Secondary Card: Hardware Fleet Directory */}
-          <Pressable
-            onPress={onNavigateToDevicesList}
-            accessibilityRole="button"
-            accessibilityLabel="Browse Hardware Fleet Directory"
-            style={({ pressed }) => [
-              styles.navCard,
-              {
-                backgroundColor: tokens.surface,
-                borderColor: pressed ? '#10B981' : tokens.border,
-                transform: [{ scale: pressed ? 0.99 : 1 }],
-              },
-            ]}
-          >
-            <XStack alignItems="center" justifyContent="space-between" gap="$3">
-              <View style={[styles.iconCircle, { backgroundColor: '#10B98120' }]}>
-                <LuSmartphone size={26} color="#10B981" />
-              </View>
-
-              <YStack flex={1} gap="$1">
-                <XStack alignItems="center" gap="$2">
-                  <Text fontSize={15} fontWeight="800" color={tokens.text}>
-                    Hardware Directory
-                  </Text>
-                  <View style={[styles.tagBadge, { backgroundColor: '#10B98125' }]}>
-                    <Text fontSize={9} fontWeight="800" color="#10B981">
-                      DIRECTORY
-                    </Text>
-                  </View>
-                </XStack>
-                <Text fontSize={12} color={tokens.textMuted} numberOfLines={2} lineHeight={16}>
-                  Comprehensive directory of registered mobile &amp; web devices with platform, signal and acquisition filters.
-                </Text>
-              </YStack>
-
-              <View style={[styles.chevronCircle, { backgroundColor: tokens.surfaceRaised }]}>
-                <LuChevronRight size={18} color={tokens.textMuted} />
-              </View>
-            </XStack>
-
-            <XStack
-              marginTop="$3"
-              paddingTop="$2.5"
-              borderTopWidth={1}
-              borderTopColor={tokens.border}
-              justifyContent="space-between"
-              alignItems="center"
-            >
-              <XStack alignItems="center" gap="$1.5">
-                <LuShieldCheck size={12} color={tokens.textMuted} />
-                <Text fontSize={11} fontWeight="600" color={tokens.textMuted}>
-                  Filtered hardware inspection &amp; profiles
-                </Text>
-              </XStack>
-              <Text fontSize={11} fontWeight="800" color="#10B981">
-                Browse Directory ➔
-              </Text>
-            </XStack>
-          </Pressable>
-        </YStack>
-
         {/* ── Section: Operational Storefront Quick Links ── */}
-        <YStack gap="$3" marginTop="$4">
+        <YStack gap="$3">
           <XStack alignItems="center" gap="$2" paddingHorizontal="$1">
             <LuStore size={15} color={tokens.textMuted} />
             <Text fontSize={12} fontWeight="800" color={tokens.text} textTransform="uppercase" letterSpacing={0.8}>
@@ -434,6 +239,132 @@ export const AdminStoreAdministrationPage: React.FC<AdminStoreAdministrationPage
             </Pressable>
           </XStack>
         </YStack>
+
+        {/* ── Live Fleet Telemetry KPI Header Strip ── */}
+        <YStack
+          backgroundColor={tokens.surface}
+          borderRadius={tokens.radius.lg}
+          borderWidth={1}
+          borderColor={tokens.border}
+          padding="$4"
+          gap="$3"
+        >
+          <XStack justifyContent="space-between" alignItems="center">
+            <XStack alignItems="center" gap="$2">
+              <View style={[styles.pulseDot, { backgroundColor: '#10B981' }]} />
+              <Text fontSize={11} fontWeight="800" color={tokens.textMuted} textTransform="uppercase" letterSpacing={0.8}>
+                Hardware &amp; Telemetry Status
+              </Text>
+            </XStack>
+            <XStack
+              backgroundColor={tokens.surfaceRaised}
+              paddingHorizontal="$2"
+              paddingVertical="$1"
+              borderRadius={tokens.radius.full}
+            >
+              <Text fontSize={10} fontWeight="700" color={tokens.accent}>
+                Active Signal Sync
+              </Text>
+            </XStack>
+          </XStack>
+
+          <XStack justifyContent="space-between" alignItems="center" gap="$2">
+            <YStack flex={1}>
+              <Text fontSize={24} fontWeight="900" color={tokens.text} letterSpacing={-0.5}>
+                {loading && !stats ? '...' : totalDevices}
+              </Text>
+              <Text fontSize={11} color={tokens.textMuted}>
+                Total Registered Devices
+              </Text>
+            </YStack>
+
+            <View style={[styles.kpiDivider, { backgroundColor: tokens.border }]} />
+
+            <YStack flex={1}>
+              <Text fontSize={24} fontWeight="900" color="#10B981" letterSpacing={-0.5}>
+                {loading && !stats ? '...' : activeToday}
+              </Text>
+              <Text fontSize={11} color={tokens.textMuted}>
+                Active Today
+              </Text>
+            </YStack>
+
+            <View style={[styles.kpiDivider, { backgroundColor: tokens.border }]} />
+
+            <YStack flex={1}>
+              <Text fontSize={13} fontWeight="700" color={tokens.text}>
+                {androidCount}A • {iosCount}i • {webCount}W
+              </Text>
+              <Text fontSize={11} color={tokens.textMuted}>
+                Platform Breakdown
+              </Text>
+            </YStack>
+          </XStack>
+        </YStack>
+
+        {/* ── Section: Fleet & Devices Administration ── */}
+        <YStack gap="$3">
+          <XStack alignItems="center" gap="$2" paddingHorizontal="$1">
+            <LuMonitor size={15} color="#06B6D4" />
+            <Text fontSize={12} fontWeight="800" color={tokens.text} textTransform="uppercase" letterSpacing={0.8}>
+              Fleet &amp; Devices
+            </Text>
+          </XStack>
+
+          <XStack gap="$3">
+            {/* Fleet & Devices Intelligence */}
+            <Pressable
+              onPress={onNavigateToDevices}
+              accessibilityRole="button"
+              accessibilityLabel="Open Fleet and Devices Intelligence"
+              style={({ pressed }) => [
+                styles.quickTile,
+                {
+                  backgroundColor: tokens.surface,
+                  borderColor: pressed ? '#06B6D4' : tokens.border,
+                },
+              ]}
+            >
+              <View style={[styles.smallIconCircle, { backgroundColor: '#06B6D420' }]}>
+                <LuMonitor size={20} color="#06B6D4" />
+              </View>
+              <YStack gap="$0.5">
+                <Text fontSize={13} fontWeight="800" color={tokens.text}>
+                  Fleet &amp; Devices
+                </Text>
+                <Text fontSize={10.5} color={tokens.textMuted} numberOfLines={1}>
+                  Live telemetry &amp; charts
+                </Text>
+              </YStack>
+            </Pressable>
+
+            {/* Hardware Fleet Directory */}
+            <Pressable
+              onPress={onNavigateToDevicesList}
+              accessibilityRole="button"
+              accessibilityLabel="Browse Hardware Fleet Directory"
+              style={({ pressed }) => [
+                styles.quickTile,
+                {
+                  backgroundColor: tokens.surface,
+                  borderColor: pressed ? '#10B981' : tokens.border,
+                },
+              ]}
+            >
+              <View style={[styles.smallIconCircle, { backgroundColor: '#10B98120' }]}>
+                <LuSmartphone size={20} color="#10B981" />
+              </View>
+              <YStack gap="$0.5">
+                <Text fontSize={13} fontWeight="800" color={tokens.text}>
+                  Hardware Directory
+                </Text>
+                <Text fontSize={10.5} color={tokens.textMuted} numberOfLines={1}>
+                  Device profiles &amp; filters
+                </Text>
+              </YStack>
+            </Pressable>
+          </XStack>
+        </YStack>
       </ScrollView>
     </View>
     </GestureDetector>
@@ -467,30 +398,6 @@ const styles = StyleSheet.create({
   kpiDivider: {
     width: 1,
     height: 28,
-  },
-  navCard: {
-    padding: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-  },
-  iconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tagBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  chevronCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   quickTile: {
     flex: 1,

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Pressable,
@@ -9,6 +9,7 @@ import {
   FlatList,
   RefreshControl,
   TouchableOpacity,
+  BackHandler,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -79,6 +80,8 @@ export interface AdminVayyariStoreInventoryPageProps {
   onOpenPdp?: (productId: string) => void;
   onResyncProduct?: (productId: string) => void;
   onDismissReview?: (productId: string) => Promise<void>;
+  onNavigateToReviewQueue?: () => void;
+  isReviewQueueMode?: boolean;
   disableSafeArea?: boolean;
 }
 
@@ -97,6 +100,8 @@ export function AdminVayyariStoreInventoryPage({
   onOpenPdp,
   onResyncProduct,
   onDismissReview,
+  onNavigateToReviewQueue,
+  isReviewQueueMode = false,
   disableSafeArea = false,
 }: AdminVayyariStoreInventoryPageProps) {
   const { tokens } = useTheme();
@@ -107,8 +112,24 @@ export function AdminVayyariStoreInventoryPage({
   const [filters, setFilters] = useState<StoreInventoryFilterState>(DEFAULT_STORE_INVENTORY_FILTER_STATE);
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
   const [resyncToast, setResyncToast] = useState<string | null>(null);
-  const [showNeedsReviewOnly, setShowNeedsReviewOnly] = useState(false);
+  const [showNeedsReviewOnly, setShowNeedsReviewOnly] = useState(isReviewQueueMode);
   const [dismissingId, setDismissingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isReviewQueueMode) {
+      setShowNeedsReviewOnly(true);
+    }
+  }, [isReviewQueueMode]);
+
+  // Hardware BackHandler for in-place review filter dismissal before route popping
+  useEffect(() => {
+    if (!showNeedsReviewOnly || isReviewQueueMode) return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      setShowNeedsReviewOnly(false);
+      return true;
+    });
+    return () => subscription.remove();
+  }, [showNeedsReviewOnly, isReviewQueueMode]);
 
   const activeFilterCount = useMemo(() => {
     return getActiveStoreInventoryFilterCount(filters);
@@ -242,26 +263,27 @@ export function AdminVayyariStoreInventoryPage({
               </Text>
             </View>
 
-            {/* Media Count Badge (Top-Right) */}
-            <View style={styles.mediaCountBadge}>
-              <Text fontSize={9} fontWeight="700" color="#fff">
-                📸 {product.mediaCount}
-              </Text>
-            </View>
-
-            {/* SKUs Count Badge (Bottom-Left on Image) */}
-            <View style={styles.swatchCountBadge}>
-              <XStack alignItems="center" gap={3}>
-                <LuLayers size={10} color="#fff" />
-                <Text fontSize={9} fontWeight="800" color="#fff">
-                  {swatchesCount} {swatchesCount === 1 ? 'SKU' : 'SKUs'}
+            {/* Top-Right Badges: Image Count & SKU Count below it */}
+            <YStack style={styles.topRightBadgeContainer}>
+              <View style={styles.topRightBadge}>
+                <Text fontSize={9} fontWeight="700" color="#fff">
+                  📸 {product.mediaCount}
                 </Text>
-              </XStack>
-            </View>
+              </View>
+
+              <View style={styles.topRightBadge}>
+                <XStack alignItems="center" gap={3}>
+                  <LuLayers size={10} color="#fff" />
+                  <Text fontSize={9} fontWeight="800" color="#fff">
+                    {swatchesCount} {swatchesCount === 1 ? 'SKU' : 'SKUs'}
+                  </Text>
+                </XStack>
+              </View>
+            </YStack>
           </View>
 
           {/* Card Details & Action */}
-          <YStack padding={8} gap={4} backgroundColor={tokens.surface}>
+          <YStack padding={8} gap={6} backgroundColor={tokens.surface}>
             <XStack alignItems="center" justifyContent="space-between">
               <Text fontSize={11} fontWeight="900" color={tokens.text} numberOfLines={1}>
                 {product.productCode}
@@ -271,54 +293,8 @@ export function AdminVayyariStoreInventoryPage({
               </Text>
             </XStack>
 
-            <Text fontSize={10} color={tokens.textMuted} numberOfLines={1}>
-              {product.title}
-            </Text>
-
-            {/* Swatch Color Preview Dots & SKU Count */}
-            <XStack alignItems="center" justifyContent="space-between" marginTop={2} minHeight={16}>
-              <XStack alignItems="center" gap={3}>
-                {siblingSwatches.length > 0 ? (
-                  <>
-                    {siblingSwatches.slice(0, 4).map((s: any, idx: number) => (
-                      <View
-                        key={idx}
-                        style={{
-                          width: 10,
-                          height: 10,
-                          borderRadius: 5,
-                          backgroundColor: s.colorHex || '#1B4D3E',
-                          borderWidth: 1,
-                          borderColor: tokens.border,
-                        }}
-                      />
-                    ))}
-                    {siblingSwatches.length > 4 && (
-                      <Text fontSize={8.5} fontWeight="700" color={tokens.textMuted}>
-                        +{siblingSwatches.length - 4}
-                      </Text>
-                    )}
-                  </>
-                ) : (
-                  <View
-                    style={{
-                      width: 10,
-                      height: 10,
-                      borderRadius: 5,
-                      backgroundColor: product.color && product.color.startsWith('#') ? product.color : '#1B4D3E',
-                      borderWidth: 1,
-                      borderColor: tokens.border,
-                    }}
-                  />
-                )}
-              </XStack>
-              <Text fontSize={9} fontWeight="700" color={tokens.textMuted}>
-                {swatchesCount} {swatchesCount === 1 ? 'SKU' : 'SKUs'}
-              </Text>
-            </XStack>
-
             {/* Action Buttons: Curate & Group / Mark Reviewed */}
-            <XStack alignItems="center" gap={4} marginTop={4}>
+            <XStack alignItems="center" gap={4} marginTop={2}>
               <Pressable
                 hitSlop={4}
                 onPress={(e) => {
@@ -419,32 +395,51 @@ export function AdminVayyariStoreInventoryPage({
                 { backgroundColor: pressed ? 'rgba(0,0,0,0.05)' : 'transparent' },
               ]}
               accessibilityRole="button"
-              accessibilityLabel="Go back"
+              accessibilityLabel={isReviewQueueMode ? 'Back to In-Store Inventory' : 'Go back'}
             >
               <LuArrowLeft size={20} color={tokens.text} />
             </Pressable>
           )}
           <YStack>
             <XStack alignItems="center" gap={5}>
-              <LuStore size={15} color={tokens.accent} />
-              <Text fontSize={15} fontWeight="800" color={tokens.text}>
-                In-Store Inventory
-              </Text>
+              {isReviewQueueMode ? (
+                <>
+                  <LuSparkles size={15} color="#D97706" />
+                  <Text fontSize={15} fontWeight="800" color={tokens.text}>
+                    Review Queue
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <LuStore size={15} color={tokens.accent} />
+                  <Text fontSize={15} fontWeight="800" color={tokens.text}>
+                    In-Store Inventory
+                  </Text>
+                </>
+              )}
             </XStack>
             <Text fontSize={11} color={tokens.textMuted}>
-              {filteredProducts.length} Synced Products Active
+              {isReviewQueueMode
+                ? `${reviewCount} Product${reviewCount === 1 ? '' : 's'} Need Review`
+                : `${filteredProducts.length} Synced Products Active`}
             </Text>
           </YStack>
         </XStack>
 
         <XStack alignItems="center" gap={8}>
           <Pressable
-            onPress={() => setShowNeedsReviewOnly((prev) => !prev)}
+            onPress={() => {
+              if (onNavigateToReviewQueue) {
+                onNavigateToReviewQueue();
+              } else {
+                setShowNeedsReviewOnly((prev) => !prev);
+              }
+            }}
             style={({ pressed }) => [
               styles.navReviewBtn,
               {
-                backgroundColor: showNeedsReviewOnly ? '#FEF3C7' : pressed ? tokens.accentSubtle : tokens.surfaceRaised,
-                borderColor: showNeedsReviewOnly ? '#F59E0B' : tokens.border,
+                backgroundColor: (showNeedsReviewOnly || isReviewQueueMode) ? '#FEF3C7' : pressed ? tokens.accentSubtle : tokens.surfaceRaised,
+                borderColor: (showNeedsReviewOnly || isReviewQueueMode) ? '#F59E0B' : tokens.border,
                 borderWidth: 1,
               },
             ]}
@@ -452,8 +447,8 @@ export function AdminVayyariStoreInventoryPage({
             accessibilityLabel={`Review queue (${reviewCount} products need review)`}
           >
             <XStack alignItems="center" gap={5}>
-              <LuSparkles size={13} color={showNeedsReviewOnly ? '#B45309' : tokens.accent} />
-              <Text fontSize={11} fontWeight="800" color={showNeedsReviewOnly ? '#B45309' : tokens.accent}>
+              <LuSparkles size={13} color={(showNeedsReviewOnly || isReviewQueueMode) ? '#B45309' : tokens.accent} />
+              <Text fontSize={11} fontWeight="800" color={(showNeedsReviewOnly || isReviewQueueMode) ? '#B45309' : tokens.accent}>
                 Review
               </Text>
               {reviewCount > 0 && (
@@ -669,7 +664,16 @@ export function AdminVayyariStoreInventoryPage({
               : 'Publish starred products from the catalog to populate your online storefront.'}
           </Text>
           {showNeedsReviewOnly ? (
-            <Pressable onPress={() => setShowNeedsReviewOnly(false)} style={styles.resetPillBtn}>
+            <Pressable
+              onPress={() => {
+                if (isReviewQueueMode && onBack) {
+                  onBack();
+                } else {
+                  setShowNeedsReviewOnly(false);
+                }
+              }}
+              style={styles.resetPillBtn}
+            >
               <Text fontSize={11} fontWeight="800" color={tokens.accent}>
                 View All In-Store Products
               </Text>
@@ -834,6 +838,20 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: 'rgba(0,0,0,0.65)',
     zIndex: 2,
+  },
+  topRightBadgeContainer: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    alignItems: 'flex-end',
+    gap: 4,
+    zIndex: 2,
+  },
+  topRightBadge: {
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: 'rgba(0,0,0,0.65)',
   },
   mediaCountBadge: {
     position: 'absolute',

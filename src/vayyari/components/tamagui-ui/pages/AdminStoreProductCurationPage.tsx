@@ -80,6 +80,7 @@ import {
 } from '../organisms/StoreCuration/mockCurationData';
 import { MediaEditorModal } from '../organisms/StoreCuration/MediaEditorModal';
 import { MediaDualCardStackModal } from '../organisms/StoreCuration/MediaDualCardStackModal';
+import { ProductDetailFragment } from '../organisms/StoreCuration/ProductDetailFragment';
 import {
   TransformRecipe,
   DEFAULT_RECIPE,
@@ -1104,7 +1105,7 @@ export function AdminStoreProductCurationPage({
     return (
       <YStack
         width="100%"
-        maxWidth={isMobile ? '100%' : containerMaxWidth}
+        maxWidth={isMobile ? "100%" : containerMaxWidth}
         flex={1}
         height="100%"
         backgroundColor="#FFFFFF"
@@ -1115,323 +1116,35 @@ export function AdminStoreProductCurationPage({
         alignSelf="center"
         position="relative"
       >
-        {/* Preview Header */}
-        <XStack
-          backgroundColor="#FFFFFF"
-          borderBottomWidth={1}
-          borderBottomColor="#E2E8F0"
-          paddingHorizontal={pagePaddingHorizontal}
-          paddingTop={topInset > 0 ? topInset + 6 : 10}
-          paddingBottom={10}
-          alignItems="center"
-          justifyContent="space-between"
-          zIndex={30}
-        >
-          <XStack alignItems="center" gap={6}>
-            <Text fontSize={14} fontWeight="900" color="#1E293B" letterSpacing={1}>
-              VAYYARI
-            </Text>
-            <View style={styles.codePill}>
-              <Text fontSize={9} fontWeight="700" color="#64748B">
-                {productCode}
-              </Text>
-            </View>
-          </XStack>
-
-          <Pressable onPress={() => setShowPreview(false)} hitSlop={8} style={styles.exitPreviewChip}>
-            <Text fontSize={11} fontWeight="800" color="#DC2626">
-              ✕ Exit Preview
-            </Text>
-          </Pressable>
-        </XStack>
-
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 30 }}>
-          {/* 1. Media Carousel (Height 380px) */}
-          <View style={styles.previewCarousel}>
-            {currentPreviewMedia ? (
-              <Image
-                source={{ uri: getMediaDisplayUri(currentPreviewMedia) }}
-                style={styles.previewImage}
-                resizeMode="cover"
-              />
-            ) : (
-              <View style={styles.previewEmpty}>
-                <Text fontSize={12} color="#94A3B8">
-                  No media in this colorway
-                </Text>
-              </View>
-            )}
-
-            {/* Video Play Overlay */}
-            {currentPreviewMedia?.mediaType === 'video' && (
-              <View style={styles.videoOverlay}>
-                {previewPlayingVideo ? (
-                  <View style={styles.videoLiveBar}>
-                    <View style={styles.greenDot} />
-                    <Text fontSize={11} fontWeight="800" color="#FFFFFF">
-                      Streaming Reel (5.6MB)
-                    </Text>
-                    <Pressable onPress={handlePreviewPlayVideo} hitSlop={6}>
-                      <LuPause size={13} color="#FFFFFF" />
-                    </Pressable>
-                  </View>
-                ) : (
-                  <Pressable onPress={handlePreviewPlayVideo} style={styles.playBigBtn}>
-                    {previewBufferingVideo ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
-                    ) : (
-                      <LuPlay size={22} color="#FFFFFF" style={{ marginLeft: 3 }} />
-                    )}
-                  </Pressable>
-                )}
-              </View>
-            )}
-
-            {/* Chevrons */}
-            {previewMedia.length > 1 && (
-              <>
-                <Pressable
-                  onPress={() => {
-                    setPreviewPlayingVideo(false);
-                    setPreviewSlideIndex((prev) => (prev - 1 + previewMedia.length) % previewMedia.length);
-                  }}
-                  style={[styles.carouselChevron, { left: 8 }]}
-                  hitSlop={8}
-                >
-                  <LuChevronLeft size={18} color="#1E293B" />
-                </Pressable>
-
-                <Pressable
-                  onPress={() => {
-                    setPreviewPlayingVideo(false);
-                    setPreviewSlideIndex((prev) => (prev + 1) % previewMedia.length);
-                  }}
-                  style={[styles.carouselChevron, { right: 8 }]}
-                  hitSlop={8}
-                >
-                  <LuChevronRight size={18} color="#1E293B" />
-                </Pressable>
-              </>
-            )}
-
-            {/* Top Badges */}
-            <XStack position="absolute" top={10} left={10} zIndex={20} gap={6}>
-              {previewMedia.length > 0 && (
-                <View style={styles.slideCounter}>
-                  <Text fontSize={10} fontWeight="800" color="#FFFFFF">
-                    {previewSlideIndex + 1}/{previewMedia.length}
-                  </Text>
-                </View>
-              )}
-              {currentPreviewMedia?.isCommon && (
-                <View style={styles.commonPreviewTag}>
-                  <LuStar size={10} color="#B45309" />
-                  <Text fontSize={9} fontWeight="800" color="#B45309">
-                    Universal Craft
-                  </Text>
-                </View>
-              )}
-            </XStack>
-
-            {/* Carousel Dots */}
-            {previewMedia.length > 1 && (
-              <XStack
-                position="absolute"
-                bottom={12}
-                left={0}
-                right={0}
-                zIndex={20}
-                justifyContent="center"
-                alignItems="center"
-                gap={6}
-              >
-                {previewMedia.map((_, idx) => (
-                  <CarouselDot
-                    key={idx}
-                    active={idx === previewSlideIndex}
-                    onPress={() => {
-                      setPreviewPlayingVideo(false);
-                      setPreviewSlideIndex(idx);
-                    }}
-                  />
-                ))}
-              </XStack>
-            )}
-          </View>
-
-          {/* 2. Color Swatch Row Directly Below Carousel */}
-          <YStack paddingHorizontal={pagePaddingHorizontal} paddingVertical={10} gap={6} borderBottomWidth={1} borderBottomColor="#F1F5F9">
-            <XStack alignItems="center" justifyContent="space-between">
-              <Text fontSize={11} fontWeight="800" color="#1E293B" textTransform="uppercase">
-                Colour: {colorGroups.find((g) => g.id === previewActiveGroupId)?.name || 'Standard'}
-              </Text>
-              <Text fontSize={10} color="#64748B">
-                {colorGroups.length} Swatch{colorGroups.length === 1 ? '' : 'es'}
-              </Text>
-            </XStack>
-
-            <XStack gap={10} alignItems="center" paddingVertical={4}>
-              {colorGroups.map((cg) => {
-                const isSelected = cg.id === previewActiveGroupId;
-                return (
-                  <Pressable
-                    key={cg.id}
-                    onPress={() => {
-                      setPreviewActiveGroupId(cg.id);
-                      setPreviewSlideIndex(0);
-                      setPreviewPlayingVideo(false);
-                    }}
-                    style={styles.previewSwatchBtn}
-                  >
-                    <CustomSwatchDot
-                      template={cg.template}
-                      primaryColor={cg.slotA}
-                      secondaryColor={cg.slotB || '#D4AF37'}
-                      tertiaryColor={cg.slotC}
-                      quaternaryColor={cg.slotD}
-                      colors={cg.colors}
-                      colorCount={cg.colorCount as any}
-                      size={36}
-                      selected={isSelected}
-                    />
-                    <Text fontSize={9} fontWeight={isSelected ? '800' : '600'} color={isSelected ? '#1E293B' : '#64748B'}>
-                      {cg.name.split(' ')[0]}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </XStack>
-          </YStack>
-
-          {/* 3. Product Details */}
-          {(() => {
-            const activePreviewSku = skuList.find(
-              (s) => s.colorGroupId === previewActiveGroupId || s.id === previewActiveGroupId
-            ) || skuList[0];
-            const effectivePreviewSale = activePreviewSku && !activePreviewSku.isPriceInherited && activePreviewSku.price != null
-              ? activePreviewSku.price
-              : parsedSalePrice;
-            const effectivePreviewMrp = activePreviewSku && !activePreviewSku.isPriceInherited && activePreviewSku.mrp != null
-              ? activePreviewSku.mrp
-              : parsedMrp;
-            const effectivePreviewDiscount = effectivePreviewMrp > effectivePreviewSale && effectivePreviewMrp > 0
-              ? Math.round(((effectivePreviewMrp - effectivePreviewSale) / effectivePreviewMrp) * 100)
-              : discountPercent;
-            const previewStock = activePreviewSku ? activePreviewSku.stockQuantity : 10;
-            const previewAllowWaitlist = activePreviewSku ? activePreviewSku.allowWaitlist : true;
-            const previewCustomMsg = activePreviewSku?.customMessage;
-
-            return (
-              <YStack padding={cardPadding} gap={8}>
-                <Text fontSize={11} fontWeight="800" color="#94A3B8" textTransform="uppercase">
-                  {fabric} · Handloom
-                </Text>
-                <Text fontSize={16} fontWeight="800" color="#0F172A">
-                  {title}
-                </Text>
-
-                {/* Highlighted Tag for Custom SKU Message */}
-                {previewCustomMsg ? (
-                  <XStack
-                    alignSelf="flex-start"
-                    backgroundColor="#FEF3C7"
-                    borderColor="#F59E0B"
-                    borderWidth={1}
-                    paddingHorizontal={8}
-                    paddingVertical={4}
-                    borderRadius={6}
-                    alignItems="center"
-                    gap={5}
-                  >
-                    <LuSparkles size={11} color="#B45309" />
-                    <Text fontSize={11} fontWeight="800" color="#92400E">
-                      {previewCustomMsg}
-                    </Text>
-                  </XStack>
-                ) : null}
-
-                <XStack alignItems="center" gap={8}>
-                  <Text fontSize={18} fontWeight="900" color="#0F172A">
-                    ₹{effectivePreviewSale.toLocaleString('en-IN')}
-                  </Text>
-                  {effectivePreviewMrp > effectivePreviewSale && (
-                    <Text fontSize={13} color="#94A3B8" textDecorationLine="line-through">
-                      ₹{effectivePreviewMrp.toLocaleString('en-IN')}
-                    </Text>
-                  )}
-                  {effectivePreviewDiscount > 0 && (
-                    <View style={styles.discountPill}>
-                      <Text fontSize={10} fontWeight="800" color="#15803D">
-                        {effectivePreviewDiscount}% OFF
-                      </Text>
-                    </View>
-                  )}
-                  {activePreviewSku && !activePreviewSku.isPriceInherited && (
-                    <View style={[styles.discountPill, { backgroundColor: '#DBEAFE' }]}>
-                      <Text fontSize={9} fontWeight="800" color="#1E40AF">
-                        Item Price
-                      </Text>
-                    </View>
-                  )}
-                </XStack>
-
-                <Text fontSize={12} color="#475569" lineHeight={18}>
-                  {description}
-                </Text>
-
-                {/* Action CTA: Add to Bag vs Join Restock Waitlist vs Sold Out */}
-                <XStack marginTop={6} width="100%">
-                  {previewStock > 0 ? (
-                    <View
-                      style={{
-                        flex: 1,
-                        backgroundColor: tokens.accent,
-                        paddingVertical: 10,
-                        borderRadius: 8,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Text fontSize={12} fontWeight="800" color={tokens.accentForeground}>
-                        🛍 Add to Bag ({previewStock} in stock)
-                      </Text>
-                    </View>
-                  ) : previewAllowWaitlist ? (
-                    <View
-                      style={{
-                        flex: 1,
-                        backgroundColor: '#B45309',
-                        paddingVertical: 10,
-                        borderRadius: 8,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Text fontSize={12} fontWeight="800" color="#FFFFFF">
-                        🔔 Join Restock Waitlist
-                      </Text>
-                    </View>
-                  ) : (
-                    <View
-                      style={{
-                        flex: 1,
-                        backgroundColor: '#94A3B8',
-                        paddingVertical: 10,
-                        borderRadius: 8,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Text fontSize={12} fontWeight="800" color="#FFFFFF">
-                        Sold Out (No Restock)
-                      </Text>
-                    </View>
-                  )}
-                </XStack>
-              </YStack>
-            );
-          })()}
-        </ScrollView>
+        <ProductDetailFragment
+          mode="preview"
+          product={{
+            code: productCode,
+            sku: productCode,
+            title,
+            brand: "VAANYA LUXE",
+            fabric,
+            description,
+            price: parsedSalePrice,
+            originalPrice: parsedMrp,
+            discountPercent,
+            colorGroups: colorGroups as any,
+            mediaList: qualifiedMedia as any,
+            specifications: [
+              { label: 'Product Code / SKU', value: productCode },
+              { label: 'Fabric Composition', value: fabric },
+              { label: 'Weave Technique', value: 'Handloom Kadwa Brocade Weave' },
+              { label: 'Regional Origin', value: 'Varanasi, Uttar Pradesh' },
+              { label: 'Saree Drape Length', value: '5.5 metres' },
+              { label: 'Blouse Format', value: '0.8m Unstitched Attached Blouse Piece' },
+              { label: 'Wash Care Instructions', value: 'Dry Clean Only, Store in Muslin Bag' },
+            ],
+          }}
+          selectedColorId={previewActiveGroupId}
+          onSelectColorId={setPreviewActiveGroupId}
+          onBack={() => setShowPreview(false)}
+          borderless={true}
+        />
       </YStack>
     );
   }
